@@ -505,7 +505,7 @@ public class WifiApConfigStore {
         SoftApConfiguration.Builder configBuilder = new SoftApConfiguration.Builder();
         configBuilder.setBand(generateDefaultBand(mContext));
         configBuilder.setSsid(mResourceCache.getString(
-                R.string.wifi_tether_configure_ssid_default) + "_" + getRandomIntForDefaultSsid());
+                R.string.wifi_tether_configure_ssid_default));
         try {
             if (ApConfigUtil.isWpa3SaeSupported(mContext)) {
                 configBuilder.setPassphrase(generatePassword(),
@@ -543,15 +543,9 @@ public class WifiApConfigStore {
         return configBuilder.build();
     }
 
-    private static int getRandomIntForDefaultSsid() {
-        Random random = new Random();
-        return random.nextInt((RAND_SSID_INT_MAX - RAND_SSID_INT_MIN) + 1) + RAND_SSID_INT_MIN;
-    }
-
     private static String generateLohsSsid(WifiContext context) {
         return context.getResourceCache().getString(
-                R.string.wifi_localhotspot_configure_ssid_default) + "_"
-                + getRandomIntForDefaultSsid();
+                R.string.wifi_localhotspot_configure_ssid_default);
     }
 
     private static boolean hasAutomotiveFeature(Context context) {
