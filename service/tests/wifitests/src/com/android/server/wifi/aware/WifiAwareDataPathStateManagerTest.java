@@ -88,6 +88,8 @@ import android.os.test.TestLooper;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
+import com.android.dx.mockito.inline.extended.StaticMockitoSession;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.Clock;
 import com.android.server.wifi.DeviceConfigFacade;
@@ -117,6 +119,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -172,6 +175,7 @@ public class WifiAwareDataPathStateManagerTest extends WifiBaseTest {
     public ErrorCollector collector = new ErrorCollector();
     private MockResources mResources;
     private Bundle mExtras = new Bundle();
+    private StaticMockitoSession mSession;
 
     /**
      * Initialize mocks.
@@ -179,6 +183,12 @@ public class WifiAwareDataPathStateManagerTest extends WifiBaseTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        mSession = ExtendedMockito.mockitoSession()
+                .strictness(Strictness.LENIENT)
+                .mockStatic(WifiInjector.class)
+                .startMocking();
+
+        when(WifiInjector.getInstance()).thenReturn(mWifiInjector);
 
         mAlarmManager = new TestAlarmManager();
         when(mMockContext.getSystemService(Context.ALARM_SERVICE))
@@ -244,6 +254,7 @@ public class WifiAwareDataPathStateManagerTest extends WifiBaseTest {
     @After
     public void tearDown() throws Exception {
         mMockNative.validateUniqueTransactionIds();
+        mSession.finishMocking();
     }
 
     /**

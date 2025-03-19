@@ -333,15 +333,13 @@ abstract class SupplicantStaIfaceCallbackHidlImpl extends ISupplicantStaIfaceCal
                     // was not successfully verified is indicated with a status code of 15. This
                     // typically happens when the entered password is wrong. So treat status code
                     // of 15 as incorrect password.
-                    // Some implementations also send status code of 1 for incorrect password. But
-                    // this is a generic status code and can't be treated as incorrect password all
-                    // the time. So treat status code of 1 as incorrect password only if the STA
-                    // was not connected to this network before. In this case, we will
-                    // send an authentication failure event up.
+                    // Some implementations also send status code of 1 for incorrect password. For
+                    // both status codes, broadcast authentication failure message with reason code
+                    // set to wrong password. ClientModeImpl will notify user for wrong password
+                    // error if the network had never been connected before.
                     if (statusCode == SupplicantStaIfaceHal.StaIfaceStatusCode.CHALLENGE_FAIL
-                            || (statusCode
-                            == SupplicantStaIfaceHal.StaIfaceStatusCode.UNSPECIFIED_FAILURE
-                            && !curConfiguration.getNetworkSelectionStatus().hasEverConnected())) {
+                            || statusCode
+                            == SupplicantStaIfaceHal.StaIfaceStatusCode.UNSPECIFIED_FAILURE) {
                         mStaIfaceHal.logCallback("SAE incorrect password");
                         isWrongPwd = true;
                     } else {

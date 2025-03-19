@@ -107,7 +107,6 @@ import com.android.server.wifi.proto.nano.WifiMetricsProto;
 import com.android.server.wifi.scanner.WifiScannerInternal;
 import com.android.server.wifi.util.LruConnectionTracker;
 import com.android.server.wifi.util.WifiPermissionsUtil;
-import com.android.wifi.flags.FeatureFlags;
 import com.android.wifi.resources.R;
 
 import org.junit.After;
@@ -180,8 +179,6 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         when(mPrimaryClientModeManager.getRole()).thenReturn(ActiveModeManager.ROLE_CLIENT_PRIMARY);
         when(mPrimaryClientModeManager.getConnectionInfo()).thenReturn(mWifiInfo);
         when(mActiveModeWarden.getPrimaryClientModeManager()).thenReturn(mPrimaryClientModeManager);
-        when(mDeviceConfigFacade.getFeatureFlags()).thenReturn(mFeatureFlags);
-        when(mFeatureFlags.delayedCarrierNetworkSelection()).thenReturn(true);
         when(mWifiCarrierInfoManager.isCarrierNetworkOffloadEnabled(anyInt(), anyBoolean()))
                 .thenReturn(true);
         doAnswer(new AnswerWithArguments() {
@@ -322,7 +319,6 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
     @Mock private WifiNetworkSuggestion mWifiNetworkSuggestion;
     @Mock private IPowerManager mPowerManagerService;
     @Mock private DeviceConfigFacade mDeviceConfigFacade;
-    @Mock private FeatureFlags mFeatureFlags;
     @Mock private ActiveModeWarden mActiveModeWarden;
     @Mock private ConcreteClientModeManager mPrimaryClientModeManager;
     @Mock private ConcreteClientModeManager mSecondaryClientModeManager;
@@ -589,7 +585,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mCandidateList = new ArrayList<WifiCandidates.Candidate>();
         mCandidateList.add(mCandidate1);
         when(ns.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(mCandidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(mCandidateList);
         when(ns.selectNetwork(any()))
                 .then(new AnswerWithArguments() {
                     public WifiConfiguration answer(List<WifiCandidates.Candidate> candidateList) {
@@ -1417,7 +1413,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
             mCandidateList.add(mCandidate3);
         }
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(mCandidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(mCandidateList);
 
         doAnswer(new AnswerWithArguments() {
             public void answer(ExternalClientModeManagerRequestListener listener,
@@ -2342,7 +2338,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         // Issue a partial scan that does not locate any candidates. This should not affect
         // the cache populated by the full scan.
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(null);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(null);
         when(mScanData.getScannedBandsInternal()).thenReturn(WifiScanner.WIFI_BAND_6_GHZ);
         when(mClock.getElapsedSinceBootMillis())
                 .thenReturn(DELAYED_CARRIER_SELECTION_TIME_MS - 1000L);
@@ -2353,7 +2349,8 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         // Issue a full scan after the delay period has passed. Since the cache was not modified by
         // the partial scan, the delayed carrier candidate should still be in the timestamp cache.
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(Arrays.asList(mCandidate1));
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(Arrays.asList(
+                mCandidate1));
         when(mScanData.getScannedBandsInternal()).thenReturn(WifiScanner.WIFI_BAND_ALL);
         when(mClock.getElapsedSinceBootMillis())
                 .thenReturn(DELAYED_CARRIER_SELECTION_TIME_MS + 1000L);
@@ -2423,7 +2420,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2476,7 +2473,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2517,7 +2514,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(candidate1);
         candidateList.add(candidate2);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2552,7 +2549,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2594,7 +2591,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2649,7 +2646,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2689,7 +2686,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2733,7 +2730,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2776,7 +2773,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         candidateList.add(mCandidate1);
         candidateList.add(otherCandidate);
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(candidateList);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(candidateList);
 
         // Set WiFi to disconnected state to trigger scan
         mWifiConnectivityManager.handleConnectionStateChanged(
@@ -2899,7 +2896,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
     public void wifiDisconnected_noCandidatesInScan_openNetworkNotifierScanResultsHandled() {
         // no connection candidates from scan.
         when(mWifiNS.getCandidatesFromScan(any(), any(), any(), anyBoolean(), anyBoolean(),
-                anyBoolean(), any(), anyBoolean())).thenReturn(null);
+                anyBoolean(), any(), anyBoolean(), anyInt())).thenReturn(null);
 
         List<ScanDetail> expectedOpenNetworks = new ArrayList<>();
         expectedOpenNetworks.add(
@@ -4922,6 +4919,30 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         assertFalse(mWifiConnectivityManager.getAutoJoinEnabledExternal());
     }
 
+    /**
+     * Verify if setAutojoinDisallowedSecurityTypes method is working correctly.
+     * Also verify getAutojoinDisallowedSecurityTypes method is working correctly.
+     */
+    @Test
+    public void testSetAndGetAutojoinDisallowedSecurityTypes() {
+        // test default value of auto-join restriction secirity types (NONE)
+        assertEquals(0/*restrict none by default*/,
+                mWifiConnectivityManager.getAutojoinDisallowedSecurityTypes());
+
+        // test setting auto-join restriction on secirity types OPEN, WEP, and OWE
+        int restrictOpenWepOwe = (0x1 << WifiInfo.SECURITY_TYPE_OPEN)
+                | (0x1 << WifiInfo.SECURITY_TYPE_WEP)
+                | (0x1 << WifiInfo.SECURITY_TYPE_OWE);
+        mWifiConnectivityManager.setAutojoinDisallowedSecurityTypes(restrictOpenWepOwe);
+        assertEquals(restrictOpenWepOwe, mWifiConnectivityManager
+                .getAutojoinDisallowedSecurityTypes());
+
+        // test resetting auto-join restriction on all secirity types
+        mWifiConnectivityManager.setAutojoinDisallowedSecurityTypes(0/*restrict none*/);
+        assertEquals(0/*restrict none*/, mWifiConnectivityManager
+                .getAutojoinDisallowedSecurityTypes());
+    }
+
     /*
      * Firmware supports controlled roaming.
      * Connect to a network which doesn't have a config specified BSSID.
@@ -5261,7 +5282,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
      * on a DBS supported device.
      *
      * Expected behavior: WifiConnectivityManager invokes
-     * {@link WifiNetworkSelector#getCandidatesFromScan(List, Set, List, boolean, boolean, Set, boolean)}
+     * {@link WifiNetworkSelector#getCandidatesFromScan(List, Set, List, boolean, boolean, Set, boolean, int)}
      * boolean, boolean, boolean)} after filtering out the scan results obtained via DBS scan.
      */
     @Test
@@ -5282,12 +5303,14 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
                     List<WifiNetworkSelector.ClientModeManagerState> cmmStates,
                     boolean untrustedNetworkAllowed,
                     boolean oemPaidNetworkAllowed, boolean oemPrivateNetworkAllowed,
-                    Set<Integer> restrictedNetworkAllowedUids, boolean multiInternetNetworkAllowed)
+                    Set<Integer> restrictedNetworkAllowedUids, boolean skipSufficiencyCheck,
+                    int autojoinRestrictionSecurityTypes)
                     throws Exception {
                 capturedScanDetails.addAll(scanDetails);
                 return null;
             }}).when(mWifiNS).getCandidatesFromScan(
-                    any(), any(), any(), anyBoolean(), eq(true), eq(false), any(), eq(false));
+                    any(), any(), any(), anyBoolean(), eq(true), eq(false), any(), eq(false),
+                    anyInt());
 
         mWifiConnectivityManager.setTrustedConnectionAllowed(true);
         mWifiConnectivityManager.setOemPaidConnectionAllowed(true, new WorkSource());
@@ -5341,12 +5364,13 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
                     List<WifiNetworkSelector.ClientModeManagerState> cmmStates,
                     boolean untrustedNetworkAllowed,
                     boolean oemPaidNetworkAllowed, boolean oemPrivateNetworkAllowed,
-                    Set<Integer> restrictedNetworkAllowedUids, boolean multiInternetNetworkAllowed)
+                    Set<Integer> restrictedNetworkAllowedUids, boolean skipSufficiencyCheck,
+                    int autojoinRestrictionSecurityTypes)
                     throws Exception {
                 capturedScanDetails.addAll(scanDetails);
                 return null;
             }}).when(mWifiNS).getCandidatesFromScan(
-                any(), any(), any(), anyBoolean(), eq(false), eq(true), any(), eq(false));
+                any(), any(), any(), anyBoolean(), eq(false), eq(true), any(), eq(false), anyInt());
 
         mWifiConnectivityManager.setTrustedConnectionAllowed(true);
         mWifiConnectivityManager.setOemPrivateConnectionAllowed(true, new WorkSource());
@@ -6313,7 +6337,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
                                 ROLE_CLIENT_SECONDARY_LONG_LIVED));
         verify(mWifiNS).getCandidatesFromScan(any(), any(),
                 eq(expectedCmmStates), anyBoolean(), anyBoolean(), anyBoolean(), any(),
-                eq(false));
+                eq(false), anyInt());
     }
 
     @Test
@@ -6345,7 +6369,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
         verify(mWifiNS).getCandidatesFromScan(any(), any(),
                 any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
-                eq(true));
+                eq(true), anyInt());
     }
 
     @Test
@@ -6378,7 +6402,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
         verify(mWifiNS).getCandidatesFromScan(any(), any(),
                 any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
-                eq(true));
+                eq(true), anyInt());
     }
 
     /**

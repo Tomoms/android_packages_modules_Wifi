@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"பெறுநர்:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"பின்வரும் அவசியமான பின்னை உள்ளிடவும்:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"பின்:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"சாதன இணைப்பு"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"சாதன இணைப்பு"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> சாதனத்திற்கு அழைப்பு அனுப்பப்பட்டது."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"இணைப்பதற்கு இந்தப் பின்னை <xliff:g id="DEVICE_NAME">%1$s</xliff:g> சாதனத்தில் டைப் செய்யவும்."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"சரி"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"சாதன இணைப்பு"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"சாதன இணைப்பு"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"சாதன இணைப்பு"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"உங்கள் சாதனத்துடன் இணைக்கும்படி <xliff:g id="DEVICE_NAME">%1$s</xliff:g> கேட்கிறது."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"இணைப்பதற்கு <xliff:g id="DEVICE_NAME">%1$s</xliff:g> சாதனத்தில் கட்டப்படும் பின்னை டைப் செய்யவும்."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"காட்டப்படும் பின்னைக் கொண்டு உங்கள் சாதனத்துடன் இணைக்கும்படி <xliff:g id="DEVICE_NAME">%1$s</xliff:g> கேட்கிறது."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{உங்கள் சாதனத்துடன் இணைக்கும்படி {device} கேட்கிறது. {countdown} வினாடியில் ஏற்கவும்.}other{உங்கள் சாதனத்துடன் இணைக்கும்படி {device} கேட்கிறது. {countdown} வினாடிகளில் ஏற்கவும்.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{இணைப்பதற்கு {device} சாதனத்தில் காட்டப்படும் பின்னை {countdown} வினாடிக்குள் டைப் செய்யவும்.}other{இணைப்பதற்கு {device} சாதனத்தில் காட்டப்படும் பின்னை {countdown} வினாடிகளுக்குள் டைப் செய்யவும்.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{காட்டப்படும் பின்னைக் கொண்டு உங்கள் சாதனத்துடன் இணைக்கும்படி {device} கேட்கிறது. {countdown} வினாடியில் ஏற்கவும்.}other{காட்டப்படும் பின்னைக் கொண்டு உங்கள் சாதனத்துடன் இணைக்கும்படி {device} கேட்கிறது. {countdown} வினாடிகளில் ஏற்கவும்.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"இணை"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"ரத்துசெய்"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"பின்"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"பின்"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> உடன் இணைக்கப்பட்டிருக்கும்போது உங்கள் சாதனம் வைஃபை இணைப்பில் இருந்து தற்காலிகமாகத் துண்டிக்கப்படும்"</string>
     <string name="dlg_ok" msgid="254496739491689405">"சரி"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g> உடன் இணைக்க முடியவில்லை"</string>

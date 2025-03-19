@@ -26,6 +26,7 @@ import android.net.wifi.aware.PublishConfig;
 import android.net.wifi.aware.SubscribeConfig;
 import android.net.wifi.aware.WifiAwareChannelInfo;
 import android.net.wifi.aware.WifiAwareDataPathSecurityConfig;
+import android.net.wifi.rtt.RangingResult;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -857,5 +858,13 @@ public class WifiNanIface implements WifiHal.WifiInterface {
          * the suspension mode
          */
         void eventSuspensionModeChanged(boolean isSuspended);
+
+        /**
+         * Invoked when ranging results are available.
+         * @param rangingResults Rtt results data.
+         * @param sessionId ID of an active publish or subscribe discovery session.
+         */
+        void notifyRangingResults(ArrayList<RangingResult> rangingResults, byte sessionId);
+
     }
 }

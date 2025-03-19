@@ -22,6 +22,7 @@ import android.annotation.Nullable;
 import android.net.DhcpResultsParcelable;
 import android.net.MacAddress;
 import android.net.Network;
+import android.net.wifi.BlockingOption;
 import android.net.wifi.IWifiConnectedNetworkScorer;
 import android.net.wifi.WifiAnnotations;
 import android.net.wifi.WifiConfiguration;
@@ -43,6 +44,7 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Set;
 
@@ -136,7 +138,8 @@ public interface ClientMode {
     DhcpResultsParcelable syncGetDhcpResultsParcelable();
 
     /** Get the supported feature set synchronously */
-    long getSupportedFeatures();
+    @NonNull
+    BitSet getSupportedFeatures();
 
     boolean syncStartSubscriptionProvisioning(int callingUid, OsuProvider provider,
             IProvisioningCallback callback);
@@ -368,4 +371,9 @@ public interface ClientMode {
      * Notify changes in PowerManager#isDeviceIdleMode
      */
     void onIdleModeChanged(boolean isIdle);
+
+    /**
+     * Block current connect network and add to blocklist
+     */
+    void blockNetwork(BlockingOption option);
 }

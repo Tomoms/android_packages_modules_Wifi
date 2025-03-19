@@ -22,8 +22,9 @@ import static com.android.server.wifi.ActiveModeManager.ROLE_CLIENT_SECONDARY_TR
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
+import android.app.ActivityManager;
+import android.content.Context;
 import android.os.BatteryStatsManager;
-import android.os.Binder;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.WorkSource;
@@ -50,6 +51,7 @@ import org.mockito.Spy;
 public class WifiMulticastLockManagerTest extends WifiBaseTest {
     private static final String WL_1_TAG = "Wakelock-1";
     private static final String WL_2_TAG = "Wakelock-2";
+    private static final int TEST_UID = 123;
 
     private TestLooper mLooper;
     @Mock ConcreteClientModeManager mClientModeManager;
@@ -58,7 +60,11 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
     @Spy FakeFilterController mFilterController2 = new FakeFilterController();
     @Mock BatteryStatsManager mBatteryStats;
     @Mock ActiveModeWarden mActiveModeWarden;
+    @Mock Context mContext;
+    @Mock ActivityManager mActivityManager;
     @Captor ArgumentCaptor<PrimaryClientModeManagerChangedCallback> mPrimaryChangedCallbackCaptor;
+    @Captor ArgumentCaptor<ActivityManager.OnUidImportanceListener> mUidImportanceListenerCaptor =
+            ArgumentCaptor.forClass(ActivityManager.OnUidImportanceListener.class);
     WifiMulticastLockManager mManager;
 
     /**
@@ -78,11 +84,14 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
         when(mClientModeManager2.getRole()).thenReturn(ROLE_CLIENT_SECONDARY_TRANSIENT);
 
         when(mActiveModeWarden.getPrimaryClientModeManager()).thenReturn(mClientModeManager);
+        when(mContext.getSystemService(ActivityManager.class)).thenReturn(mActivityManager);
         mManager = new WifiMulticastLockManager(mActiveModeWarden, mBatteryStats,
-                mLooper.getLooper());
+                mLooper.getLooper(), mContext);
 
         verify(mActiveModeWarden).registerPrimaryClientModeManagerChangedCallback(
                 mPrimaryChangedCallbackCaptor.capture());
+        verify(mActivityManager).addOnUidImportanceListener(
+                mUidImportanceListenerCaptor.capture(), anyInt());
     }
 
     /**
@@ -91,7 +100,7 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
     @Test
     public void noLocks() {
         assertFalse(mManager.isMulticastEnabled());
-        mManager.initializeFiltering();
+        mManager.startFilteringMulticastPackets();
         verify(mFilterController, times(1)).startFilteringMulticastPackets();
     }
 
@@ -101,21 +110,21 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
     @Test
     public void oneLock() throws RemoteException {
         IBinder binder = mock(IBinder.class);
-        mManager.acquireLock(binder, WL_1_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG);
         assertTrue(mManager.isMulticastEnabled());
         verify(mFilterController).stopFilteringMulticastPackets();
-        mManager.initializeFiltering();
+        mManager.startFilteringMulticastPackets();
         verify(mFilterController, times(0)).startFilteringMulticastPackets();
         ArgumentCaptor<WorkSource> wsCaptor = ArgumentCaptor.forClass(WorkSource.class);
         verify(mBatteryStats).reportWifiMulticastEnabled(wsCaptor.capture());
         assertNotNull(wsCaptor.getValue());
-        assertEquals(Binder.getCallingUid(), wsCaptor.getValue().getAttributionUid());
+        assertEquals(TEST_UID, wsCaptor.getValue().getAttributionUid());
         verify(mBatteryStats, times(0)).reportWifiMulticastDisabled(any());
 
-        mManager.releaseLock(WL_1_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_1_TAG);
         verify(mBatteryStats).reportWifiMulticastDisabled(wsCaptor.capture());
         assertNotNull(wsCaptor.getValue());
-        assertEquals(Binder.getCallingUid(), wsCaptor.getValue().getAttributionUid());
+        assertEquals(TEST_UID, wsCaptor.getValue().getAttributionUid());
         assertFalse(mManager.isMulticastEnabled());
     }
 
@@ -151,7 +160,7 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
         assertTrue(mFilterController2.isFilteringStarted());
 
         IBinder binder = mock(IBinder.class);
-        mManager.acquireLock(binder, WL_1_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG);
         assertTrue(mManager.isMulticastEnabled());
         // CMM1 filtering stopped
         assertFalse(mFilterController.isFilteringStarted());
@@ -172,7 +181,7 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
         // CMM2 filter stopped
         assertFalse(mFilterController2.isFilteringStarted());
 
-        mManager.releaseLock(WL_1_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_1_TAG);
         assertFalse(mManager.isMulticastEnabled());
         // CMM1 filter started
         assertTrue(mFilterController.isFilteringStarted());
@@ -186,15 +195,15 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
     @Test
     public void oneLock_wrongName() throws RemoteException {
         IBinder binder = mock(IBinder.class);
-        mManager.acquireLock(binder, WL_1_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG);
         assertTrue(mManager.isMulticastEnabled());
         verify(mFilterController).stopFilteringMulticastPackets();
-        mManager.initializeFiltering();
+        mManager.startFilteringMulticastPackets();
         verify(mFilterController, never()).startFilteringMulticastPackets();
         verify(mBatteryStats).reportWifiMulticastEnabled(any());
         verify(mBatteryStats, never()).reportWifiMulticastDisabled(any());
 
-        mManager.releaseLock(WL_2_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_2_TAG);
         verify(mBatteryStats, never()).reportWifiMulticastDisabled(any());
         assertTrue(mManager.isMulticastEnabled());
     }
@@ -209,25 +218,25 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
         InOrder inOrderHandler = inOrder(mFilterController);
         InOrder inOrderBatteryStats = inOrder(mBatteryStats);
 
-        mManager.acquireLock(binder, WL_1_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG);
         inOrderHandler.verify(mFilterController).stopFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastEnabled(any());
         assertTrue(mManager.isMulticastEnabled());
 
-        mManager.acquireLock(binder, WL_2_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_2_TAG);
         inOrderHandler.verify(mFilterController).stopFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastEnabled(any());
         assertTrue(mManager.isMulticastEnabled());
 
-        mManager.initializeFiltering();
+        mManager.startFilteringMulticastPackets();
         inOrderHandler.verify(mFilterController, never()).startFilteringMulticastPackets();
 
-        mManager.releaseLock(WL_2_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_2_TAG);
         inOrderHandler.verify(mFilterController, never()).startFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastDisabled(any());
         assertTrue(mManager.isMulticastEnabled());
 
-        mManager.releaseLock(WL_1_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_1_TAG);
         inOrderHandler.verify(mFilterController).startFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastDisabled(any());
         assertFalse(mManager.isMulticastEnabled());
@@ -243,27 +252,131 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
         InOrder inOrderHandler = inOrder(mFilterController);
         InOrder inOrderBatteryStats = inOrder(mBatteryStats);
 
-        mManager.acquireLock(binder, WL_1_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG);
         inOrderHandler.verify(mFilterController).stopFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastEnabled(any());
         assertTrue(mManager.isMulticastEnabled());
 
-        mManager.acquireLock(binder, WL_2_TAG);
+        mManager.acquireLock(TEST_UID, binder, WL_2_TAG);
         inOrderHandler.verify(mFilterController).stopFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastEnabled(any());
         assertTrue(mManager.isMulticastEnabled());
 
-        mManager.initializeFiltering();
+        mManager.startFilteringMulticastPackets();
         inOrderHandler.verify(mFilterController, never()).startFilteringMulticastPackets();
 
-        mManager.releaseLock(WL_1_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_1_TAG);
         inOrderHandler.verify(mFilterController, never()).startFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastDisabled(any());
         assertTrue(mManager.isMulticastEnabled());
 
-        mManager.releaseLock(WL_2_TAG);
+        mManager.releaseLock(TEST_UID, binder, WL_2_TAG);
         inOrderHandler.verify(mFilterController).startFilteringMulticastPackets();
         inOrderBatteryStats.verify(mBatteryStats).reportWifiMulticastDisabled(any());
         assertFalse(mManager.isMulticastEnabled());
+    }
+
+    /**
+     * Verify the behavior when two separate locks are created using the same tag.
+     *
+     * Since locks are uniquely identified by (binder, tag), we expect that multicast is
+     * enabled until both locks have been released.
+     */
+    @Test
+    public void testMultipleLocksWithSameTag() throws RemoteException {
+        IBinder binder1 = mock(IBinder.class);
+        IBinder binder2 = mock(IBinder.class);
+
+        // Both acquired locks have the same tag
+        mManager.acquireLock(TEST_UID, binder1, WL_1_TAG);
+        mManager.acquireLock(TEST_UID, binder2, WL_1_TAG);
+        assertTrue(mManager.isMulticastEnabled());
+
+        mManager.releaseLock(TEST_UID, binder1, WL_1_TAG);
+        verify(mBatteryStats, times(1)).reportWifiMulticastDisabled(any());
+        assertTrue(mManager.isMulticastEnabled());
+
+        mManager.releaseLock(TEST_UID, binder2, WL_1_TAG);
+        verify(mBatteryStats, times(2)).reportWifiMulticastDisabled(any());
+        assertFalse(mManager.isMulticastEnabled());
+    }
+
+    /**
+     * Test that mulicast filtering is toggled correctly when the owner of
+     * a single lock transitions between importance levels.
+     */
+    @Test
+    public void testSingleLockActiveStateChange() {
+        IBinder binder = mock(IBinder.class);
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG);
+        assertTrue(mManager.isMulticastEnabled());
+        verify(mFilterController).stopFilteringMulticastPackets();
+
+        // Transition UID to low importance
+        mUidImportanceListenerCaptor.getValue().onUidImportance(
+                TEST_UID, ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED);
+        mLooper.dispatchAll();
+        assertFalse(mManager.isMulticastEnabled());
+        verify(mFilterController).startFilteringMulticastPackets();
+
+        // Transition UID to high importance
+        mUidImportanceListenerCaptor.getValue().onUidImportance(
+                TEST_UID, ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        mLooper.dispatchAll();
+        assertTrue(mManager.isMulticastEnabled());
+        verify(mFilterController, times(2)).stopFilteringMulticastPackets();
+
+        mManager.releaseLock(TEST_UID, binder, WL_1_TAG);
+        assertFalse(mManager.isMulticastEnabled());
+        verify(mFilterController, times(2)).startFilteringMulticastPackets();
+    }
+
+    /**
+     * Test that mulicast filtering is toggled correctly when multiple lock owners
+     * transition between importance levels.
+     */
+    @Test
+    public void testMultipleOwnersActiveStateChange() {
+        int uid1 = TEST_UID;
+        int uid2 = TEST_UID + 1;
+        IBinder binder1 = mock(IBinder.class);
+        IBinder binder2 = mock(IBinder.class);
+
+        mManager.acquireLock(uid1, binder1, WL_1_TAG);
+        mManager.acquireLock(uid2, binder2, WL_2_TAG);
+        assertTrue(mManager.isMulticastEnabled());
+        verify(mFilterController, times(2)).stopFilteringMulticastPackets();
+
+        // Transition UID 1 to low importance. Since UID 2 is still active,
+        // multicast should still be enabled.
+        mUidImportanceListenerCaptor.getValue().onUidImportance(
+                uid1, ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED);
+        mLooper.dispatchAll();
+        assertTrue(mManager.isMulticastEnabled());
+        verify(mFilterController, never()).startFilteringMulticastPackets();
+
+        // Transition UID 2 to low importance. Since no lock owners are active,
+        // multicast should be disabled.
+        mUidImportanceListenerCaptor.getValue().onUidImportance(
+                uid2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED);
+        mLooper.dispatchAll();
+        assertFalse(mManager.isMulticastEnabled());
+        verify(mFilterController).startFilteringMulticastPackets();
+
+        // Transition UID 2 back to high importance. Multicast should be re-enabled.
+        mUidImportanceListenerCaptor.getValue().onUidImportance(
+                uid2, ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        mLooper.dispatchAll();
+        assertTrue(mManager.isMulticastEnabled());
+        verify(mFilterController, times(3)).stopFilteringMulticastPackets();
+
+        // Release the lock held by UID 1. An active lock is still held by UID 2.
+        mManager.releaseLock(uid1, binder1, WL_1_TAG);
+        assertTrue(mManager.isMulticastEnabled());
+
+        // Release the lock held by UID 2. No locks are active.
+        mManager.releaseLock(uid2, binder2, WL_2_TAG);
+        assertFalse(mManager.isMulticastEnabled());
+        verify(mFilterController, times(2)).startFilteringMulticastPackets();
     }
 }

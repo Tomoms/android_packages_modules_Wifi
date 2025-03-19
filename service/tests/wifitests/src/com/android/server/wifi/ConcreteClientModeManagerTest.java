@@ -187,13 +187,15 @@ public class ConcreteClientModeManagerTest extends WifiBaseTest {
          * * no deferring time for wifi off
          */
         mStaticMockSession = mockitoSession()
-            .mockStatic(ImsMmTelManager.class)
-            .mockStatic(SubscriptionManager.class)
-            .startMocking();
+                .mockStatic(ImsMmTelManager.class)
+                .mockStatic(SubscriptionManager.class)
+                .mockStatic(WifiInjector.class)
+                .startMocking();
         lenient().when(ImsMmTelManager.createForSubscriptionId(eq(TEST_ACTIVE_SUBSCRIPTION_ID)))
                 .thenReturn(mImsMmTelManager);
         lenient().when(SubscriptionManager.isValidSubscriptionId(eq(TEST_ACTIVE_SUBSCRIPTION_ID)))
                 .thenReturn(true);
+        when(WifiInjector.getInstance()).thenReturn(mWifiInjector);
         doAnswer(new AnswerWithArguments() {
             public void answer(Executor executor, RegistrationManager.RegistrationCallback c) {
                 mImsMmTelManagerRegistrationCallback = c;

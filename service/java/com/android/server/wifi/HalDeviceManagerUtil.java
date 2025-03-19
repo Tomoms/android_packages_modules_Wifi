@@ -33,15 +33,12 @@ import java.util.List;
 public class HalDeviceManagerUtil {
     static class StaticChipInfo {
         private int mChipId;
-        private long mChipCapabilities;
         private @NonNull ArrayList<WifiChip.ChipMode> mAvailableModes = new ArrayList<>();
 
         StaticChipInfo(
                 int chipId,
-                long chipCapabilities,
                 @NonNull ArrayList<WifiChip.ChipMode> availableModes) {
             mChipId = chipId;
-            mChipCapabilities = chipCapabilities;
             if (availableModes != null) {
                 mAvailableModes = availableModes;
             }
@@ -51,24 +48,18 @@ public class HalDeviceManagerUtil {
             return mChipId;
         }
 
-        long getChipCapabilities() {
-            return mChipCapabilities;
-        }
-
         ArrayList<WifiChip.ChipMode> getAvailableModes() {
             return mAvailableModes;
         }
     }
 
     private static final String KEY_CHIP_ID = "chipId";
-    private static final String KEY_CHIP_CAPABILITIES = "chipCapabilities";
     private static final String KEY_AVAILABLE_MODES = "availableModes";
 
     static JSONObject staticChipInfoToJson(@NonNull StaticChipInfo staticChipInfo)
             throws JSONException {
         JSONObject jsonObject = new JSONObject();
         jsonObject.put(KEY_CHIP_ID, staticChipInfo.getChipId());
-        jsonObject.put(KEY_CHIP_CAPABILITIES, staticChipInfo.getChipCapabilities());
         JSONArray availableModesJson = new JSONArray();
         for (WifiChip.ChipMode mode : staticChipInfo.getAvailableModes()) {
             availableModesJson.put(chipModeToJson(mode));
@@ -80,12 +71,11 @@ public class HalDeviceManagerUtil {
     static StaticChipInfo jsonToStaticChipInfo(JSONObject jsonObject) throws JSONException {
         ArrayList<WifiChip.ChipMode> availableModes = new ArrayList<>();
         int chipId = jsonObject.getInt(KEY_CHIP_ID);
-        long chipCapabilities = jsonObject.getLong(KEY_CHIP_CAPABILITIES);
         JSONArray modesJson = jsonObject.getJSONArray(KEY_AVAILABLE_MODES);
         for (int i = 0; i < modesJson.length(); i++) {
             availableModes.add(jsonToChipMode(modesJson.getJSONObject(i)));
         }
-        return new StaticChipInfo(chipId, chipCapabilities, availableModes);
+        return new StaticChipInfo(chipId, availableModes);
     }
 
     private static final String KEY_ID = "id";

@@ -18,16 +18,15 @@ package android.net.wifi;
 
 import android.net.wifi.SoftApCapability;
 import android.net.wifi.SoftApInfo;
-import android.net.wifi.WifiClient;
 import android.net.wifi.SoftApState;
+import android.net.wifi.WifiClient;
 
 /**
  * Interface for Soft AP callback.
  *
  * @hide
  */
-oneway interface ISoftApCallback
-{
+oneway interface ISoftApCallback {
     /**
      * Service to manager callback providing current soft AP state. The possible
      * parameter values listed are defined in WifiManager.java
@@ -45,8 +44,7 @@ oneway interface ISoftApCallback
      * @param isRegistration whether or not the callbackk was triggered when register.
      */
     void onConnectedClientsOrInfoChanged(in Map<String, SoftApInfo> infos,
-            in Map<String, List<WifiClient>> clients, boolean isBridged,
-	    boolean isRegistration);
+            in Map<String, List<WifiClient>> clients, boolean isBridged, boolean isRegistration);
 
     /**
      * Service to manager callback providing capability of softap.
@@ -62,4 +60,12 @@ oneway interface ISoftApCallback
      * @param blockedReason one of blocked reason from {@link WifiManager.SapClientBlockedReason}
      */
     void onBlockedClientConnecting(in WifiClient client, int blockedReason);
+
+    /**
+     * Service to manager callback providing clients that disconnected from the softap.
+     *
+     * @param info information about the AP instance
+     * @param clients the disconnected clients of the AP instance
+     */
+    void onClientsDisconnected(in SoftApInfo info, in List<WifiClient> clients);
 }

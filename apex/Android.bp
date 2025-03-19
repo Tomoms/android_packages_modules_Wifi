@@ -27,6 +27,8 @@ apex_defaults {
     // from build rule `cacerts_wfa`
     prebuilts: [
         "cacerts_wfa",
+        "mainline_supplicant_conf",
+        "mainline_supplicant_rc",
     ],
     key: "com.android.wifi.key",
     certificate: ":com.android.wifi.certificate",
@@ -34,6 +36,13 @@ apex_defaults {
         "OsuLogin",
         "ServiceWifiResources",
         "WifiDialog",
+    ],
+    binaries: select(release_flag("RELEASE_WIFI_MAINLINE_SUPPLICANT_BINARY"), {
+        true: ["wpa_supplicant_mainline"],
+        default: [],
+    }),
+    jni_libs: [
+        "libservice-wifi-jni",
     ],
     defaults: ["r-launched-apex-module"],
     // Indicates that pre-installed version of this apex can be compressed.
@@ -122,6 +131,7 @@ bootclasspath_fragment {
             "android.net.wifi.p2p",
             "android.net.wifi.rtt",
             "android.net.wifi.twt",
+            "android.net.wifi.usd",
             "android.net.wifi.util",
             "com.android.wifi",
         ],

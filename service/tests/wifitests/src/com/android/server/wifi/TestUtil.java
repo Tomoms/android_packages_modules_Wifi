@@ -26,6 +26,7 @@ import android.net.wifi.WifiManager;
 import android.os.PowerManager;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 
 /**
  * Utils for wifi tests.
@@ -105,5 +106,46 @@ public class TestUtil {
     public static void sendIdleModeChanged(BroadcastReceiver broadcastReceiver, Context context) {
         Intent intent = new Intent(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED);
         broadcastReceiver.onReceive(context, intent);
+    }
+
+    /**
+     * Create a new capability BitSet containing the provided capabilities.
+     *
+     * @param capabilities One or more WifiManager.WIFI_FEATURE_* capabilities
+     */
+    public static BitSet createCapabilityBitset(int... capabilities) {
+        BitSet capabilityBitset = new BitSet();
+        for (int capability : capabilities) {
+            capabilityBitset.set(capability);
+        }
+        return capabilityBitset;
+    }
+
+    /**
+     * Add additional capabilities to the provided BitSet.
+     *
+     * @param bitset BitSet that the capabilities should be added to
+     * @param capabilities One or more WifiManager.WIFI_FEATURE_* capabilities
+     */
+    public static BitSet addCapabilitiesToBitset(BitSet bitset, int... capabilities) {
+        // Clone to avoid modifying the input BitSet
+        BitSet clonedBitset = (BitSet) bitset.clone();
+        for (int capability : capabilities) {
+            clonedBitset.set(capability);
+        }
+        return clonedBitset;
+    }
+
+    /**
+     * Combine several BitSets using an OR operation.
+     *
+     * @param bitsets BitSets that should be combined
+     */
+    public static BitSet combineBitsets(BitSet... bitsets) {
+        BitSet combinedBitset = new BitSet();
+        for (BitSet bitset : bitsets) {
+            combinedBitset.or(bitset);
+        }
+        return combinedBitset;
     }
 }

@@ -300,6 +300,7 @@ interface ISupplicantP2pIfaceHal {
      * @return true, if operation was successful.
      */
     boolean groupAdd(String networkName, String passphrase,
+            @WifiP2pConfig.PccModeConnectionType int connectionType,
             boolean isPersistent, int freq, String peerAddress, boolean join);
 
     /**

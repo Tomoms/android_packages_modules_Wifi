@@ -297,6 +297,7 @@
           <item type="bool" name="config_wifiDialogCanceledOnTouchOutside" />
           <item type="bool" name="config_showConfirmationDialogForThirdPartyAppsEnablingWifi" />
           <item type="integer" name="config_p2pInvitationReceivedDialogTimeoutMs"/>
+          <item type="bool" name="config_p2pInvitationReceivedDialogShowRemainingTime" />
           <item type="bool" name="config_p2pInvitationReceivedDialogNotificationSound"/>
           <item type="integer" name="config_wifiP2pJoinRequestAuthorizingTimeoutMs" />
           <item type="bool" name="config_wifiForcedSoftApRestartWhenCountryCodeChanged" />
@@ -307,6 +308,7 @@
           <item type="bool" name="config_wifiUserApprovalNotRequireForDisconnectedP2p" />
           <item type="integer" name="config_disconnectedP2pIfaceLowPriorityTimeoutMs" />
           <item type="array" name="config_wifiP2pAwareConcurrencyAllowlist" />
+          <item type="array" name="config_wifiSoftApAwareConcurrencyAllowlist" />
           <item type="bool" name="config_wifiNetworkCentricQosPolicyFeatureEnabled" />
           <item type="bool" name="config_wifiApplicationCentricQosPolicyFeatureEnabled" />
           <item type="string" name="config_wifiDriverWorldModeCountryCode" />
@@ -344,6 +346,7 @@
           <item type="integer" name="config_wifi80211azMaxTimeBetweenNtbMeasurementsMicros"/>
           <item type="bool" name="config_wifiD2dAllowedControlSupportedWhenInfraStaDisabled" />
           <item type="array" name="config_wifiTwtBlockedOuiList" />
+          <item type="integer" name="config_wifiSoftApMaxNumberMLDSupported"/>
           <item type="bool" name="config_wifiSoftApSingleLinkMloInBridgedModeSupported" />
           <item type="bool" name="config_wifiTwtSupported" />
           <item type="bool" name="config_wifiNetworkSelectionSetTargetBssid" />
@@ -351,6 +354,8 @@
           <item type="array" name="config_wifiDelayedSelectionCarrierIds" />
           <item type="integer" name="config_wifiDelayedCarrierSelectionTimeMs" />
           <item type="bool" name="config_wifiRsnOverridingEnabled" />
+          <item type="bool" name="config_wifi_subsystem_restart_bugreport_enabled" />
+          <item type="bool" name="config_wifiNl80211HalEnabled" />
 
           <!-- Params from config.xml that can be overlayed -->
 
@@ -387,13 +392,19 @@
           <item type="string" name="accept" />
           <item type="string" name="decline" />
           <item type="string" name="ok" />
-          <item type="string" name="wifi_p2p_invitation_sent_title" />
-          <item type="string" name="wifi_p2p_invitation_to_connect_title" />
-          <item type="string" name="wifi_p2p_invitation_seconds_remaining" />
-          <item type="string" name="wifi_p2p_from_message" />
-          <item type="string" name="wifi_p2p_to_message" />
-          <item type="string" name="wifi_p2p_enter_pin_message" />
-          <item type="string" name="wifi_p2p_show_pin_message" />
+          <item type="string" name="wifi_p2p_dialog2_sent_title" />
+          <item type="string" name="wifi_p2p_dialog2_sent_title_display_pin" />
+          <item type="string" name="wifi_p2p_dialog2_sent_message" />
+          <item type="string" name="wifi_p2p_dialog2_sent_message_display_pin" />
+          <item type="string" name="wifi_p2p_dialog2_sent_positive_button" />
+          <item type="string" name="wifi_p2p_dialog2_received_title" />
+          <item type="string" name="wifi_p2p_dialog2_received_message" />
+          <item type="string" name="wifi_p2p_dialog2_received_message_enter_pin" />
+          <item type="string" name="wifi_p2p_dialog2_received_message_display_pin" />
+          <item type="string" name="wifi_p2p_dialog2_received_positive_button" />
+          <item type="string" name="wifi_p2p_dialog2_received_negative_button" />
+          <item type="string" name="wifi_p2p_dialog2_enter_pin_label" />
+          <item type="string" name="wifi_p2p_dialog2_display_pin_label" />
           <item type="string" name="wifi_p2p_frequency_conflict_message" />
           <item type="string" name="dlg_ok" />
           <item type="string" name="wifi_cannot_connect_with_randomized_mac_title" />
@@ -502,6 +513,17 @@
           <item type="style" name="wifi_p2p_dialog_row_content" />
           <item type="style" name="wifi_p2p_dialog_enter_pin_message" />
           <item type="style" name="wifi_p2p_dialog_pin_input" />
+
+          <item type="style" name="wifi_p2p_dialog2" />
+          <item type="style" name="wifi_p2p_dialog2_pin_section" />
+          <item type="style" name="wifi_p2p_dialog2_pin_label" />
+          <item type="style" name="wifi_p2p_dialog2_pin" />
+          <item type="style" name="wifi_p2p_dialog2_enter_pin_section" />
+          <item type="style" name="wifi_p2p_dialog2_enter_pin_label" />
+          <item type="style" name="wifi_p2p_dialog2_enter_pin" />
+          <item type="style" name="wifi_p2p_dialog2_display_pin_section" />
+          <item type="style" name="wifi_p2p_dialog2_display_pin_label" />
+          <item type="style" name="wifi_p2p_dialog2_display_pin" />
           <!-- Params from styles.xml that can be overlayed -->
 
           <!-- Params from drawable/ that can be overlayed -->

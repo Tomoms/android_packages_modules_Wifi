@@ -39,8 +39,10 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import android.net.MacAddress;
 import android.net.wifi.CoexUnsafeChannel;
@@ -59,18 +61,23 @@ import android.util.SparseIntArray;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.SoftApManager;
 import com.android.server.wifi.WifiBaseTest;
+import com.android.server.wifi.WifiInjector;
 import com.android.server.wifi.WifiNative;
 import com.android.server.wifi.WifiSettingsConfigStore;
 import com.android.server.wifi.coex.CoexManager;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -173,15 +180,23 @@ public class ApConfigUtilTest extends WifiBaseTest {
     @Mock WifiSettingsConfigStore mConfigStore;
     @Mock
     DeviceWiphyCapabilities mDeviceWiphyCapabilities;
+    @Mock WifiInjector mWifiInjector;
     private SoftApCapability mCapability;
     private boolean mApBridgeIfaceCobinationSupported = false;
     private boolean mApBridgeWithStaIfaceCobinationSupported = false;
+    private MockitoSession mSession;
+
     /**
      * Setup test.
      */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        // Mock WifiMigration to avoid calling into its static methods
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(Flags.class, withSettings().lenient())
+                .mockStatic(WifiInjector.class, withSettings().lenient())
+                .startMocking();
         final long testFeatures = SoftApCapability.SOFTAP_FEATURE_CLIENT_FORCE_DISCONNECT
                 | SoftApCapability.SOFTAP_FEATURE_BAND_6G_SUPPORTED
                 | SoftApCapability.SOFTAP_FEATURE_BAND_60G_SUPPORTED;
@@ -189,6 +204,8 @@ public class ApConfigUtilTest extends WifiBaseTest {
         mCapability.setSupportedChannelList(SoftApConfiguration.BAND_2GHZ, ALLOWED_2G_CHANS);
         mCapability.setSupportedChannelList(SoftApConfiguration.BAND_5GHZ, ALLOWED_5G_CHANS);
         mCapability.setSupportedChannelList(SoftApConfiguration.BAND_60GHZ, ALLOWED_60G_CHANS);
+        when(WifiInjector.getInstance()).thenReturn(mWifiInjector);
+        when(mWifiInjector.getContext()).thenReturn(mContext);
         when(mContext.getResourceCache()).thenReturn(mResources);
         when(mResources.getBoolean(R.bool.config_wifi24ghzSupport)).thenReturn(true);
         when(mResources.getBoolean(R.bool.config_wifi5ghzSupport)).thenReturn(true);
@@ -218,6 +235,17 @@ public class ApConfigUtilTest extends WifiBaseTest {
                     }
                     return false;
                 });
+    }
+
+    /**
+     * Called after each test
+     */
+    @After
+    public void cleanup() {
+        validateMockitoUsage();
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     /**
@@ -1377,7 +1405,7 @@ public class ApConfigUtilTest extends WifiBaseTest {
                 .thenReturn(TEST_5G_DFS_FREQS);
         when(mWifiNative.getChannelsForBand(anyInt())).thenReturn(new int[0]);
         List<Integer> result = ApConfigUtil.getAvailableChannelFreqsForBand(
-                SoftApConfiguration.BAND_5GHZ, mWifiNative, mResources, true);
+                SoftApConfiguration.BAND_5GHZ, mWifiNative, null, true);
         // make sure we try to get dfs channel.
         verify(mWifiNative).getChannelsForBand(WifiScanner.WIFI_BAND_5_GHZ_DFS_ONLY);
         for (int freq : result) {
@@ -1412,7 +1440,7 @@ public class ApConfigUtilTest extends WifiBaseTest {
         when(mWifiNative.getChannelsForBand(WifiScanner.WIFI_BAND_5_GHZ))
                 .thenReturn(ALLOWED_5G_FREQS);
         List<Integer> result = ApConfigUtil.getAvailableChannelFreqsForBand(
-                SoftApConfiguration.BAND_5GHZ, mWifiNative, mResources, true);
+                SoftApConfiguration.BAND_5GHZ, mWifiNative, null, true);
         // make sure we try to get available channels from wificond.
         verify(mWifiNative).getChannelsForBand(WifiScanner.WIFI_BAND_5_GHZ);
         verify(mWifiNative, never()).getUsableChannels(anyInt(), anyInt(), anyInt());
@@ -1432,7 +1460,7 @@ public class ApConfigUtilTest extends WifiBaseTest {
                 .thenReturn(ALLOWED_5G_FREQS);
         when(mWifiNative.getUsableChannels(anyInt(), anyInt(), anyInt())).thenReturn(null);
         List<Integer> result = ApConfigUtil.getAvailableChannelFreqsForBand(
-                SoftApConfiguration.BAND_5GHZ, mWifiNative, mResources, true);
+                SoftApConfiguration.BAND_5GHZ, mWifiNative, null, true);
         // make sure we try to get available channels from HAL and fallback to wificond.
         verify(mWifiNative).getChannelsForBand(WifiScanner.WIFI_BAND_5_GHZ);
         verify(mWifiNative).getUsableChannels(eq(WifiScanner.WIFI_BAND_5_GHZ), anyInt(), anyInt());
@@ -1455,7 +1483,7 @@ public class ApConfigUtilTest extends WifiBaseTest {
                 .thenReturn(false);
         /* 11be is disallowed when IEEE80211_BE feature is not supported */
         assertFalse(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
-                mContext, config, true));
+                mContext, config, true, 0, false));
 
         when(mResources.getBoolean(R.bool.config_wifiSoftapIeee80211beSupported))
                 .thenReturn(true);
@@ -1465,13 +1493,34 @@ public class ApConfigUtilTest extends WifiBaseTest {
                 .thenReturn(true);
         /* 11be is allowed if chip supports single link MLO in bridged mode */
         assertTrue(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
-                mContext, config, true));
+                mContext, config, true, 0, false));
 
         /* 11be is not allowed if chip doesn't support single link MLO in bridged mode */
         when(mResources.getBoolean(R.bool.config_wifiSoftApSingleLinkMloInBridgedModeSupported))
                 .thenReturn(false);
         assertFalse(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
-                mContext, config, true));
+                mContext, config, true, 0, false));
+
+        when(Flags.mloSap()).thenReturn(true);
+        // two MLDs supported, allow 11be on bridged mode.
+        when(mResources.getInteger(R.integer.config_wifiSoftApMaxNumberMLDSupported))
+                .thenReturn(2);
+        assertTrue(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
+                mContext, config, true, 0, false));
+
+        // One MLD only, disallow 11be on bridged AP.
+        when(mResources.getInteger(R.integer.config_wifiSoftApMaxNumberMLDSupported))
+                .thenReturn(1);
+        assertFalse(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
+                mContext, config, true, 0, false));
+
+        // One MLD only, disallow 11be when there is existing 11be AP.
+        assertFalse(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
+                mContext, config, false, 1, false));
+
+        // One MLD only but chip support MultilinksOnMLD, allow 11be on bridged AP.
+        assertTrue(ApConfigUtil.is11beAllowedForThisConfiguration(mDeviceWiphyCapabilities,
+                mContext, config, true, 0, true));
     }
     @Test
     public void testIs11beDisabledForSecurityType() throws Exception {

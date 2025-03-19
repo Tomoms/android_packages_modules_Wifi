@@ -774,6 +774,12 @@ message WifiLog {
   // and telephony.
   // Bucket value is capped to WifiMetrics.MAX_COUNTRY_CODE_COUNT.
   repeated Int32Count country_code_scan_histogram = 219;
+
+  // Each WifiUsabilityStatsTraining instance contains a list of WifiUsabilityStatsEntry objects,
+  // representing a time series of WiFi usability statistics recorded within a specific data
+  // capture period. It also includes information about the type of data capture and the duration
+  // of the capture period.
+  repeated WifiUsabilityStatsTraining wifi_usability_stats_training = 220;
 }
 
 // Information that gets logged for every WiFi connection.
@@ -1466,6 +1472,15 @@ message StaEvent {
 
     // Wi-Fi 7 support for this network has been enabled or disabled.
     DISCONNECT_NETWORK_WIFI7_TOGGLED = 17;
+
+    // IP configuration is lost. Triggered by connectivity
+    DISCONNECT_IP_CONFIGURATION_LOST = 18;
+
+    // IP reachability is lost. Triggered by connectivity
+    DISCONNECT_IP_REACHABILITY_LOST = 19;
+
+    // No credentials
+    DISCONNECT_NO_CREDENTIALS = 20;
   }
 
   // Authentication Failure reasons as reported through the API.
@@ -2563,6 +2578,32 @@ message WifiUsabilityStatsEntry {
     NETWORK_TYPE_NR = 7;
   }
 
+  enum CaptureEventType {
+    // Unknown event
+    CAPTURE_EVENT_TYPE_UNKNOWN = 0;
+
+    // This is a synchronous event
+    CAPTURE_EVENT_TYPE_SYNCHRONOUS = 1;
+
+    // RSSI polling turned on
+    CAPTURE_EVENT_TYPE_RSSI_POLLING_ENABLED = 2;
+
+    // RSSI polling turned off
+    CAPTURE_EVENT_TYPE_RSSI_POLLING_DISABLED = 3;
+
+    // Data sample came from CMD_ONESHOT_RSSI_POLL
+    CAPTURE_EVENT_TYPE_ONESHOT_RSSI_POLL = 4;
+
+    // IP reachability lost
+    CAPTURE_EVENT_TYPE_IP_REACHABILITY_LOST = 5;
+
+    // IP reachability failure
+    CAPTURE_EVENT_TYPE_IP_REACHABILITY_FAILURE = 6;
+
+    // Firmware alert
+    CAPTURE_EVENT_TYPE_FIRMWARE_ALERT = 7;
+  }
+
   // Absolute milliseconds from device boot when these stats were sampled
   optional int64 time_stamp_ms = 1;
 
@@ -2709,6 +2750,71 @@ message WifiUsabilityStatsEntry {
 
   // Link layer radio stats for all the radios
   repeated RadioStats radio_stats = 44;
+
+  // Number of WiFi links.
+  optional int32 wifi_link_count = 45;
+
+  // Link layer radio stats for all WiFi links
+  repeated LinkStats link_stats = 46;
+
+  // The MLO mode
+  // See details in @WifiManager.MloMode
+  optional int32 mlo_mode = 47;
+
+  // The number of tx bytes transmitted on current interface
+  optional int64 tx_transmitted_bytes = 48;
+
+  // The number of rx bytes transmitted on current interface
+  optional int64 rx_transmitted_bytes = 49;
+
+  // The total number of LABEL_BAD event happens
+  optional int32 label_bad_event_count = 50;
+
+  // Current WiFi state in framework
+  optional int32 wifi_framework_state = 51;
+
+  // Downstream throughput estimation provided by Network Capabilities
+  optional int32 is_network_capabilities_downstream_sufficient = 52;
+
+  // Upstream throughput estimation provided by Network Capabilities
+  optional int32 is_network_capabilities_upstream_sufficient = 53;
+
+  // Downstream throughput estimation used in Network Selection
+  optional int32 is_throughput_predictor_downstream_sufficient = 54;
+
+  // Upstream throughput estimation provided by Network Capabilities
+  optional int32 is_throughput_predictor_upstream_sufficient = 55;
+
+  // If bluetooth is connected
+  optional bool is_bluetooth_connected = 56;
+
+  // State of UWB adapter. Refers to
+  // UwbManager#registerAdapterStateCallback(Executor, AdapterStateCallback)
+  optional int32 uwb_adapter_state = 57;
+
+  // Wifi Low Latency mode state
+  optional bool is_low_latency_activated = 58;
+
+  // Maximum supported tx link speed in Mbps
+  optional int32 max_supported_tx_linkspeed = 59;
+
+  // Maximum supported rx link speed in Mbps
+  optional int32 max_supported_rx_linkspeed = 60;
+
+  // Wifi Voip mode state
+  optional int32 voip_mode = 61;
+
+  // Device Role of thread. Refers to ThreadNetworkController@DeviceRole
+  optional int32 thread_device_role = 62;
+
+  // Capture buffer event type
+  optional CaptureEventType capture_event_type = 63;
+
+  // Some capture event types (eg. ip reachability lost) have a code associated
+  // with them. This code is stored here.
+  optional int32 capture_event_type_subcode = 64;
+
+  optional int32 status_data_stall = 65;
 }
 
 message ContentionTimeStats {
@@ -2740,6 +2846,37 @@ message ContentionTimeStats {
 
   // Number of data packets used for contention statistics
   optional int64 contention_num_samples = 5;
+}
+
+message PacketStats {
+  enum AccessCategory {
+    // WME Best Effort Access Category
+    WME_ACCESS_CATEGORY_BE = 0;
+
+    // WME Background Access Category
+    WME_ACCESS_CATEGORY_BK = 1;
+
+    // WME Video Access Category
+    WME_ACCESS_CATEGORY_VI = 2;
+
+    // WME Voice Access Category
+    WME_ACCESS_CATEGORY_VO = 3;
+  }
+
+  // WME access category
+  optional AccessCategory access_category = 1;
+
+  // The number of tx success counted from the last radio chip reset
+  optional int64 tx_success = 2;
+
+  // The number of MPDU data packet retries counted from the last radio chip reset
+  optional int64 tx_retries = 3;
+
+  // The number of tx bad counted from the last radio chip reset
+  optional int64 tx_bad = 4;
+
+  // The number of rx success counted from the last radio chip reset
+  optional int64 rx_success = 5;
 }
 
 message RateStats {
@@ -2786,6 +2923,8 @@ message RateStats {
     WIFI_BANDWIDTH_5_MHZ = 5;
     // Channel bandwidth: 10MHz
     WIFI_BANDWIDTH_10_MHZ = 6;
+    // Channel bandwidth: 320MHz
+    WIFI_BANDWIDTH_320_MHZ = 7;
     // Invalid channel bandwidth
     WIFI_BANDWIDTH_INVALID = -1;
   }
@@ -2849,6 +2988,123 @@ message RadioStats {
   // The total time spent on hotspot2.0 scans and GAS exchange in ms counted from the last radio
   // chip reset
   optional int64 total_hotspot_2_scan_time_ms = 10;
+
+  // Time for which the radio is in active tranmission per tx level
+  repeated int32 tx_time_ms_per_level = 11;
+}
+
+message LinkStats {
+  enum LinkState {
+    // Chip does not support reporting the state of the link
+    LINK_STATE_UNKNOWN = 0;
+
+    // Link has not been in use since last report. It is placed in power save
+    LINK_STATE_NOT_IN_USE = 1;
+
+    // Link is in use. In presence of traffic, it is set to be power active.
+    LINK_STATE_IN_USE = 2;
+  }
+
+  enum WifiChannelBandwidth {
+    // Channel bandwidth: 20MHz
+    WIFI_BANDWIDTH_20_MHZ = 0;
+    // Channel bandwidth: 40MHz
+    WIFI_BANDWIDTH_40_MHZ = 1;
+    // Channel bandwidth: 80MHz
+    WIFI_BANDWIDTH_80_MHZ = 2;
+    // Channel bandwidth: 160MHz
+    WIFI_BANDWIDTH_160_MHZ = 3;
+    // Channel bandwidth: 80MHz + 80MHz
+    WIFI_BANDWIDTH_80P80_MHZ = 4;
+    // Channel bandwidth: 5MHz
+    WIFI_BANDWIDTH_5_MHZ = 5;
+    // Channel bandwidth: 10MHz
+    WIFI_BANDWIDTH_10_MHZ = 6;
+    // Channel bandwidth: 320MHz
+    WIFI_BANDWIDTH_320_MHZ = 7;
+    // Invalid channel bandwidth
+    WIFI_BANDWIDTH_INVALID = -1;
+  }
+
+  // The Link ID
+  optional int32 link_id = 1;
+
+  // Link state
+  optional LinkState state = 2;
+
+  // Identifier of the radio on which link is currently operating
+  optional int32 radio_id = 3;
+
+  // Frequency of the link in MHz
+  optional int32 frequency_mhz = 4;
+
+  // Number of beacons received from our own AP
+  optional int32 beacon_rx = 5;
+
+  // RSSI of management frames
+  optional int32 rssi_mgmt = 6;
+
+  // Duty cycle of the link.
+  optional int32 time_slice_duty_cycle_in_percent = 7;
+
+  // Overall RSSI from wpa_supplicant signal_poll
+  optional int32 rssi = 8;
+
+  // channel width of WiFi link.
+  optional WifiChannelBandwidth channel_width = 9;
+
+  // Center frequency (MHz) of first segment.
+  optional int32 center_freq_first_seg = 10;
+
+  // Center frequency (MHz) of second segment.
+  optional int32 center_freq_second_seg = 11;
+
+  // Total time for which the radio is awake on this channel.
+  optional int64 on_time_in_ms = 12;
+
+  // Total time for which CCA is held busy on this channel.
+  optional int64 cca_busy_time_in_ms = 13;
+
+  // WME data packet contention time statistics for all four categories: BE, BK, VI, VO
+  repeated ContentionTimeStats contention_time_stats = 14;
+
+  // Packet statistics for all four categories: BE, BK, VI, VO
+  repeated PacketStats packet_stats = 15;
+
+  // Peer statistics on this WiFi link
+  repeated PeerInfo peer_info = 16;
+
+  // List of scan results who have the same freq with current WiFi link
+  repeated ScanResultWithSameFreq scan_result_with_same_freq = 17;
+
+  // TX linkspeed in this WiFi link
+  optional int32 tx_linkspeed = 18;
+
+  // RX linkspeed in this WiFi link
+  optional int32 rx_linkspeed = 19;
+}
+
+message PeerInfo {
+  // Station count.
+  optional int32 sta_count = 1;
+
+  // Channel utilization.
+  optional int32 chan_util = 2;
+
+  // Rate statistics, including number of successful packets, retries, etc.,
+  // indexed by preamble, bandwidth, number of spatial streams, MCS.
+  repeated RateStats rate_stats = 3;
+}
+
+message ScanResultWithSameFreq {
+  // timestamp in microseconds (since boot) when this result was last seen.
+  optional int64 scan_result_timestamp_micros = 1;
+
+  // The detected signal level in dBm
+  optional int32 rssi = 2;
+
+  // The center frequency of the primary 20 MHz frequency (in MHz) of the channel
+  optional int32 frequencyMhz = 3;
 }
 
 message WifiUsabilityStats {
@@ -2898,6 +3154,21 @@ message WifiUsabilityStats {
 
   // Absolute milliseconds from device boot when these stats were sampled
   optional int64 time_stamp_ms = 5;
+}
+
+message TrainingData {
+  // The list of timestamped wifi usability stats
+  repeated WifiUsabilityStatsEntry stats = 1;
+}
+
+message WifiUsabilityStatsTraining {
+  // Data capture type
+  optional int32 data_capture_type = 1;
+
+  // Capture period start timestamp floored to the nearest hour.
+  optional int64 capture_start_timestamp_secs = 2;
+
+  optional TrainingData training_data = 3;
 }
 
 message DeviceMobilityStatePnoScanStats {

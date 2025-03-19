@@ -22,6 +22,7 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -32,6 +33,7 @@ import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.mock;
 
 import android.net.MacAddress;
+import android.net.wifi.util.Environment;
 import android.os.Parcel;
 import android.os.PersistableBundle;
 import android.util.SparseIntArray;
@@ -131,6 +133,9 @@ public class SoftApConfigurationTest {
                         .isEqualTo(SoftApConfiguration.RANDOMIZATION_PERSISTENT);
             }
         }
+        if (Environment.isSdkAtLeastB()) {
+            assertFalse(original.isClientIsolationEnabled());
+        }
 
         SoftApConfiguration unparceled = parcelUnparcel(original);
         assertThat(unparceled).isNotSameInstanceAs(original);
@@ -229,7 +234,9 @@ public class SoftApConfigurationTest {
             originalBuilder.setBridgedModeOpportunisticShutdownTimeoutMillis(300_000);
             originalBuilder.setVendorElements(TEST_TWO_VENDOR_ELEMENTS);
         }
-
+        if (Environment.isSdkAtLeastB()) {
+            originalBuilder.setClientIsolationEnabled(true);
+        }
         SoftApConfiguration original = originalBuilder.build();
         assertThat(original.getPassphrase()).isEqualTo("secretsecret");
         assertThat(original.getSecurityType()).isEqualTo(
@@ -260,6 +267,9 @@ public class SoftApConfigurationTest {
                     .isEqualTo(300_000);
             assertThat(original.getVendorElements())
                     .isEqualTo(TEST_TWO_VENDOR_ELEMENTS);
+        }
+        if (Environment.isSdkAtLeastB()) {
+            assertTrue(original.isClientIsolationEnabled());
         }
 
         SoftApConfiguration unparceled = parcelUnparcel(original);

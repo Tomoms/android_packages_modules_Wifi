@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Prima:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Unesite potrebni PIN:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Veza uređaja"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Veza uređaja"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Pozivnica je poslana na uređaj <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Da se povežete, unesite ovaj PIN na uređaju <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"Uredu"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Veza uređaja"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Veza uređaja"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Veza uređaja"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"Uređaj <xliff:g id="DEVICE_NAME">%1$s</xliff:g> se želi povezati s vašim uređajem."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Da se povežete, unesite PIN prikazan na uređaju <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"Uređaj <xliff:g id="DEVICE_NAME">%1$s</xliff:g> se želi povezati s vašim uređajem sa sljedećim PIN-om."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{Uređaj {device} se želi povezati s vašim uređajem. Prihvatite za {countdown} sekundu.}one{Uređaj {device} se želi povezati s vašim uređajem. Prihvatite za {countdown} sekundu.}few{Uređaj {device} se želi povezati s vašim uređajem. Prihvatite za {countdown} sekunde.}other{Uređaj {device} se želi povezati s vašim uređajem. Prihvatite za {countdown} sekundi.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Da se povežete, unesite PIN prikazan na uređaju {device} u roku od {countdown} sekunde.}one{Da se povežete, unesite PIN prikazan na uređaju {device} u roku od {countdown} sekunde.}few{Da se povežete, unesite PIN prikazan na uređaju {device} u roku od {countdown} sekunde.}other{Da se povežete, unesite PIN prikazan na uređaju {device} u roku od {countdown} sekundi.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{Uređaj {device} se želi povezati s vašim uređajem sa sljedećim PIN-om. Prihvatite za {countdown} sekundu.}one{Uređaj {device} se želi povezati s vašim uređajem sa sljedećim PIN-om. Prihvatite za {countdown} sekundu.}few{Uređaj {device} se želi povezati s vašim uređajem sa sljedećim PIN-om. Prihvatite za {countdown} sekunde.}other{Uređaj {device} se želi povezati s vašim uređajem sa sljedećim PIN-om. Prihvatite za {countdown} sekundi.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Poveži se"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Otkaži"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Povezanost uređaja s WiFi mrežom će se privremeno prekinuti dok je povezan s uređajem <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"Uredu"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Nije se moguće povezati s mrežom <xliff:g id="SSID">%1$s</xliff:g>"</string>

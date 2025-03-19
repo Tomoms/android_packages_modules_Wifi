@@ -25,6 +25,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.BitSet;
 
 /**
  * This class provides helper functions for Wifi connectivity related modules to
@@ -63,10 +64,10 @@ public class WifiConnectivityHelper {
 
         ClientModeManager primaryManager =
                 mWifiInjector.getActiveModeWarden().getPrimaryClientModeManager();
-        long fwFeatureSet = primaryManager.getSupportedFeatures();
-        Log.d(TAG, "Firmware supported feature set: " + Long.toHexString(fwFeatureSet));
+        BitSet fwFeatureSet = primaryManager.getSupportedFeatures();
+        Log.d(TAG, "Firmware supported feature set: " + fwFeatureSet);
 
-        if ((fwFeatureSet & WIFI_FEATURE_CONTROL_ROAMING) == 0) {
+        if (!fwFeatureSet.get(WIFI_FEATURE_CONTROL_ROAMING)) {
             Log.d(TAG, "Firmware roaming is not supported");
             return true;
         }

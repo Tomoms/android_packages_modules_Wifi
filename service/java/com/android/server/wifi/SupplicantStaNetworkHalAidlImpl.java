@@ -19,8 +19,6 @@ package com.android.server.wifi;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_TLS_V1_3;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA3_SUITE_B;
 
-import static com.android.server.wifi.util.GeneralUtil.getCapabilityIndex;
-
 import android.annotation.NonNull;
 import android.content.Context;
 import android.hardware.wifi.supplicant.AuthAlgMask;
@@ -888,7 +886,7 @@ public class SupplicantStaNetworkHalAidlImpl {
 
     private int getOptimalMinimumTlsVersion(WifiEnterpriseConfig enterpriseConfig) {
         int maxTlsVersionSupported = WifiEnterpriseConfig.TLS_V1_2;
-        if (mWpaDriverFeatures.get(getCapabilityIndex(WIFI_FEATURE_TLS_V1_3))) {
+        if (mWpaDriverFeatures.get(WIFI_FEATURE_TLS_V1_3)) {
             maxTlsVersionSupported = WifiEnterpriseConfig.TLS_V1_3;
         }
 
@@ -1048,8 +1046,7 @@ public class SupplicantStaNetworkHalAidlImpl {
                         mask |= GroupCipherMask.GTK_NOT_USED;
                         break;
                     case WifiConfiguration.GroupCipher.GCMP_256:
-                        if (!mAdvanceKeyMgmtFeatures.get(
-                                getCapabilityIndex(WIFI_FEATURE_WPA3_SUITE_B))) {
+                        if (!mAdvanceKeyMgmtFeatures.get(WIFI_FEATURE_WPA3_SUITE_B)) {
                             Log.d(TAG, "Ignore unsupported GCMP_256 cipher.");
                             break;
                         }
@@ -1110,8 +1107,7 @@ public class SupplicantStaNetworkHalAidlImpl {
                         mask |= PairwiseCipherMask.CCMP;
                         break;
                     case WifiConfiguration.PairwiseCipher.GCMP_256:
-                        if (!mAdvanceKeyMgmtFeatures.get(
-                                getCapabilityIndex(WIFI_FEATURE_WPA3_SUITE_B))) {
+                        if (!mAdvanceKeyMgmtFeatures.get(WIFI_FEATURE_WPA3_SUITE_B)) {
                             Log.d(TAG, "Ignore unsupporting GCMP_256 cipher.");
                             break;
                         }

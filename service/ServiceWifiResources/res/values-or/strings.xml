@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"ପ୍ରାପ୍ତେଷୁ:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"ଆବଶ୍ୟକ PIN ଟାଇପ୍‍ କରନ୍ତୁ:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"ଡିଭାଇସ କନେକ୍ସନ"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"ଡିଭାଇସ କନେକ୍ସନ"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>କୁ ଆମନ୍ତ୍ରଣ ପଠାଯାଇଛି।"</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"କନେକ୍ଟ କରିବାକୁ <xliff:g id="DEVICE_NAME">%1$s</xliff:g>ରେ ଏହି PIN ଲେଖନ୍ତୁ।"</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"ଠିକ ଅଛି"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"ଡିଭାଇସ କନେକ୍ସନ"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"ଡିଭାଇସ କନେକ୍ସନ"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"ଡିଭାଇସ କନେକ୍ସନ"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> ଆପଣଙ୍କ ଡିଭାଇସ ସହ କନେକ୍ଟ କରିବାକୁ ଚାହୁଁଛି।"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"କନେକ୍ଟ କରିବାକୁ <xliff:g id="DEVICE_NAME">%1$s</xliff:g>ରେ ଦେଖାଯାଉଥିବା PIN ଲେଖନ୍ତୁ।"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> ନିମ୍ନୋକ୍ତ PIN ମାଧ୍ୟମରେ ଆପଣଙ୍କ ଡିଭାଇସ ସହ କନେକ୍ଟ କରିବାକୁ ଚାହୁଁଛି।"</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} ଆପଣଙ୍କ ଡିଭାଇସ ସହ କନେକ୍ଟ କରିବାକୁ ଚାହୁଁଛି। {countdown} ସେକେଣ୍ଡରେ ଗ୍ରହଣ କରନ୍ତୁ।}other{{device} ଆପଣଙ୍କ ଡିଭାଇସ ସହ କନେକ୍ଟ କରିବାକୁ ଚାହୁଁଛି। {countdown} ସେକେଣ୍ଡରେ ଗ୍ରହଣ କରନ୍ତୁ।}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{କନେକ୍ଟ କରିବାକୁ {countdown} ସେକେଣ୍ଡ ମଧ୍ୟରେ {device}ରେ ଦେଖାଯାଉଥିବା PIN ଲେଖନ୍ତୁ।}other{କନେକ୍ଟ କରିବାକୁ {countdown} ସେକେଣ୍ଡ ମଧ୍ୟରେ {device}ରେ ଦେଖାଯାଉଥିବା PIN ଲେଖନ୍ତୁ।}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} ନିମ୍ନୋକ୍ତ PIN ମାଧ୍ୟମରେ ଆପଣଙ୍କ ଡିଭାଇସ ସହ କନେକ୍ଟ କରିବାକୁ ଚାହୁଁଛି। {countdown} ସେକେଣ୍ଡରେ ଗ୍ରହଣ କରନ୍ତୁ।}other{{device} ନିମ୍ନୋକ୍ତ PIN ମାଧ୍ୟମରେ ଆପଣଙ୍କ ଡିଭାଇସ ସହ କନେକ୍ଟ କରିବାକୁ ଚାହୁଁଛି। {countdown} ସେକେଣ୍ଡରେ ଗ୍ରହଣ କରନ୍ତୁ।}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"କନେକ୍ଟ କରନ୍ତୁ"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"ବାତିଲ କରନ୍ତୁ"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"ଆପଣଙ୍କ ଡିଭାଇସ <xliff:g id="DEVICE_NAME">%1$s</xliff:g> ସହ କନେକ୍ଟ ଥିବା ସମୟରେ ଏହା ଅସ୍ଥାୟୀ ଭାବେ ୱାଇ-ଫାଇରୁ ଡିସକନେକ୍ଟ ହୋଇଯିବ"</string>
     <string name="dlg_ok" msgid="254496739491689405">"ଠିକ ଅଛି"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g> ସହିତ ସଂଯୋଗ କରାଯାଇପାରିବ ନାହିଁ"</string>

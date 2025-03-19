@@ -43,7 +43,6 @@ import android.net.wifi.aware.SubscribeConfig;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
@@ -89,7 +88,7 @@ public class WifiAwareServiceImpl extends IWifiAwareManager.Stub {
     private WifiAwareNativeApi mWifiAwareNativeApi;
     private WifiAwareNativeCallback mWifiAwareNativeCallback;
     private WifiAwareShellCommand mShellCommand;
-    private Handler mHandler;
+    private RunnerHandler mHandler;
 
     private final Object mLock = new Object();
     private final SparseArray<IBinder.DeathRecipient> mDeathRecipientsByClientId =
@@ -160,6 +159,7 @@ public class WifiAwareServiceImpl extends IWifiAwareManager.Stub {
         mWifiAwareNativeManager.enableVerboseLogging(mVerboseLoggingEnabled,
                 mVerboseLoggingEnabled);
         mWifiAwareNativeApi.enableVerboseLogging(mVerboseLoggingEnabled, vDbg);
+        mHandler.enableVerboseLogging(mVerboseLoggingEnabled);
     }
 
     /**

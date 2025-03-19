@@ -46,7 +46,7 @@ public class WifiP2pDnsSdServiceRequestTest {
 
         // failure case due to null service type
         try {
-            request = WifiP2pDnsSdServiceRequest.newInstance(null);
+            request = WifiP2pDnsSdServiceRequest.newInstance((String) null);
             fail("should throw IllegalArgumentException");
         } catch (IllegalArgumentException ex) {
             // expected exception.

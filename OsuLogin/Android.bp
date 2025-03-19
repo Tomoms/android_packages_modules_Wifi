@@ -18,9 +18,10 @@ android_app {
     optimize: {
         shrink_resources: true,
     },
+    updatable: true,
 }
 
 android_app_certificate {
     name: "com.android.hotspot2.osulogin.certificate",
-    certificate: "certs/com.android.hotspot2.osulogin"
+    certificate: "certs/com.android.hotspot2.osulogin",
 }

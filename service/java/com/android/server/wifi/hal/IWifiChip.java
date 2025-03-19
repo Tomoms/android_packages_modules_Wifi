@@ -58,10 +58,14 @@ public interface IWifiChip {
      *
      * @param vendorData List of {@link OuiKeyedData} containing vendor-provided
      *                   configuration data. Empty list indicates no vendor data.
+     * @param isUsingMultiLinkOperation whether the bridged AP is using multi-links
+     *                                      operation soft ap.
+     *
      * @return {@link WifiApIface} object, or null if a failure occurred.
      */
     @Nullable
-    WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData);
+    WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation);
 
     /**
      * Create a NAN interface on the chip.

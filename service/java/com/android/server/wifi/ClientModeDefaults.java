@@ -21,6 +21,7 @@ import android.annotation.Nullable;
 import android.net.DhcpResultsParcelable;
 import android.net.MacAddress;
 import android.net.Network;
+import android.net.wifi.BlockingOption;
 import android.net.wifi.IWifiConnectedNetworkScorer;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
@@ -284,4 +285,7 @@ public interface ClientModeDefaults extends ClientMode {
 
     @Override
     default void onIdleModeChanged(boolean isIdle) { }
+
+    @Override
+    default void blockNetwork(BlockingOption option) { }
 }

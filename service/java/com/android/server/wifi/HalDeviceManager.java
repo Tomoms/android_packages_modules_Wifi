@@ -19,7 +19,7 @@ package com.android.server.wifi;
 import static com.android.server.wifi.HalDeviceManagerUtil.jsonToStaticChipInfo;
 import static com.android.server.wifi.HalDeviceManagerUtil.staticChipInfoToJson;
 import static com.android.server.wifi.WifiSettingsConfigStore.WIFI_STATIC_CHIP_INFO;
-import static com.android.server.wifi.util.GeneralUtil.bitsetToLong;
+import static com.android.server.wifi.util.GeneralUtil.longToBitset;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
@@ -83,8 +83,9 @@ public class HalDeviceManager {
     private final FeatureFlags mFeatureFlags;
     private boolean mDbg = false;
 
-    public static final long CHIP_CAPABILITY_ANY = 0L;
-    private static final long CHIP_CAPABILITY_UNINITIALIZED = -1L;
+    public static final BitSet CHIP_CAPABILITY_ANY = new BitSet();
+    // TODO: Determine if CHIP_CAPABILITY_UNINITIALIZED can be replaced with an empty BitSet
+    private static final BitSet CHIP_CAPABILITY_UNINITIALIZED = longToBitset(-1L);
 
     private static final int DBS_24G_5G_MASK =
             WifiScanner.WIFI_BAND_24_GHZ | WifiScanner.WIFI_BAND_5_GHZ;
@@ -322,8 +323,9 @@ public class HalDeviceManager {
      * @param concreteClientModeManager ConcreteClientModeManager requesting the interface.
      * @return A newly created interface - or null if the interface could not be created.
      */
-    public WifiStaIface createStaIface(
-            long requiredChipCapabilities,
+    @VisibleForTesting
+    protected WifiStaIface createStaIface(
+            @NonNull BitSet requiredChipCapabilities,
             @Nullable InterfaceDestroyedListener destroyedListener, @Nullable Handler handler,
             @NonNull WorkSource requestorWs,
             @NonNull ConcreteClientModeManager concreteClientModeManager) {
@@ -332,7 +334,8 @@ public class HalDeviceManager {
             return null;
         }
         WifiStaIface staIface = (WifiStaIface) createIface(HDM_CREATE_IFACE_STA,
-                requiredChipCapabilities, destroyedListener, handler, requestorWs, null);
+                requiredChipCapabilities, destroyedListener, handler, requestorWs, null,
+                false /* isUsingMultiLinkOperation */);
         if (staIface != null) {
             mClientModeManagers.put(getName(staIface), concreteClientModeManager);
         }
@@ -367,7 +370,7 @@ public class HalDeviceManager {
      * Create AP interface if possible (see createStaIface doc).
      */
     public WifiApIface createApIface(
-            long requiredChipCapabilities,
+            @NonNull BitSet requiredChipCapabilities,
             @Nullable InterfaceDestroyedListener destroyedListener, @Nullable Handler handler,
             @NonNull WorkSource requestorWs, boolean isBridged,
             @NonNull SoftApManager softApManager, @NonNull List<OuiKeyedData> vendorData) {
@@ -377,7 +380,7 @@ public class HalDeviceManager {
         }
         WifiApIface apIface = (WifiApIface) createIface(isBridged ? HDM_CREATE_IFACE_AP_BRIDGE
                 : HDM_CREATE_IFACE_AP, requiredChipCapabilities, destroyedListener,
-                handler, requestorWs, vendorData);
+                handler, requestorWs, vendorData, softApManager.isUsingMlo());
         if (apIface != null) {
             mSoftApManagers.put(getName(apIface), softApManager);
         }
@@ -387,12 +390,14 @@ public class HalDeviceManager {
     /**
      * Create P2P interface if possible (see createStaIface doc).
      */
-    public String createP2pIface(
-            long requiredChipCapabilities,
+    @VisibleForTesting
+    protected String createP2pIface(
+            @NonNull BitSet requiredChipCapabilities,
             @Nullable InterfaceDestroyedListener destroyedListener,
             @Nullable Handler handler, @NonNull WorkSource requestorWs) {
         WifiP2pIface iface = (WifiP2pIface) createIface(HDM_CREATE_IFACE_P2P,
-                requiredChipCapabilities, destroyedListener, handler, requestorWs, null);
+                requiredChipCapabilities, destroyedListener, handler, requestorWs, null,
+                false /* isUsingMultiLinkOperation */);
         if (iface == null) {
             return null;
         }
@@ -419,7 +424,8 @@ public class HalDeviceManager {
     public WifiNanIface createNanIface(@Nullable InterfaceDestroyedListener destroyedListener,
             @Nullable Handler handler, @NonNull WorkSource requestorWs) {
         return (WifiNanIface) createIface(HDM_CREATE_IFACE_NAN, CHIP_CAPABILITY_ANY,
-                destroyedListener, handler, requestorWs, null);
+                destroyedListener, handler, requestorWs, null,
+                false /* isUsingMultiLinkOperation */);
     }
 
     /**
@@ -818,8 +824,9 @@ public class HalDeviceManager {
      *                    interface using rules based on the requestor app's context.
      * @return true if the device supports the provided combo, false otherwise.
      */
-    public boolean isItPossibleToCreateIface(@HdmIfaceTypeForCreation int createIfaceType,
-            long requiredChipCapabilities, WorkSource requestorWs) {
+    @VisibleForTesting
+    protected boolean isItPossibleToCreateIface(@HdmIfaceTypeForCreation int createIfaceType,
+            BitSet requiredChipCapabilities, WorkSource requestorWs) {
         if (VDBG) {
             Log.d(TAG, "isItPossibleToCreateIface: createIfaceType=" + createIfaceType
                     + ", requiredChipCapabilities=" + requiredChipCapabilities);
@@ -863,7 +870,7 @@ public class HalDeviceManager {
      */
     private List<WifiIfaceInfo> getIfacesToDestroyForRequest(
             @HdmIfaceTypeForCreation int createIfaceType, boolean queryForNewInterface,
-            long requiredChipCapabilities, WorkSource requestorWs) {
+            BitSet requiredChipCapabilities, WorkSource requestorWs) {
         if (VDBG) {
             Log.d(TAG, "getIfacesToDestroyForRequest: ifaceType=" + createIfaceType
                     + ", requiredChipCapabilities=" + requiredChipCapabilities
@@ -1066,7 +1073,7 @@ public class HalDeviceManager {
         // Arrays of WifiIfaceInfo indexed by @HdmIfaceTypeForCreation, in order of creation as
         // returned by WifiChip.getXxxIfaceNames.
         public WifiIfaceInfo[][] ifaces = new WifiIfaceInfo[CREATE_TYPES_BY_PRIORITY.length][];
-        public long chipCapabilities;
+        public BitSet chipCapabilities = new BitSet();
         public List<WifiChip.WifiRadioCombination> radioCombinations = null;
         // A data structure for the faster band combination lookup.
         public Set<List<Integer>> bandCombinations = null;
@@ -1208,7 +1215,7 @@ public class HalDeviceManager {
                     return null;
                 }
 
-                long chipCapabilities = getChipCapabilities(chip);
+                BitSet chipCapabilities = getChipCapabilities(chip);
 
                 List<String> ifaceNames = chip.getStaIfaceNames();
                 if (ifaceNames == null) {
@@ -1378,6 +1385,7 @@ public class HalDeviceManager {
             }
         } catch (JSONException e) {
             Log.e(TAG, "Failed to load static chip info from store: " + e);
+            return new StaticChipInfo[0];
         }
         return staticChipInfos;
     }
@@ -1390,7 +1398,6 @@ public class HalDeviceManager {
             WifiChipInfo chipInfo = chipInfos[i];
             staticChipInfos[i] = new StaticChipInfo(
                     chipInfo.chipId,
-                    chipInfo.chipCapabilities,
                     chipInfo.availableModes);
         }
         return staticChipInfos;
@@ -1616,8 +1623,9 @@ public class HalDeviceManager {
     }
 
     private WifiHal.WifiInterface createIface(@HdmIfaceTypeForCreation int createIfaceType,
-            long requiredChipCapabilities, InterfaceDestroyedListener destroyedListener,
-            Handler handler, WorkSource requestorWs, @Nullable List<OuiKeyedData> vendorData) {
+            BitSet requiredChipCapabilities, InterfaceDestroyedListener destroyedListener,
+            Handler handler, WorkSource requestorWs, @Nullable List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation) {
         if (mDbg) {
             Log.d(TAG, "createIface: createIfaceType=" + createIfaceType
                     + ", requiredChipCapabilities=" + requiredChipCapabilities
@@ -1626,6 +1634,10 @@ public class HalDeviceManager {
         if (destroyedListener != null && handler == null) {
             Log.wtf(TAG, "createIface: createIfaceType=" + createIfaceType
                     + "with NonNull destroyedListener but Null handler");
+            return null;
+        }
+        if (requiredChipCapabilities == null) {
+            Log.wtf(TAG, "createIface received null required chip capabilities");
             return null;
         }
 
@@ -1649,23 +1661,33 @@ public class HalDeviceManager {
 
             return createIfaceIfPossible(
                     chipInfos, createIfaceType, requiredChipCapabilities,
-                    destroyedListener, handler, requestorWs, vendorData);
+                    destroyedListener, handler, requestorWs, vendorData,
+                    isUsingMultiLinkOperation);
         }
     }
 
-    private static boolean isChipCapabilitiesSupported(long currentChipCapabilities,
-            long requiredChipCapabilities) {
-        if (requiredChipCapabilities == CHIP_CAPABILITY_ANY) return true;
+    @VisibleForTesting
+    protected static boolean areChipCapabilitiesSupported(BitSet currentChipCapabilities,
+            BitSet requiredChipCapabilities) {
+        if (requiredChipCapabilities == null
+                || requiredChipCapabilities.equals(CHIP_CAPABILITY_ANY)) {
+            // No capabilities are required for this operation
+            return true;
+        }
+        if (currentChipCapabilities.equals(CHIP_CAPABILITY_UNINITIALIZED)) {
+            return true;
+        }
 
-        if (CHIP_CAPABILITY_UNINITIALIZED == currentChipCapabilities) return true;
-
-        return (currentChipCapabilities & requiredChipCapabilities)
-                == requiredChipCapabilities;
+        // Check if the chip supports the required capabilities using
+        // (requiredChipCapabilities & currentChipCapabilities) == requiredChipCapabilities
+        BitSet tempRequiredCapabilities = (BitSet) requiredChipCapabilities.clone();
+        tempRequiredCapabilities.and(currentChipCapabilities);
+        return tempRequiredCapabilities.equals(requiredChipCapabilities);
     }
 
     private IfaceCreationData getBestIfaceCreationProposal(
             WifiChipInfo[] chipInfos, @HdmIfaceTypeForCreation int createIfaceType,
-            long requiredChipCapabilities, WorkSource requestorWs) {
+            BitSet requiredChipCapabilities, WorkSource requestorWs) {
         int targetHalIfaceType = HAL_IFACE_MAP.get(createIfaceType);
         if (VDBG) {
             Log.d(TAG, "getBestIfaceCreationProposal: chipInfos=" + Arrays.deepToString(chipInfos)
@@ -1677,7 +1699,7 @@ public class HalDeviceManager {
         synchronized (mLock) {
             IfaceCreationData bestIfaceCreationProposal = null;
             for (WifiChipInfo chipInfo : chipInfos) {
-                if (!isChipCapabilitiesSupported(
+                if (!areChipCapabilitiesSupported(
                         chipInfo.chipCapabilities, requiredChipCapabilities)) {
                     continue;
                 }
@@ -1749,15 +1771,17 @@ public class HalDeviceManager {
 
     private WifiHal.WifiInterface createIfaceIfPossible(
             WifiChipInfo[] chipInfos, @HdmIfaceTypeForCreation int createIfaceType,
-            long requiredChipCapabilities, InterfaceDestroyedListener destroyedListener,
-            Handler handler, WorkSource requestorWs, @Nullable List<OuiKeyedData> vendorData) {
+            BitSet requiredChipCapabilities, InterfaceDestroyedListener destroyedListener,
+            Handler handler, WorkSource requestorWs, @Nullable List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation) {
         int targetHalIfaceType = HAL_IFACE_MAP.get(createIfaceType);
         if (VDBG) {
             Log.d(TAG, "createIfaceIfPossible: chipInfos=" + Arrays.deepToString(chipInfos)
                     + ", createIfaceType=" + createIfaceType
                     + ", targetHalIfaceType=" + targetHalIfaceType
                     + ", requiredChipCapabilities=" + requiredChipCapabilities
-                    + ", requestorWs=" + requestorWs);
+                    + ", requestorWs=" + requestorWs
+                    + ", isUsingMultiLinkOperation" + isUsingMultiLinkOperation);
         }
         if (vendorData != null && !vendorData.isEmpty()) {
             Log.d(TAG, "Request includes vendor data. ifaceType=" + createIfaceType
@@ -1769,7 +1793,7 @@ public class HalDeviceManager {
 
             if (bestIfaceCreationProposal != null) {
                 WifiHal.WifiInterface iface = executeChipReconfiguration(bestIfaceCreationProposal,
-                        createIfaceType, vendorData);
+                        createIfaceType, vendorData, isUsingMultiLinkOperation);
                 if (iface == null) {
                     // If the chip reconfiguration failed, we'll need to clean up internal state.
                     Log.e(TAG, "Teardown Wifi internal state");
@@ -1876,6 +1900,51 @@ public class HalDeviceManager {
         return false;
     }
 
+    private boolean isRequestorAllowedToUseApNanConcurrency(WorkSource requestorWs) {
+        String[] allowlistArray = mContext.getResources().getStringArray(
+                R.array.config_wifiSoftApAwareConcurrencyAllowlist);
+        if (allowlistArray == null || allowlistArray.length == 0) {
+            // No allowlist defined, so allow.
+            return true;
+        }
+        List<String> allowlist = Arrays.asList(allowlistArray);
+        for (int i = 0; i < requestorWs.size(); i++) {
+            if (allowlist.contains(requestorWs.getPackageName(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Remove AP from the combo if NAN requested (or NAN if AP is requested) if the current
+     * requestor is not allowed to use AP/NAN concurrency.
+     */
+    @NonNull
+    private int[] removeApNanConcurrencyIfNotAllowed(
+            @NonNull int[] chipCreateTypeCombo,
+            @HdmIfaceTypeForCreation int requestedCreateType,
+            WorkSource requestorWs) {
+        if (isRequestorAllowedToUseApNanConcurrency(requestorWs)) {
+            return chipCreateTypeCombo;
+        }
+
+        int[] newCombo = chipCreateTypeCombo.clone();
+        switch (requestedCreateType) {
+            case HDM_CREATE_IFACE_AP:
+            case HDM_CREATE_IFACE_AP_BRIDGE:
+                newCombo[HDM_CREATE_IFACE_NAN] = 0;
+                break;
+            case HDM_CREATE_IFACE_NAN:
+                newCombo[HDM_CREATE_IFACE_AP] = 0;
+                newCombo[HDM_CREATE_IFACE_AP_BRIDGE] = 0;
+                break;
+            default:
+                break;
+        }
+        return newCombo;
+    }
+
     /**
      * Checks whether the input chip-create-type-combo can support the requested create type:
      * if not then returns null, if yes then returns information containing the list of interfaces
@@ -1922,6 +1991,10 @@ public class HalDeviceManager {
                 }
             }
         }
+
+        // Remove AP/NAN concurrency if the requestor isn't on the allowlist.
+        chipCreateTypeCombo = removeApNanConcurrencyIfNotAllowed(
+                chipCreateTypeCombo, requestedCreateType, requestorWs);
 
         IfaceCreationData ifaceCreationData = new IfaceCreationData();
         ifaceCreationData.chipInfo = chipInfo;
@@ -2414,7 +2487,8 @@ public class HalDeviceManager {
      * Returns the newly created interface or a null on any error.
      */
     private WifiHal.WifiInterface executeChipReconfiguration(IfaceCreationData ifaceCreationData,
-            @HdmIfaceTypeForCreation int createIfaceType, @Nullable List<OuiKeyedData> vendorData) {
+            @HdmIfaceTypeForCreation int createIfaceType, @Nullable List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation) {
         if (mDbg) {
             Log.d(TAG, "executeChipReconfiguration: ifaceCreationData=" + ifaceCreationData
                     + ", createIfaceType=" + createIfaceType);
@@ -2488,7 +2562,8 @@ public class HalDeviceManager {
                     iface = ifaceCreationData.chipInfo.chip.createStaIface();
                     break;
                 case HDM_CREATE_IFACE_AP_BRIDGE:
-                    iface = ifaceCreationData.chipInfo.chip.createBridgedApIface(vendorData);
+                    iface = ifaceCreationData.chipInfo.chip.createBridgedApIface(vendorData,
+                            isUsingMultiLinkOperation);
                     break;
                 case HDM_CREATE_IFACE_AP:
                     iface = ifaceCreationData.chipInfo.chip.createApIface(vendorData);
@@ -2858,18 +2933,18 @@ public class HalDeviceManager {
      * @param wifiChip WifiChip to get the features for.
      * @return Bitset of WifiManager.WIFI_FEATURE_* values.
      */
-    private long getChipCapabilities(@NonNull WifiChip wifiChip) {
-        if (wifiChip == null) return 0;
+    private BitSet getChipCapabilities(@NonNull WifiChip wifiChip) {
+        if (wifiChip == null) return new BitSet();
 
         WifiChip.Response<BitSet> capsResp = wifiChip.getCapabilitiesBeforeIfacesExist();
         if (capsResp.getStatusCode() == WifiHal.WIFI_STATUS_SUCCESS) {
-            return bitsetToLong(capsResp.getValue());
+            return capsResp.getValue();
         } else if (capsResp.getStatusCode() != WifiHal.WIFI_STATUS_ERROR_REMOTE_EXCEPTION) {
             // Non-remote exception here is likely because HIDL HAL < v1.5
             // does not support getting capabilities before creating an interface.
             return CHIP_CAPABILITY_UNINITIALIZED;
         } else { // remote exception
-            return 0;
+            return new BitSet();
         }
     }
 

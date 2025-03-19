@@ -16,9 +16,14 @@
 
 package android.net.wifi.p2p.nsd;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.net.wifi.p2p.WifiP2pDevice;
+import android.net.wifi.util.Environment;
 import android.os.Parcel;
 import android.os.Parcelable;
+
+import com.android.wifi.flags.Flags;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -26,6 +31,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The class for a response of service discovery.
@@ -64,6 +70,11 @@ public class WifiP2pServiceResponse implements Parcelable {
      * the service protocol type. The protocol format depends on the service type.
      */
     protected byte[] mData;
+
+    /**
+     * This field is used only for USD based service discovery response.
+     */
+    private WifiP2pUsdBasedServiceResponse mUsdBasedServiceResponse;
 
 
     /**
@@ -125,6 +136,23 @@ public class WifiP2pServiceResponse implements Parcelable {
     }
 
     /**
+     * Hidden constructor. This is only used in framework.
+     *
+     * @param device source device.
+     * @param usdResponseData USD based service response data.
+     * @hide
+     */
+    public WifiP2pServiceResponse(WifiP2pDevice device,
+            @NonNull WifiP2pUsdBasedServiceResponse usdResponseData) {
+        mServiceType = 0;
+        mStatus = 0;
+        mTransId = 0;
+        mDevice = device;
+        mData = null;
+        mUsdBasedServiceResponse = usdResponseData;
+    }
+
+    /**
      * Return the service type of service discovery response.
      *
      * @return service discovery type.<br>
@@ -180,6 +208,20 @@ public class WifiP2pServiceResponse implements Parcelable {
     public void setSrcDevice(WifiP2pDevice dev) {
         if (dev == null) return;
         this.mDevice = dev;
+    }
+
+    /**
+     * Get the service response data received through un-synchronized service
+     * discovery (USD) protocol.
+     *
+     * @return A valid or not null {@link WifiP2pUsdBasedServiceResponse} if the service response
+     * data is received through un-synchronized service discovery (USD) protocol.
+     * Otherwise, it is null.
+     * @hide
+     */
+    @Nullable
+    public WifiP2pUsdBasedServiceResponse getWifiP2pUsdBasedServiceResponse() {
+        return mUsdBasedServiceResponse;
     }
 
 
@@ -289,6 +331,11 @@ public class WifiP2pServiceResponse implements Parcelable {
         sbuf.append(" status:").append(Status.toString(mStatus));
         sbuf.append(" srcAddr:").append(mDevice.deviceAddress);
         sbuf.append(" data:").append(Arrays.toString(mData));
+        if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
+            sbuf.append(" USD based service response:")
+                    .append((mUsdBasedServiceResponse == null)
+                            ? "<null>" : mUsdBasedServiceResponse.toString());
+        }
         return sbuf.toString();
     }
 
@@ -303,10 +350,11 @@ public class WifiP2pServiceResponse implements Parcelable {
 
         WifiP2pServiceResponse req = (WifiP2pServiceResponse)o;
 
-        return (req.mServiceType == mServiceType) &&
-            (req.mStatus == mStatus) &&
-                equals(req.mDevice.deviceAddress, mDevice.deviceAddress) &&
-                Arrays.equals(req.mData, mData);
+        return mServiceType == req.mServiceType
+                && mStatus == req.mStatus
+                && Objects.equals(mDevice.deviceAddress, req.mDevice.deviceAddress)
+                && Arrays.equals(mData, req.mData)
+                && Objects.equals(mUsdBasedServiceResponse, req.mUsdBasedServiceResponse);
     }
 
     private boolean equals(Object a, Object b) {
@@ -327,6 +375,8 @@ public class WifiP2pServiceResponse implements Parcelable {
         result = 31 * result + (mDevice.deviceAddress == null ?
                 0 : mDevice.deviceAddress.hashCode());
         result = 31 * result + (mData == null ? 0 : Arrays.hashCode(mData));
+        result = 31 * result + (mUsdBasedServiceResponse == null
+                ? 0 : mUsdBasedServiceResponse.hashCode());
         return result;
     }
 
@@ -347,35 +397,41 @@ public class WifiP2pServiceResponse implements Parcelable {
             dest.writeInt(mData.length);
             dest.writeByteArray(mData);
         }
+        if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
+            dest.writeParcelable(mUsdBasedServiceResponse, flags);
+        }
     }
 
     /** Implement the Parcelable interface {@hide} */
     public static final @android.annotation.NonNull Creator<WifiP2pServiceResponse> CREATOR =
-        new Creator<WifiP2pServiceResponse>() {
-            public WifiP2pServiceResponse createFromParcel(Parcel in) {
-
-                int type = in.readInt();
-                int status = in.readInt();
-                int transId = in.readInt();
-                WifiP2pDevice dev = (WifiP2pDevice)in.readParcelable(null);
-                int len = in.readInt();
-                byte[] data = null;
-                if (len > 0) {
-                    data = new byte[len];
-                    in.readByteArray(data);
+            new Creator<WifiP2pServiceResponse>() {
+                public WifiP2pServiceResponse createFromParcel(Parcel in) {
+                    int type = in.readInt();
+                    int status = in.readInt();
+                    int transId = in.readInt();
+                    WifiP2pDevice dev = in.readParcelable(WifiP2pDevice.class.getClassLoader());
+                    int len = in.readInt();
+                    byte[] data = null;
+                    if (len > 0) {
+                        data = new byte[len];
+                        in.readByteArray(data);
+                    }
+                    WifiP2pUsdBasedServiceResponse response = null;
+                    if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
+                        response = in.readParcelable(
+                                WifiP2pUsdBasedServiceResponse.class.getClassLoader());
+                    }
+                    if (type ==  WifiP2pServiceInfo.SERVICE_TYPE_BONJOUR) {
+                        return WifiP2pDnsSdServiceResponse.newInstance(status, transId, dev, data);
+                    } else if (type == WifiP2pServiceInfo.SERVICE_TYPE_UPNP) {
+                        return WifiP2pUpnpServiceResponse.newInstance(status, transId, dev, data);
+                    } else if (response != null) {
+                        return new WifiP2pServiceResponse(dev, response);
+                    }
+                    return new WifiP2pServiceResponse(type, status, transId, dev, data);
                 }
-                if (type ==  WifiP2pServiceInfo.SERVICE_TYPE_BONJOUR) {
-                    return WifiP2pDnsSdServiceResponse.newInstance(status,
-                            transId, dev, data);
-                } else if (type == WifiP2pServiceInfo.SERVICE_TYPE_UPNP) {
-                    return WifiP2pUpnpServiceResponse.newInstance(status,
-                            transId, dev, data);
+                public WifiP2pServiceResponse[] newArray(int size) {
+                    return new WifiP2pServiceResponse[size];
                 }
-                return new WifiP2pServiceResponse(type, status, transId, dev, data);
-            }
-
-            public WifiP2pServiceResponse[] newArray(int size) {
-                return new WifiP2pServiceResponse[size];
-            }
-        };
+            };
 }

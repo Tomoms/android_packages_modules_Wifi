@@ -41,9 +41,11 @@ android_test {
     srcs: [
         "ConnectivityManagerSnippet.java",
         "PermissionUtils.java",
+        "SerializationUtil.java",
         "WifiAwareJsonDeserializer.java",
         "WifiAwareManagerSnippet.java",
         "WifiAwareSnippetConverter.java",
+        "TlvBufferUtils.java",
     ],
     manifest: "AndroidManifestNew.xml",
     static_libs: [

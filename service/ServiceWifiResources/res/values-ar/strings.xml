@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"إلى:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"‏اكتب رمز PIN المطلوب:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"رقم التعريف الشخصي:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"اتصال الجهاز"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"اتصال الجهاز"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"تم إرسال الدعوة إلى جهاز \"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>\"."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"أدخِل رقم التعريف الشخصي هذا على جهاز \"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>\" لتوصيله بجهازك."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"حسنًا"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"اتصال الجهاز"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"اتصال الجهاز"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"اتصال الجهاز"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"يريد جهاز \"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>\" الاتصال بجهازك."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"أدخِل رقم التعريف الشخصي المعروض على جهاز \"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>\" لتوصيله بجهازك."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"يريد جهاز \"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{يريد جهاز \"{device}\" الاتصال بجهازك. يمكنك القبول خلال ثانية واحدة ({countdown}).}zero{يريد جهاز \"{device}\" الاتصال بجهازك. يمكنك القبول خلال {countdown} ثانية.}two{يريد جهاز \"{device}\" الاتصال بجهازك. يمكنك القبول خلال ثانيتين ({countdown}).}few{يريد جهاز \"{device}\" الاتصال بجهازك. يمكنك القبول خلال {countdown} ثوانٍ.}many{يريد جهاز \"{device}\" الاتصال بجهازك. يمكنك القبول خلال {countdown} ثانية.}other{يريد جهاز \"{device}\" الاتصال بجهازك. يمكنك القبول خلال {countdown} ثانية.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{أدخِل رقم التعريف الشخصي المعروض على جهاز \"{device}\" خلال ثانية واحدة ({countdown}) لتوصيله بجهازك.}zero{أدخِل رقم التعريف الشخصي المعروض على جهاز \"{device}\" خلال {countdown} ثانية لتوصيله بجهازك.}two{أدخِل رقم التعريف الشخصي المعروض على جهاز \"{device}\" خلال ثانيتين ({countdown}) لتوصيله بجهازك.}few{أدخِل رقم التعريف الشخصي المعروض على جهاز \"{device}\" خلال {countdown} ثوانٍ لتوصيله بجهازك.}many{أدخِل رقم التعريف الشخصي المعروض على جهاز \"{device}\" خلال {countdown} ثانية لتوصيله بجهازك.}other{أدخِل رقم التعريف الشخصي المعروض على جهاز \"{device}\" خلال {countdown} ثانية لتوصيله بجهازك.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{يريد \"{device}\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي. يمكنك القبول خلال ثانية واحدة ({countdown}).}zero{يريد جهاز \"{device}\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي. يمكنك القبول خلال {countdown} ثانية.}two{يريد جهاز \"{device}\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي. يمكنك القبول خلال ثانيتين ({countdown}).}few{يريد جهاز \"{device}\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي. يمكنك القبول خلال {countdown} ثوانٍ.}many{يريد جهاز \"{device}\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي. يمكنك القبول خلال {countdown} ثانية.}other{يريد جهاز \"{device}\" الاتصال بجهازك باستخدام رقم التعريف الشخصي الآتي. يمكنك القبول خلال {countdown} ثانية.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"اتصال"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"إلغاء"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"رقم التعريف الشخصي"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"رقم التعريف الشخصي"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"‏سيتم قطع اتصال الجهاز بشبكة Wi-Fi مؤقتًا أثناء اتصاله بـ <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"حسنًا"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"يتعذّر الاتصال بـ <xliff:g id="SSID">%1$s</xliff:g>."</string>

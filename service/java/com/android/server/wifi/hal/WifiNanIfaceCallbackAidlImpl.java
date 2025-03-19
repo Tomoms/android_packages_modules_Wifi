@@ -47,14 +47,19 @@ import android.hardware.wifi.NanStatus;
 import android.hardware.wifi.NanStatusCode;
 import android.hardware.wifi.NanSuspensionModeChangeInd;
 import android.hardware.wifi.NpkSecurityAssociation;
+import android.hardware.wifi.RttResult;
+import android.hardware.wifi.RttType;
 import android.net.MacAddress;
 import android.net.wifi.OuiKeyedData;
 import android.net.wifi.aware.AwarePairingConfig;
 import android.net.wifi.aware.Characteristics;
 import android.net.wifi.aware.WifiAwareChannelInfo;
+import android.net.wifi.rtt.RangingResult;
+import android.net.wifi.rtt.ResponderLocation;
 import android.net.wifi.util.HexEncoding;
 import android.util.Log;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.aware.Capabilities;
 import com.android.server.wifi.aware.PairingConfigManager.PairingSecurityAssociationInfo;
 import com.android.server.wifi.hal.WifiNanIface.NanClusterEventType;
@@ -74,6 +79,11 @@ public class WifiNanIfaceCallbackAidlImpl extends IWifiNanIfaceEventCallback.Stu
 
     private boolean mVerboseLoggingEnabled;
     private final WifiNanIfaceAidlImpl mWifiNanIface;
+    private static final int SUPPORTED_RX_CHAINS_1 = 1;
+    private static final int SUPPORTED_RX_CHAINS_2 = 2;
+    private static final int SUPPORTED_RX_CHAINS_3 = 3;
+    private static final int SUPPORTED_RX_CHAINS_4 = 4;
+
 
     public WifiNanIfaceCallbackAidlImpl(WifiNanIfaceAidlImpl wifiNanIface) {
         mWifiNanIface = wifiNanIface;
@@ -309,6 +319,18 @@ public class WifiNanIfaceCallbackAidlImpl extends IWifiNanIfaceEventCallback.Stu
         }
         mWifiNanIface.getFrameworkCallback().notifyTerminatePairingResponse(
                 (short) id, WifiNanIface.NanStatusCode.fromAidl(status.status));
+    }
+
+    @Override
+    public void notifyRangingResults(RttResult[] results, byte sessionId) {
+        if (!checkFrameworkCallback()) return;
+        if (mVerboseLoggingEnabled) {
+            int numResults = results != null ? results.length : -1;
+            Log.v(TAG, "notifyRangingResults: number of ranging results: " + numResults
+                    + ", session_id=" + sessionId);
+        }
+        ArrayList<RangingResult> rangingResults = convertToFrameworkRangingResults(results);
+        mWifiNanIface.getFrameworkCallback().notifyRangingResults(rangingResults, sessionId);
     }
 
     @Override
@@ -736,6 +758,11 @@ public class WifiNanIfaceCallbackAidlImpl extends IWifiNanIfaceEventCallback.Stu
         frameworkCapabilities.isSuspensionSupported = capabilities.supportsSuspension;
         frameworkCapabilities.is6gSupported = capabilities.supports6g;
         frameworkCapabilities.isHeSupported = capabilities.supportsHe;
+        frameworkCapabilities.isPeriodicRangingSupported = capabilities.supportsPeriodicRanging;
+        frameworkCapabilities.maxSupportedRangingPktBandWidth = WifiRttControllerAidlImpl
+                .halToFrameworkChannelBandwidth(capabilities.maxSupportedBandwidth);
+        frameworkCapabilities.maxSupportedRxChains =
+                toFrameworkChainsSupported(capabilities.maxNumRxChainsSupported);
         return frameworkCapabilities;
     }
 
@@ -769,6 +796,21 @@ public class WifiNanIfaceCallbackAidlImpl extends IWifiNanIfaceEventCallback.Stu
         }
 
         return publicCipherSuites;
+    }
+
+    private static int toFrameworkChainsSupported(int supportedRxChains) {
+        switch(supportedRxChains) {
+            case SUPPORTED_RX_CHAINS_1:
+                return Characteristics.SUPPORTED_RX_CHAINS_1;
+            case SUPPORTED_RX_CHAINS_2:
+                return Characteristics.SUPPORTED_RX_CHAINS_2;
+            case SUPPORTED_RX_CHAINS_3:
+                return Characteristics.SUPPORTED_RX_CHAINS_3;
+            case SUPPORTED_RX_CHAINS_4:
+                return Characteristics.SUPPORTED_RX_CHAINS_4;
+            default:
+                return Characteristics.SUPPORTED_RX_CHAINS_UNSPECIFIED;
+        }
     }
 
     private static String statusString(NanStatus status) {
@@ -807,5 +849,50 @@ public class WifiNanIfaceCallbackAidlImpl extends IWifiNanIfaceEventCallback.Stu
             return false;
         }
         return true;
+    }
+
+    private ArrayList<RangingResult> convertToFrameworkRangingResults(RttResult[] halResults) {
+        ArrayList<RangingResult> rangingResults = new ArrayList();
+        for (RttResult rttResult : halResults) {
+            if (rttResult == null) continue;
+            byte[] lci = rttResult.lci.data;
+            byte[] lcr = rttResult.lcr.data;
+            ResponderLocation responderLocation;
+            try {
+                responderLocation = new ResponderLocation(lci, lcr);
+                if (!responderLocation.isValid()) {
+                    responderLocation = null;
+                }
+            } catch (Exception e) {
+                responderLocation = null;
+                Log.e(TAG, "ResponderLocation: lci/lcr parser failed exception -- " + e);
+            }
+            if (rttResult.successNumber <= 1 && rttResult.distanceSdInMm != 0) {
+                if (mVerboseLoggingEnabled) {
+                    Log.w(TAG, "postProcessResults: non-zero distance stdev with 0||1 num "
+                            + "samples!? result=" + rttResult);
+                }
+                rttResult.distanceSdInMm = 0;
+            }
+            RangingResult.Builder resultBuilder = new RangingResult.Builder()
+                    .setStatus(WifiRttControllerAidlImpl.halToFrameworkRttStatus(rttResult.status))
+                    .setMacAddress(MacAddress.fromBytes(rttResult.addr))
+                    .setDistanceMm(rttResult.distanceInMm)
+                    .setDistanceStdDevMm(rttResult.distanceSdInMm)
+                    .setRssi(rttResult.rssi / -2)
+                    .setNumAttemptedMeasurements(rttResult.numberPerBurstPeer)
+                    .setNumSuccessfulMeasurements(rttResult.successNumber)
+                    .setUnverifiedResponderLocation(responderLocation)
+                    .setRangingTimestampMillis(
+                            rttResult.timeStampInUs / WifiRttController.CONVERSION_US_TO_MS)
+                    .set80211mcMeasurement(rttResult.type == RttType.TWO_SIDED_11MC);
+            if (SdkLevel.isAtLeastV() && WifiHalAidlImpl.isServiceVersionAtLeast(2)
+                    && rttResult.vendorData != null) {
+                resultBuilder.setVendorData(
+                        HalAidlUtil.halToFrameworkOuiKeyedDataList(rttResult.vendorData));
+            }
+            rangingResults.add(resultBuilder.build());
+        }
+        return rangingResults;
     }
 }

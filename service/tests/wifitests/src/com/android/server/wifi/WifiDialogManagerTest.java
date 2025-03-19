@@ -70,13 +70,13 @@ import org.mockito.MockitoAnnotations;
  */
 @SmallTest
 public class WifiDialogManagerTest extends WifiBaseTest {
-    private static final int TIMEOUT_MILLIS = 30_000;
     private static final String TEST_TITLE = "Title";
     private static final String TEST_MESSAGE = "Message";
     private static final String TEST_POSITIVE_BUTTON_TEXT = "Yes";
     private static final String TEST_NEGATIVE_BUTTON_TEXT = "No";
     private static final String TEST_NEUTRAL_BUTTON_TEXT = "Maybe";
     private static final String TEST_DEVICE_NAME = "TEST_DEVICE_NAME";
+    private static final int TEST_P2P_TIMEOUT_MS = 15 * 60 * 1000;
     private static final String WIFI_DIALOG_APK_PKG_NAME = "WifiDialogApkPkgName";
 
     @Mock WifiContext mWifiContext;
@@ -115,14 +115,12 @@ public class WifiDialogManagerTest extends WifiBaseTest {
     /**
      * Helper method to synchronously call {@link DialogHandle#launchDialog(long)}.
      * @param dialogHandle     Dialog handle to call on.
-     * @param timeoutMs        Timeout for {@link DialogHandle#launchDialog(long)}.
      * @param wifiThreadRunner Main Wi-Fi thread runner of the WifiDialogManager.
      */
     private void launchDialogSynchronous(
             @NonNull DialogHandle dialogHandle,
-            long timeoutMs,
             @NonNull WifiThreadRunner wifiThreadRunner) {
-        dialogHandle.launchDialog(timeoutMs);
+        dialogHandle.launchDialog();
         ArgumentCaptor<Runnable> launchRunnableArgumentCaptor =
                 ArgumentCaptor.forClass(Runnable.class);
         verify(wifiThreadRunner, atLeastOnce()).post(launchRunnableArgumentCaptor.capture(),
@@ -250,7 +248,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         DialogHandle dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         Intent intent = verifyStartActivityAsUser(1, mWifiContext);
         int dialogId = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -273,7 +271,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(2, mWifiContext);
         dialogId = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -288,7 +286,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         dialogHandle = mDialogManager.createSimpleDialog(
                 TEST_TITLE, TEST_MESSAGE, TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT,
                 TEST_NEUTRAL_BUTTON_TEXT, callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(3, mWifiContext);
         dialogId = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -303,7 +301,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(4, mWifiContext);
         dialogId = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -330,7 +328,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         DialogHandle dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         Intent intent = verifyStartActivityAsUser(1, mWifiContext);
         int dialogId = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -352,7 +350,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(3, mWifiContext);
         dialogId = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -377,7 +375,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         DialogHandle dialogHandle1 = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback1, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle1, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle1, mWifiThreadRunner);
         Intent intent = verifyStartActivityAsUser(1, mWifiContext);
         int dialogId1 = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -387,7 +385,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         DialogHandle dialogHandle2 = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback2, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle2, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle2, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(2, mWifiContext);
         int dialogId2 = verifySimpleDialogLaunchIntent(intent, TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT);
@@ -434,7 +432,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         DialogHandle dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
 
         ArgumentCaptor<DialogInterface.OnClickListener> positiveButtonListenerCaptor =
                 ArgumentCaptor.forClass(DialogInterface.OnClickListener.class);
@@ -479,90 +477,6 @@ public class WifiDialogManagerTest extends WifiBaseTest {
     }
 
     @Test
-    public void testSimpleDialog_timeoutCancelsDialog_preT() {
-        Assume.assumeTrue(!SdkLevel.isAtLeastT());
-        SimpleDialogCallback callback = mock(SimpleDialogCallback.class);
-        WifiThreadRunner callbackThreadRunner = mock(WifiThreadRunner.class);
-
-
-        AlertDialog.Builder builder = mock(AlertDialog.Builder.class);
-        AlertDialog dialog = mock(AlertDialog.class);
-        when(builder.setTitle(any())).thenReturn(builder);
-        when(builder.setMessage(any())).thenReturn(builder);
-        when(builder.setPositiveButton(any(), any())).thenReturn(builder);
-        when(builder.setNegativeButton(any(), any())).thenReturn(builder);
-        when(builder.setNeutralButton(any(), any())).thenReturn(builder);
-        when(builder.setOnCancelListener(any())).thenReturn(builder);
-        when(builder.setOnDismissListener(any())).thenReturn(builder);
-        when(builder.create()).thenReturn(dialog);
-        Window window = mock(Window.class);
-        WindowManager.LayoutParams layoutParams = mock(WindowManager.LayoutParams.class);
-        when(window.getAttributes()).thenReturn(layoutParams);
-        when(dialog.getWindow()).thenReturn(window);
-        when(mFrameworkFacade.makeAlertDialogBuilder(any())).thenReturn(builder);
-        DialogHandle dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
-                TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
-                callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, TIMEOUT_MILLIS, mWifiThreadRunner);
-
-        // Verify the timeout runnable was posted and run it.
-        ArgumentCaptor<Runnable> runnableArgumentCaptor = ArgumentCaptor.forClass(Runnable.class);
-        verify(mWifiThreadRunner, times(1))
-                .postDelayed(runnableArgumentCaptor.capture(), eq((long) TIMEOUT_MILLIS),
-                        anyString());
-        runnableArgumentCaptor.getValue().run();
-
-        // Verify that the dialog was cancelled.
-        verify(dialog).cancel();
-    }
-
-    @Test
-    public void testSimpleDialog_dismissedBeforeTimeout_preT() {
-        Assume.assumeTrue(!SdkLevel.isAtLeastT());
-        SimpleDialogCallback callback = mock(SimpleDialogCallback.class);
-        WifiThreadRunner callbackThreadRunner = mock(WifiThreadRunner.class);
-
-
-        AlertDialog.Builder builder = mock(AlertDialog.Builder.class);
-        AlertDialog dialog = mock(AlertDialog.class);
-        when(builder.setTitle(any())).thenReturn(builder);
-        when(builder.setMessage(any())).thenReturn(builder);
-        when(builder.setPositiveButton(any(), any())).thenReturn(builder);
-        when(builder.setNegativeButton(any(), any())).thenReturn(builder);
-        when(builder.setNeutralButton(any(), any())).thenReturn(builder);
-        when(builder.setOnCancelListener(any())).thenReturn(builder);
-        when(builder.setOnDismissListener(any())).thenReturn(builder);
-        when(builder.create()).thenReturn(dialog);
-        Window window = mock(Window.class);
-        WindowManager.LayoutParams layoutParams = mock(WindowManager.LayoutParams.class);
-        when(window.getAttributes()).thenReturn(layoutParams);
-        when(dialog.getWindow()).thenReturn(window);
-        when(mFrameworkFacade.makeAlertDialogBuilder(any())).thenReturn(builder);
-
-        DialogHandle dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
-                TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
-                callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, TIMEOUT_MILLIS, mWifiThreadRunner);
-
-        // Verify the timeout runnable was posted.
-        ArgumentCaptor<Runnable> runnableArgumentCaptor = ArgumentCaptor.forClass(Runnable.class);
-        verify(mWifiThreadRunner, times(1))
-                .postDelayed(runnableArgumentCaptor.capture(), eq((long) TIMEOUT_MILLIS),
-                        anyString());
-        runnableArgumentCaptor.getValue().run();
-
-        // Dismiss the dialog before the timeout runnable executes.
-        ArgumentCaptor<DialogInterface.OnDismissListener> dismissListenerCaptor =
-                ArgumentCaptor.forClass(DialogInterface.OnDismissListener.class);
-        verify(builder).setOnDismissListener(dismissListenerCaptor.capture());
-        dismissListenerCaptor.getValue().onDismiss(dialog);
-        dispatchMockWifiThreadRunner(mWifiThreadRunner);
-
-        // Verify that the timeout runnable was removed.
-        verify(mWifiThreadRunner).removeCallbacks(runnableArgumentCaptor.getValue());
-    }
-
-    @Test
     public void testSimpleDialog_nullWifiResourceApkName_doesNotLaunchDialog() {
         Assume.assumeTrue(SdkLevel.isAtLeastT());
         when(mWifiContext.getWifiDialogApkPkgName()).thenReturn(null);
@@ -573,7 +487,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         DialogHandle dialogHandle = mDialogManager.createSimpleDialog(TEST_TITLE, TEST_MESSAGE,
                 TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT, TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
 
         verify(mWifiContext, never()).startActivityAsUser(any(), eq(UserHandle.CURRENT));
     }
@@ -607,7 +521,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
                 TEST_MESSAGE, TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT,
                 TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
 
         ArgumentCaptor<DialogInterface.OnClickListener> positiveButtonListenerCaptor =
                 ArgumentCaptor.forClass(DialogInterface.OnClickListener.class);
@@ -652,90 +566,6 @@ public class WifiDialogManagerTest extends WifiBaseTest {
     }
 
     @Test
-    public void testLegacySimpleDialog_timeoutCancelsDialog() {
-        SimpleDialogCallback callback = mock(SimpleDialogCallback.class);
-        WifiThreadRunner callbackThreadRunner = mock(WifiThreadRunner.class);
-
-
-        AlertDialog.Builder builder = mock(AlertDialog.Builder.class);
-        AlertDialog dialog = mock(AlertDialog.class);
-        when(builder.setTitle(any())).thenReturn(builder);
-        when(builder.setMessage(any())).thenReturn(builder);
-        when(builder.setPositiveButton(any(), any())).thenReturn(builder);
-        when(builder.setNegativeButton(any(), any())).thenReturn(builder);
-        when(builder.setNeutralButton(any(), any())).thenReturn(builder);
-        when(builder.setOnCancelListener(any())).thenReturn(builder);
-        when(builder.setOnDismissListener(any())).thenReturn(builder);
-        when(builder.create()).thenReturn(dialog);
-        Window window = mock(Window.class);
-        WindowManager.LayoutParams layoutParams = mock(WindowManager.LayoutParams.class);
-        when(window.getAttributes()).thenReturn(layoutParams);
-        when(dialog.getWindow()).thenReturn(window);
-        when(mFrameworkFacade.makeAlertDialogBuilder(any())).thenReturn(builder);
-        DialogHandle dialogHandle = mDialogManager.createLegacySimpleDialog(TEST_TITLE,
-                TEST_MESSAGE, TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT,
-                TEST_NEUTRAL_BUTTON_TEXT,
-                callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, TIMEOUT_MILLIS, mWifiThreadRunner);
-
-        // Verify the timeout runnable was posted and run it.
-        ArgumentCaptor<Runnable> runnableArgumentCaptor = ArgumentCaptor.forClass(Runnable.class);
-        verify(mWifiThreadRunner, times(1))
-                .postDelayed(runnableArgumentCaptor.capture(), eq((long) TIMEOUT_MILLIS),
-                        anyString());
-        runnableArgumentCaptor.getValue().run();
-
-        // Verify that the dialog was cancelled.
-        verify(dialog).cancel();
-    }
-
-    @Test
-    public void testLegacySimpleDialog_dismissedBeforeTimeout() {
-        SimpleDialogCallback callback = mock(SimpleDialogCallback.class);
-        WifiThreadRunner callbackThreadRunner = mock(WifiThreadRunner.class);
-
-
-        AlertDialog.Builder builder = mock(AlertDialog.Builder.class);
-        AlertDialog dialog = mock(AlertDialog.class);
-        when(builder.setTitle(any())).thenReturn(builder);
-        when(builder.setMessage(any())).thenReturn(builder);
-        when(builder.setPositiveButton(any(), any())).thenReturn(builder);
-        when(builder.setNegativeButton(any(), any())).thenReturn(builder);
-        when(builder.setNeutralButton(any(), any())).thenReturn(builder);
-        when(builder.setOnCancelListener(any())).thenReturn(builder);
-        when(builder.setOnDismissListener(any())).thenReturn(builder);
-        when(builder.create()).thenReturn(dialog);
-        Window window = mock(Window.class);
-        WindowManager.LayoutParams layoutParams = mock(WindowManager.LayoutParams.class);
-        when(window.getAttributes()).thenReturn(layoutParams);
-        when(dialog.getWindow()).thenReturn(window);
-        when(mFrameworkFacade.makeAlertDialogBuilder(any())).thenReturn(builder);
-
-        DialogHandle dialogHandle = mDialogManager.createLegacySimpleDialog(TEST_TITLE,
-                TEST_MESSAGE, TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT,
-                TEST_NEUTRAL_BUTTON_TEXT,
-                callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, TIMEOUT_MILLIS, mWifiThreadRunner);
-
-        // Verify the timeout runnable was posted.
-        ArgumentCaptor<Runnable> runnableArgumentCaptor = ArgumentCaptor.forClass(Runnable.class);
-        verify(mWifiThreadRunner, times(1))
-                .postDelayed(runnableArgumentCaptor.capture(), eq((long) TIMEOUT_MILLIS),
-                        anyString());
-        runnableArgumentCaptor.getValue().run();
-
-        // Dismiss the dialog before the timeout runnable executes.
-        ArgumentCaptor<DialogInterface.OnDismissListener> dismissListenerCaptor =
-                ArgumentCaptor.forClass(DialogInterface.OnDismissListener.class);
-        verify(builder).setOnDismissListener(dismissListenerCaptor.capture());
-        dismissListenerCaptor.getValue().onDismiss(dialog);
-        dispatchMockWifiThreadRunner(mWifiThreadRunner);
-
-        // Verify that the timeout runnable was removed.
-        verify(mWifiThreadRunner).removeCallbacks(runnableArgumentCaptor.getValue());
-    }
-
-    @Test
     public void testLegacySimpleDialog_cancelledDueToActionCloseSystemDialogs() {
         SimpleDialogCallback callback = mock(SimpleDialogCallback.class);
         WifiThreadRunner callbackThreadRunner = mock(WifiThreadRunner.class);
@@ -761,7 +591,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
                 TEST_MESSAGE, TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT,
                 TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, TIMEOUT_MILLIS, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
 
         // ACTION_CLOSE_SYSTEM_DIALOGS with EXTRA_CLOSE_SYSTEM_DIALOGS_EXCEPT_WIFI should be
         // ignored.
@@ -807,7 +637,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
                 TEST_MESSAGE, TEST_POSITIVE_BUTTON_TEXT, TEST_NEGATIVE_BUTTON_TEXT,
                 TEST_NEUTRAL_BUTTON_TEXT,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, TIMEOUT_MILLIS, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         verify(window).setType(WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG);
 
         // Receive screen off event.
@@ -833,7 +663,8 @@ public class WifiDialogManagerTest extends WifiBaseTest {
             @NonNull Intent launchIntent,
             String expectedDeviceName,
             boolean expectedIsPinRequested,
-            @Nullable String expectedDisplayPin) {
+            @Nullable String expectedDisplayPin,
+            long expectedTimeoutMs) {
         assertThat(launchIntent.getAction()).isEqualTo(WifiManager.ACTION_LAUNCH_DIALOG);
         ComponentName component = launchIntent.getComponent();
         assertThat(component.getPackageName()).isEqualTo(WIFI_DIALOG_APK_PKG_NAME);
@@ -855,6 +686,9 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         assertThat(launchIntent.hasExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN)).isTrue();
         assertThat(launchIntent.getStringExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN))
                 .isEqualTo(expectedDisplayPin);
+        assertThat(launchIntent.hasExtra(WifiManager.EXTRA_DIALOG_TIMEOUT_MS)).isTrue();
+        assertThat(launchIntent.getIntExtra(WifiManager.EXTRA_DIALOG_TIMEOUT_MS, -1))
+                .isEqualTo(expectedTimeoutMs);
         return dialogId;
     }
 
@@ -871,12 +705,12 @@ public class WifiDialogManagerTest extends WifiBaseTest {
 
         // Accept without PIN
         DialogHandle dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         Intent intent = verifyStartActivityAsUser(1, mWifiContext);
         int dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, true, null);
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(1)).onAccepted(null);
@@ -887,86 +721,87 @@ public class WifiDialogManagerTest extends WifiBaseTest {
 
         // Accept with PIN
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, true, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(2, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, true, null);
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, true, "012345");
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(1)).onAccepted("012345");
 
         // Accept with PIN but PIN was not requested
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, 123, callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, 123, callback,
+                callbackThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         if (SdkLevel.isAtLeastT()) {
             verifyStartActivityAsUser(1, 123, mWifiContext);
         }
         intent = verifyStartActivityAsUser(3, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, true, "012345");
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(2)).onAccepted("012345");
 
         // Accept without PIN but PIN was requested
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, true, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(4, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, true, null);
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, true, null);
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(2)).onAccepted(null);
 
         // Decline without PIN
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(5, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, false, null);
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(1)).onDeclined();
 
         // Decline with PIN
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, true, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(6, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, true, null);
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, false, "012345");
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(2)).onDeclined();
 
         // Decline with PIN but PIN was not requested
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(7, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, false, "012345");
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(3)).onDeclined();
 
         // Decline without PIN but PIN was requested
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, true, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(8, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, true, null);
+                TEST_DEVICE_NAME, true, null, TEST_P2P_TIMEOUT_MS);
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, false, null);
         dispatchMockWifiThreadRunner(callbackThreadRunner);
         verify(callback, times(4)).onDeclined();
@@ -985,12 +820,12 @@ public class WifiDialogManagerTest extends WifiBaseTest {
 
         // Launch and dismiss dialog.
         DialogHandle dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         Intent intent = verifyStartActivityAsUser(1, mWifiContext);
         int dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
         dismissDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(2, mWifiContext);
         verifyDismissIntent(intent);
@@ -1007,12 +842,12 @@ public class WifiDialogManagerTest extends WifiBaseTest {
 
         // Launch dialog again
         dialogHandle = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         intent = verifyStartActivityAsUser(3, mWifiContext);
         dialogId = verifyP2pInvitationReceivedDialogLaunchIntent(intent,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
 
         // Callback should receive replies to the corresponding dialogId now.
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId, true, null);
@@ -1032,23 +867,23 @@ public class WifiDialogManagerTest extends WifiBaseTest {
                 mock(P2pInvitationReceivedDialogCallback.class);
         WifiThreadRunner callbackThreadRunner = mock(WifiThreadRunner.class);
         DialogHandle dialogHandle1 = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback1, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle1, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle1, mWifiThreadRunner);
         Intent intent1 = verifyStartActivityAsUser(1, mWifiContext);
         int dialogId1 = verifyP2pInvitationReceivedDialogLaunchIntent(intent1,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
 
         // Launch Dialog2
         P2pInvitationReceivedDialogCallback callback2 =
                 mock(P2pInvitationReceivedDialogCallback.class);
         DialogHandle dialogHandle2 = mDialogManager.createP2pInvitationReceivedDialog(
-                TEST_DEVICE_NAME, false, null, Display.DEFAULT_DISPLAY,
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS, Display.DEFAULT_DISPLAY,
                 callback2, callbackThreadRunner);
-        launchDialogSynchronous(dialogHandle2, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle2, mWifiThreadRunner);
         Intent intent2 = verifyStartActivityAsUser(2, mWifiContext);
         int dialogId2 = verifyP2pInvitationReceivedDialogLaunchIntent(intent2,
-                TEST_DEVICE_NAME, false, null);
+                TEST_DEVICE_NAME, false, null, TEST_P2P_TIMEOUT_MS);
 
         // callback1 notified
         mDialogManager.replyToP2pInvitationReceivedDialog(dialogId1, true, null);
@@ -1103,7 +938,7 @@ public class WifiDialogManagerTest extends WifiBaseTest {
         // Launch and dismiss dialog.
         DialogHandle dialogHandle = mDialogManager.createP2pInvitationSentDialog(
                 TEST_DEVICE_NAME, null, Display.DEFAULT_DISPLAY);
-        launchDialogSynchronous(dialogHandle, 0, mWifiThreadRunner);
+        launchDialogSynchronous(dialogHandle, mWifiThreadRunner);
         verifyP2pInvitationSentDialogLaunchIntent(verifyStartActivityAsUser(1, mWifiContext),
                 TEST_DEVICE_NAME, null);
         dismissDialogSynchronous(dialogHandle, mWifiThreadRunner);

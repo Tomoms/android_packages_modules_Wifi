@@ -66,6 +66,7 @@ import static com.android.server.wifi.ActiveModeManager.ROLE_CLIENT_SECONDARY_LO
 import static com.android.server.wifi.ActiveModeManager.ROLE_CLIENT_SECONDARY_TRANSIENT;
 import static com.android.server.wifi.LocalOnlyHotspotRequestInfo.HOTSPOT_NO_ERROR;
 import static com.android.server.wifi.SelfRecovery.REASON_API_CALL;
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 import static com.android.server.wifi.WifiConfigurationTestUtil.SECURITY_NONE;
 import static com.android.server.wifi.WifiSettingsConfigStore.D2D_ALLOWED_WHEN_INFRA_STA_DISABLED;
 import static com.android.server.wifi.WifiSettingsConfigStore.SHOW_DIALOG_WHEN_THIRD_PARTY_APPS_ENABLE_WIFI;
@@ -148,6 +149,7 @@ import android.net.Network;
 import android.net.NetworkStack;
 import android.net.TetheringManager;
 import android.net.Uri;
+import android.net.wifi.BlockingOption;
 import android.net.wifi.CoexUnsafeChannel;
 import android.net.wifi.IActionListener;
 import android.net.wifi.IBooleanListener;
@@ -182,6 +184,7 @@ import android.net.wifi.IWifiConnectedNetworkScorer;
 import android.net.wifi.IWifiLowLatencyLockListener;
 import android.net.wifi.IWifiNetworkSelectionConfigListener;
 import android.net.wifi.IWifiNetworkStateChangedListener;
+import android.net.wifi.IWifiStateChangedListener;
 import android.net.wifi.IWifiVerboseLoggingStatusChangedListener;
 import android.net.wifi.MscsParams;
 import android.net.wifi.QosCharacteristics;
@@ -213,6 +216,7 @@ import android.net.wifi.hotspot2.pps.Credential;
 import android.net.wifi.hotspot2.pps.HomeSp;
 import android.net.wifi.twt.TwtRequest;
 import android.net.wifi.twt.TwtSessionCallback;
+import android.net.wifi.util.Environment;
 import android.net.wifi.util.WifiResourceCache;
 import android.os.Binder;
 import android.os.Build;
@@ -248,6 +252,8 @@ import com.android.modules.utils.StringParceledListSlice;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.WifiServiceImpl.LocalOnlyRequestorCallback;
 import com.android.server.wifi.WifiServiceImpl.SoftApCallbackInternal;
+import com.android.server.wifi.WifiServiceImpl.ThreadStateListener;
+import com.android.server.wifi.WifiServiceImpl.UwbAdapterStateListener;
 import com.android.server.wifi.b2b.WifiRoamingModeManager;
 import com.android.server.wifi.coex.CoexManager;
 import com.android.server.wifi.entitlement.PseudonymInfo;
@@ -284,6 +290,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -449,6 +456,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Mock IDppCallback mDppCallback;
     @Mock ILocalOnlyHotspotCallback mLohsCallback;
     @Mock ICoexCallback mCoexCallback;
+    @Mock IWifiStateChangedListener mWifiStateChangedListener;
     @Mock IScanResultsCallback mScanResultsCallback;
     @Mock ISuggestionConnectionStatusListener mSuggestionConnectionStatusListener;
     @Mock ILocalOnlyConnectionStatusListener mLocalOnlyConnectionStatusListener;
@@ -534,6 +542,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         WifiInjector.sWifiInjector = mWifiInjector;
         when(mRequestInfo.getPid()).thenReturn(mPid);
         when(mRequestInfo2.getPid()).thenReturn(mPid2);
+        when(mWifiInjector.getContext()).thenReturn(mContext);
         when(mWifiInjector.getUserManager()).thenReturn(mUserManager);
         when(mWifiInjector.getWifiCountryCode()).thenReturn(mWifiCountryCode);
         when(mWifiInjector.getWifiMetrics()).thenReturn(mWifiMetrics);
@@ -676,6 +685,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         when(mWifiInjector.getSarManager()).thenReturn(mSarManager);
         mClientModeManagers = Arrays.asList(mClientModeManager, mock(ClientModeManager.class));
         when(mActiveModeWarden.getClientModeManagers()).thenReturn(mClientModeManagers);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(new BitSet());
         when(mWifiInjector.getSelfRecovery()).thenReturn(mSelfRecovery);
         when(mWifiInjector.getLastCallerInfoManager()).thenReturn(mLastCallerInfoManager);
         when(mUserManager.getUserRestrictions()).thenReturn(mBundle);
@@ -700,6 +710,12 @@ public class WifiServiceImplTest extends WifiBaseTest {
                 onStoppedListener.run();
             }
         }).when(mMakeBeforeBreakManager).stopAllSecondaryTransientClientModeManagers(any());
+
+        doAnswer(new AnswerWithArguments() {
+            public void answer(boolean isWepAllowed) {
+                when(mWifiGlobals.isWepAllowed()).thenReturn(isWepAllowed);
+            }
+        }).when(mWifiGlobals).setWepAllowed(anyBoolean());
 
         when(mWifiSettingsConfigStore.get(eq(WIFI_WEP_ALLOWED))).thenReturn(true);
         mWifiServiceImpl = makeWifiServiceImpl();
@@ -3555,7 +3571,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         mLooper.startAutoDispatch();
         setupLohsPermissions();
         int result = mWifiServiceImpl.startLocalOnlyHotspot(mLohsCallback, TEST_PACKAGE_NAME,
-                TEST_FEATURE_ID, null, mExtras);
+                TEST_FEATURE_ID, null, mExtras, false);
         mLooper.stopAutoDispatchAndIgnoreExceptions();
         assertEquals(LocalOnlyHotspotCallback.REQUEST_REGISTERED, result);
         verifyCheckChangePermission(TEST_PACKAGE_NAME);
@@ -3583,7 +3599,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
                 .enforceCallingOrSelfPermission(eq(android.Manifest.permission.CHANGE_WIFI_STATE),
                                                 eq("WifiService"));
         mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
     }
 
     /**
@@ -3597,7 +3613,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
                                                                       eq(TEST_FEATURE_ID),
                                                                       anyInt());
         mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
     }
 
     /**
@@ -3613,7 +3629,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
                 .when(mWifiPermissionsUtil).enforceNearbyDevicesPermission(
                         any(), anyBoolean(), any());
         mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
     }
 
     /**
@@ -3627,7 +3643,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         when(mWifiPermissionsUtil.isTargetSdkLessThan(anyString(),
                 eq(Build.VERSION_CODES.TIRAMISU), anyInt())).thenReturn(true);
         mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
         verify(mWifiPermissionsUtil, never()).enforceNearbyDevicesPermission(any(), anyBoolean(),
                 any());
     }
@@ -3640,7 +3656,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
     public void testStartLocalOnlyHotspotThrowsSecurityExceptionWithoutLocationEnabled() {
         when(mWifiPermissionsUtil.isLocationModeEnabled()).thenReturn(false);
         mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
     }
 
     /**
@@ -3652,7 +3668,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
 
         when(mFrameworkFacade.isAppForeground(any(), anyInt())).thenReturn(false);
         int result = mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
         assertEquals(LocalOnlyHotspotCallback.ERROR_INCOMPATIBLE_MODE, result);
     }
 
@@ -3760,7 +3776,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         when(mFrameworkFacade.isAppForeground(any(), anyInt())).thenReturn(true);
         mLooper.dispatchAll();
         int returnCode = mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
         assertEquals(ERROR_INCOMPATIBLE_MODE, returnCode);
     }
 
@@ -3775,7 +3791,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
                 eq(UserManager.DISALLOW_CONFIG_TETHERING), any()))
                 .thenReturn(true);
         int returnCode = mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
         assertEquals(ERROR_TETHERING_DISALLOWED, returnCode);
     }
 
@@ -3788,7 +3804,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
 
         // now do the second request that will fail
         mWifiServiceImpl.startLocalOnlyHotspot(
-                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
     }
 
     /**
@@ -3905,14 +3921,16 @@ public class WifiServiceImplTest extends WifiBaseTest {
 
     @Test(expected = SecurityException.class)
     public void testCustomLohs_FailsWithoutPermission() {
-        SoftApConfiguration customConfig = new SoftApConfiguration.Builder()
-                .setSsid("customConfig")
-                .build();
+        SoftApConfiguration.Builder customConfigBuilder = new SoftApConfiguration.Builder()
+                .setSsid("customConfig");
+        if (Environment.isSdkAtLeastB()) {
+            customConfigBuilder.setUserConfiguration(false);
+        }
         // set up basic permissions, but not NETWORK_SETUP_WIZARD
         setupLohsPermissions();
         setupWardenForCustomLohs();
         mWifiServiceImpl.startLocalOnlyHotspot(mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
-                customConfig, mExtras);
+                customConfigBuilder.build(), mExtras, true);
     }
 
     private static void nopDeathCallback(LocalOnlyHotspotRequestInfo requestor) {
@@ -3932,7 +3950,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
                 new LocalOnlyHotspotRequestInfo(mLooper.getLooper(), new WorkSource(),
                         sharedCallback, WifiServiceImplTest::nopDeathCallback, null));
         assertThat(mWifiServiceImpl.startLocalOnlyHotspot(exclusiveCallback, TEST_PACKAGE_NAME,
-                TEST_FEATURE_ID, exclusiveConfig, mExtras)).isEqualTo(ERROR_GENERIC);
+                TEST_FEATURE_ID, exclusiveConfig, mExtras, true)).isEqualTo(ERROR_GENERIC);
         stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
         assertThat(sharedCallback.mIsStarted).isTrue();
         assertThat(exclusiveCallback.mIsStarted).isFalse();
@@ -3953,7 +3971,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
                         exclusiveCallback, WifiServiceImplTest::nopDeathCallback, exclusiveConfig));
         stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
         assertThat(mWifiServiceImpl.startLocalOnlyHotspot(sharedCallback, TEST_PACKAGE_NAME,
-                TEST_FEATURE_ID, null, mExtras)).isEqualTo(ERROR_GENERIC);
+                TEST_FEATURE_ID, null, mExtras, false)).isEqualTo(ERROR_GENERIC);
         assertThat(exclusiveCallback.mIsStarted).isTrue();
         assertThat(sharedCallback.mIsStarted).isFalse();
     }
@@ -3971,7 +3989,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         setupForCustomLohs();
         assertThat(
                 mWifiServiceImpl.startLocalOnlyHotspot(callback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
-                        config, mExtras)).isEqualTo(REQUEST_REGISTERED);
+                        config, mExtras, true)).isEqualTo(REQUEST_REGISTERED);
         stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
         verify(mWifiApConfigStore).generateLocalOnlyHotspotConfig(
                 eq(mContext), eq(config), any());
@@ -3997,7 +4015,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         setupForCustomLohs();
         assertThat(
                 mWifiServiceImpl.startLocalOnlyHotspot(callback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
-                        config, mExtras)).isEqualTo(REQUEST_REGISTERED);
+                        config, mExtras, true)).isEqualTo(REQUEST_REGISTERED);
         stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
         verify(mWifiApConfigStore).generateLocalOnlyHotspotConfig(
                 eq(mContext), eq(config), any());
@@ -4026,7 +4044,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         setupForCustomLohs();
         assertThat(
                 mWifiServiceImpl.startLocalOnlyHotspot(callback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
-                        customizedConfig, mExtras)).isEqualTo(REQUEST_REGISTERED);
+                        customizedConfig, mExtras, true)).isEqualTo(REQUEST_REGISTERED);
         stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
         verify(mWifiApConfigStore).generateLocalOnlyHotspotConfig(
                 eq(mContext), eq(customizedConfig), any());
@@ -4057,7 +4075,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         setupForCustomLohs();
         assertThat(
                 mWifiServiceImpl.startLocalOnlyHotspot(callback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
-                        customizedConfig, mExtras)).isEqualTo(REQUEST_REGISTERED);
+                        customizedConfig, mExtras, true)).isEqualTo(REQUEST_REGISTERED);
         stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
 
         // Use app's worksouce.
@@ -4327,6 +4345,19 @@ public class WifiServiceImplTest extends WifiBaseTest {
         mStateMachineSoftApCallback.onStateChanged(state);
         mLooper.dispatchAll();
         verify(mClientSoftApCallback).onStateChanged(eq(state));
+    }
+
+    /**
+     * Verify that soft AP callback is called on ClientsDisconnected event
+     */
+    @Test
+    public void callsRegisteredCallbacksOnClientsDisconnectedEvent() throws Exception {
+        List<WifiClient> testClients = new ArrayList<>();
+        registerSoftApCallbackAndVerify(mClientSoftApCallback);
+
+        mStateMachineSoftApCallback.onClientsDisconnected(mTestSoftApInfo, testClients);
+        mLooper.dispatchAll();
+        verify(mClientSoftApCallback).onClientsDisconnected(eq(mTestSoftApInfo), eq(testClients));
     }
 
     /**
@@ -4745,7 +4776,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         when(callback2.asBinder()).thenReturn(mock(IBinder.class));
 
         int result = mWifiServiceImpl.startLocalOnlyHotspot(
-                callback2, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras);
+                callback2, TEST_PACKAGE_NAME, TEST_FEATURE_ID, null, mExtras, false);
         assertEquals(LocalOnlyHotspotCallback.REQUEST_REGISTERED, result);
         mLooper.dispatchAll();
 
@@ -8959,7 +8990,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
      */
     @Test
     public void getWifiActivityEnergyInfoAsyncFeatureUnsupported() throws Exception {
-        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(0L);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(new BitSet());
 
         mWifiServiceImpl.getWifiActivityEnergyInfoAsync(mOnWifiActivityEnergyInfoListener);
         verify(mOnWifiActivityEnergyInfoListener).onWifiActivityEnergyInfo(null);
@@ -8971,7 +9002,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
      */
     @Test
     public void getWifiActivityEnergyInfoAsyncSuccess() throws Exception {
-        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(Long.MAX_VALUE);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_LINK_LAYER_STATS));
         setupReportActivityInfo();
         mWifiServiceImpl.getWifiActivityEnergyInfoAsync(mOnWifiActivityEnergyInfoListener);
         mLooper.dispatchAll();
@@ -9229,18 +9261,20 @@ public class WifiServiceImplTest extends WifiBaseTest {
     }
 
     @Test
-    public void getSupportedFeaturesVerboseLoggingThrottled() {
+    public void supportedFeaturesVerboseLoggingThrottled() {
         mWifiServiceImpl.enableVerboseLogging(
                 WifiManager.VERBOSE_LOGGING_LEVEL_ENABLED); // this logs
         when(mClock.getElapsedSinceBootMillis()).thenReturn(1000L);
-        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(0x110L);
-        mWifiServiceImpl.getSupportedFeatures();
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_P2P));
+        mWifiServiceImpl.isFeatureSupported(WifiManager.WIFI_FEATURE_P2P);
         when(mClock.getElapsedSinceBootMillis()).thenReturn(1001L);
-        mWifiServiceImpl.getSupportedFeatures(); // should not log
+        mWifiServiceImpl.isFeatureSupported(WifiManager.WIFI_FEATURE_P2P); // should not log
         when(mClock.getElapsedSinceBootMillis()).thenReturn(5000L);
-        mWifiServiceImpl.getSupportedFeatures();
-        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(0x100L);
-        mWifiServiceImpl.getSupportedFeatures();
+        mWifiServiceImpl.isFeatureSupported(WifiManager.WIFI_FEATURE_P2P);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(createCapabilityBitset(
+                WifiManager.WIFI_FEATURE_P2P, WifiManager.WIFI_FEATURE_PASSPOINT));
+        mWifiServiceImpl.isFeatureSupported(WifiManager.WIFI_FEATURE_P2P);
         verify(mLog, times(4)).info(any());
     }
 
@@ -10174,7 +10208,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
     }
 
     private List<WifiConfiguration> setupMultiTypeConfigs(
-            long featureFlags, boolean saeAutoUpgradeEnabled, boolean oweAutoUpgradeEnabled) {
+            BitSet featureFlags, boolean saeAutoUpgradeEnabled, boolean oweAutoUpgradeEnabled) {
         when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(featureFlags);
         when(mWifiGlobals.isWpa3SaeUpgradeEnabled()).thenReturn(saeAutoUpgradeEnabled);
         when(mWifiGlobals.isOweUpgradeEnabled()).thenReturn(oweAutoUpgradeEnabled);
@@ -10247,7 +10281,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
      */
     @Test
     public void testGetConfiguredNetworksForMultiTypeConfigs() {
-        long featureFlags = WifiManager.WIFI_FEATURE_WPA3_SAE | WifiManager.WIFI_FEATURE_OWE;
+        BitSet featureFlags = createCapabilityBitset(
+                WifiManager.WIFI_FEATURE_WPA3_SAE, WifiManager.WIFI_FEATURE_OWE);
         List<WifiConfiguration> testConfigs = setupMultiTypeConfigs(
                 featureFlags, true, true);
         when(mWifiConfigManager.getSavedNetworks(anyInt()))
@@ -10279,7 +10314,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
      */
     @Test
     public void testGetConfiguredNetworksForMultiTypeConfigsWithoutAutoUpgradeEnabled() {
-        long featureFlags = WifiManager.WIFI_FEATURE_WPA3_SAE | WifiManager.WIFI_FEATURE_OWE;
+        BitSet featureFlags = createCapabilityBitset(
+                WifiManager.WIFI_FEATURE_WPA3_SAE, WifiManager.WIFI_FEATURE_OWE);
         List<WifiConfiguration> testConfigs = setupMultiTypeConfigs(
                 featureFlags, false, false);
         when(mWifiConfigManager.getSavedNetworks(anyInt()))
@@ -10311,7 +10347,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
      */
     @Test
     public void testGetConfiguredNetworksForMultiTypeConfigsWithoutHwSupport() {
-        long featureFlags = 0L;
+        BitSet featureFlags = new BitSet();
         List<WifiConfiguration> testConfigs = setupMultiTypeConfigs(
                 featureFlags, true, true);
         when(mWifiConfigManager.getSavedNetworks(anyInt()))
@@ -10539,7 +10575,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         assumeTrue(SdkLevel.isAtLeastT());
         when(mWifiGlobals.isBackgroundScanSupported()).thenReturn(true);
         when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_PNO);
+                .thenReturn(createCapabilityBitset(WifiManager.WIFI_FEATURE_PNO));
         when(mWifiPermissionsUtil.checkRequestCompanionProfileAutomotiveProjectionPermission(
                 anyInt())).thenReturn(true);
         when(mWifiPermissionsUtil.checkCallersLocationPermissionInManifest(
@@ -10559,7 +10595,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testSetExternalPnoScanRequest_PnoNotSupported() throws Exception {
         assumeTrue(SdkLevel.isAtLeastT());
-        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(0L);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(new BitSet());
         when(mWifiPermissionsUtil.checkRequestCompanionProfileAutomotiveProjectionPermission(
                 anyInt())).thenReturn(true);
         when(mWifiPermissionsUtil.checkCallersLocationPermissionInManifest(
@@ -10781,7 +10817,7 @@ public class WifiServiceImplTest extends WifiBaseTest {
         // Expect the result is registered but it should get failure because non-supported
         // configuration
         int result = mWifiServiceImpl.startLocalOnlyHotspot(mLohsCallback, TEST_PACKAGE_NAME,
-                TEST_FEATURE_ID, customizedConfig, mExtras);
+                TEST_FEATURE_ID, customizedConfig, mExtras, true);
         assertEquals(LocalOnlyHotspotCallback.REQUEST_REGISTERED, result);
         mLooper.dispatchAll();
         verify(mLohsCallback).onHotspotFailed(ERROR_GENERIC);
@@ -12326,17 +12362,24 @@ public class WifiServiceImplTest extends WifiBaseTest {
 
     @Test
     public void testSetWepAllowedWithPermission() {
+        // Test if WIFI_WEP_ALLOWED starts with false.
         when(mWifiSettingsConfigStore.get(eq(WIFI_WEP_ALLOWED))).thenReturn(false);
         mWifiServiceImpl.checkAndStartWifi();
         mLooper.dispatchAll();
         verify(mWifiSettingsConfigStore).get(eq(WIFI_WEP_ALLOWED));
         verify(mWifiGlobals).setWepAllowed(eq(false));
+        verify(mWifiSettingsConfigStore).registerChangeListener(
+                eq(WIFI_WEP_ALLOWED),
+                mWepAllowedSettingChangedListenerCaptor.capture(),
+                any(Handler.class));
         // verify setWepAllowed with MANAGE_WIFI_NETWORK_SETTING
         when(mWifiPermissionsUtil.checkNetworkSettingsPermission(anyInt())).thenReturn(true);
         mWifiServiceImpl.setWepAllowed(true);
+        verify(mWifiSettingsConfigStore).put(eq(WIFI_WEP_ALLOWED), eq(true));
+        mWepAllowedSettingChangedListenerCaptor.getValue()
+                .onSettingsChanged(WIFI_WEP_ALLOWED, true);
         mLooper.dispatchAll();
         verify(mWifiGlobals).setWepAllowed(true);
-        verify(mWifiSettingsConfigStore).put(eq(WIFI_WEP_ALLOWED), eq(true));
     }
 
     @Test
@@ -12352,10 +12395,21 @@ public class WifiServiceImplTest extends WifiBaseTest {
         when(mockWifiInfoWpa.getCurrentSecurityType()).thenReturn(WifiInfo.SECURITY_TYPE_PSK);
         when(cmmWep.getConnectionInfo()).thenReturn(mockWifiInfoWep);
         when(cmmWpa.getConnectionInfo()).thenReturn(mockWifiInfoWpa);
+        mWifiServiceImpl.checkAndStartWifi();
+        mLooper.dispatchAll();
+        verify(mWifiSettingsConfigStore).get(eq(WIFI_WEP_ALLOWED));
+        verify(mWifiGlobals).setWepAllowed(eq(true));
+        verify(mWifiSettingsConfigStore).registerChangeListener(
+                eq(WIFI_WEP_ALLOWED),
+                mWepAllowedSettingChangedListenerCaptor.capture(),
+                any(Handler.class));
+
         mWifiServiceImpl.setWepAllowed(false);
+        verify(mWifiSettingsConfigStore).put(eq(WIFI_WEP_ALLOWED), eq(false));
+        mWepAllowedSettingChangedListenerCaptor.getValue()
+                .onSettingsChanged(WIFI_WEP_ALLOWED, false);
         mLooper.dispatchAll();
         verify(mWifiGlobals).setWepAllowed(false);
-        verify(mWifiSettingsConfigStore).put(eq(WIFI_WEP_ALLOWED), eq(false));
         // Only WEP disconnect
         verify(cmmWep).disconnect();
         verify(cmmWpa, never()).disconnect();
@@ -12493,8 +12547,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testSetPerSsidRoamingModeByDeviceAdmin() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastV());
-        when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT));
         assertThrows(SecurityException.class,
                 () -> mWifiServiceImpl.setPerSsidRoamingMode(
                         WifiSsid.fromString(TEST_SSID_WITH_QUOTES),
@@ -12516,8 +12570,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testSetPerSsidRoamingModeByNonAdmin() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastV());
-        when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT));
         assertThrows(SecurityException.class,
                 () -> mWifiServiceImpl.setPerSsidRoamingMode(
                         WifiSsid.fromString(TEST_SSID_WITH_QUOTES),
@@ -12539,8 +12593,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testRemovePerSsidRoamingModeByDeviceAdmin() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastV());
-        when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT));
         assertThrows(SecurityException.class,
                 () -> mWifiServiceImpl.removePerSsidRoamingMode(
                         WifiSsid.fromString(TEST_SSID_WITH_QUOTES), TEST_PACKAGE_NAME));
@@ -12557,8 +12611,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testRemovePerSsidRoamingModeByNonAdmin() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastV());
-        when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT));
         assertThrows(SecurityException.class,
                 () -> mWifiServiceImpl.removePerSsidRoamingMode(
                         WifiSsid.fromString(TEST_SSID_WITH_QUOTES), TEST_PACKAGE_NAME));
@@ -12574,8 +12628,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testGetPerSsidRoamingModesByDeviceAdmin() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastV());
-        when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT));
         IMapListener listener = mock(IMapListener.class);
         InOrder inOrder = inOrder(listener);
         assertThrows(SecurityException.class,
@@ -12602,8 +12656,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
     @Test
     public void testGetPerSsidRoamingModesByNonAdmin() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastV());
-        when(mActiveModeWarden.getSupportedFeatureSet())
-                .thenReturn(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT);
+        when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(
+                createCapabilityBitset(WifiManager.WIFI_FEATURE_AGGRESSIVE_ROAMING_MODE_SUPPORT));
         IMapListener listener = mock(IMapListener.class);
         InOrder inOrder = inOrder(listener);
         assertThrows(SecurityException.class,
@@ -12633,9 +12687,9 @@ public class WifiServiceImplTest extends WifiBaseTest {
         when(mWifiGlobals.isSwPnoEnabled()).thenReturn(isSwPnoEnabled);
         if (isPnoFeatureSet) {
             when(mActiveModeWarden.getSupportedFeatureSet())
-                    .thenReturn(WifiManager.WIFI_FEATURE_PNO);
+                    .thenReturn(createCapabilityBitset(WifiManager.WIFI_FEATURE_PNO));
         } else {
-            when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(0L);
+            when(mActiveModeWarden.getSupportedFeatureSet()).thenReturn(new BitSet());
         }
         assertEquals(mWifiServiceImpl.isPnoSupported(),
                 (isBackgroundScanSupported && isPnoFeatureSet) || isSwPnoEnabled);
@@ -12881,7 +12935,8 @@ public class WifiServiceImplTest extends WifiBaseTest {
 
     @Test
     public void testGetWifiConfigForMatchedNetworkSuggestionsSharedWithUserForMultiTypeConfigs() {
-        long featureFlags = WifiManager.WIFI_FEATURE_WPA3_SAE | WifiManager.WIFI_FEATURE_OWE;
+        BitSet featureFlags = createCapabilityBitset(
+                WifiManager.WIFI_FEATURE_WPA3_SAE, WifiManager.WIFI_FEATURE_OWE);
         List<WifiConfiguration> testConfigs = setupMultiTypeConfigs(featureFlags, true, true);
         when(mWifiNetworkSuggestionsManager
                 .getWifiConfigForMatchedNetworkSuggestionsSharedWithUser(anyList()))
@@ -12906,4 +12961,221 @@ public class WifiServiceImplTest extends WifiBaseTest {
                 expectedConfigs, configs.getList());
     }
 
+    @Test
+    public void testSetAutojoinDisallowedSecurityTypesWithPermission() throws RemoteException {
+        assumeTrue(SdkLevel.isAtLeastT());
+        // No permission to call API
+        when(mWifiPermissionsUtil.checkNetworkSettingsPermission(anyInt())).thenReturn(false);
+        when(mWifiPermissionsUtil.checkManageWifiNetworkSelectionPermission(anyInt()))
+                .thenReturn(false);
+        assertThrows(SecurityException.class,
+                () -> mWifiServiceImpl.setAutojoinDisallowedSecurityTypes(0/*restrict none*/,
+                        mExtras));
+        // Has permission to call API
+        when(mWifiPermissionsUtil.checkNetworkSettingsPermission(anyInt())).thenReturn(true);
+        // Null argument
+        assertThrows(IllegalArgumentException.class,
+                () -> mWifiServiceImpl.setAutojoinDisallowedSecurityTypes(0/*restrict none*/,
+                        null));
+        // Invalid argument
+        assertThrows(IllegalArgumentException.class,
+                () -> mWifiServiceImpl.setAutojoinDisallowedSecurityTypes(
+                        0x1 << WifiInfo.SECURITY_TYPE_OWE, mExtras));
+        assertThrows(IllegalArgumentException.class,
+                () -> mWifiServiceImpl.setAutojoinDisallowedSecurityTypes(
+                        0x1 << WifiInfo.SECURITY_TYPE_SAE, mExtras));
+        assertThrows(IllegalArgumentException.class,
+                () -> mWifiServiceImpl.setAutojoinDisallowedSecurityTypes(
+                        0x1 << WifiInfo.SECURITY_TYPE_EAP_WPA3_ENTERPRISE, mExtras));
+        // Valid argument
+        int restrictions = (0x1 << WifiInfo.SECURITY_TYPE_OPEN)
+                | (0x1 << WifiInfo.SECURITY_TYPE_OWE) | (0x1 << WifiInfo.SECURITY_TYPE_WEP);
+        mWifiServiceImpl.setAutojoinDisallowedSecurityTypes(restrictions, mExtras);
+        mLooper.dispatchAll();
+        verify(mWifiConnectivityManager).setAutojoinDisallowedSecurityTypes(eq(restrictions));
+    }
+
+    @Test
+    public void testGetAutojoinDisallowedSecurityTypesWithPermission() throws RemoteException {
+        assumeTrue(SdkLevel.isAtLeastT());
+        // Mock listener.
+        IIntegerListener listener = mock(IIntegerListener.class);
+        InOrder inOrder = inOrder(listener);
+        // No permission to call API
+        when(mWifiPermissionsUtil.checkNetworkSettingsPermission(anyInt())).thenReturn(false);
+        when(mWifiPermissionsUtil.checkManageWifiNetworkSelectionPermission(anyInt()))
+                .thenReturn(false);
+        assertThrows(SecurityException.class,
+                () -> mWifiServiceImpl.getAutojoinDisallowedSecurityTypes(listener, mExtras));
+        // Null arguments
+        assertThrows(IllegalArgumentException.class,
+                () -> mWifiServiceImpl.getAutojoinDisallowedSecurityTypes(null, mExtras));
+        assertThrows(IllegalArgumentException.class,
+                () -> mWifiServiceImpl.getAutojoinDisallowedSecurityTypes(listener, null));
+        // has permission to call API
+        when(mWifiPermissionsUtil.checkNetworkSettingsPermission(anyInt())).thenReturn(true);
+        when(mWifiConnectivityManager.getAutojoinDisallowedSecurityTypes()).thenReturn(7);
+        mWifiServiceImpl.getAutojoinDisallowedSecurityTypes(listener, mExtras);
+        mLooper.dispatchAll();
+        inOrder.verify(listener).onResult(7);
+    }
+    /**
+     * Verify UwbManager.AdapterStateCallback onStateChanged could update mLastUwbState in
+     * WifiMetrics properly
+     */
+    @Test
+    public void testServiceImplAdapterStateCallback() {
+        assumeTrue(SdkLevel.isAtLeastT());
+        UwbAdapterStateListener uwbAdapterStateListener =
+                mWifiServiceImpl.new UwbAdapterStateListener();
+
+        uwbAdapterStateListener.onStateChanged(2, 1);
+        verify(mWifiMetrics).setLastUwbState(2);
+    }
+
+    /**
+     * Verify ThreadNetworkController.StateCallback onDeviceRoleChanged could update
+     * mLastThreadDeviceRole in WifiMetrics properly
+     */
+    @Test
+    public void testServiceImplThreadStateCallback() {
+        assumeTrue(SdkLevel.isAtLeastV());
+        ThreadStateListener threadStateListener =
+                mWifiServiceImpl.new ThreadStateListener();
+
+        threadStateListener.onDeviceRoleChanged(3);
+        verify(mWifiMetrics).setLastThreadDeviceRole(3);
+    }
+
+    @Test
+    public void testSetQueryAllowedWhenWepUsageControllerSupported() {
+        when(mFeatureFlags.wepDisabledInApm()).thenReturn(true);
+        WepNetworkUsageController testWepNetworkUsageController =
+                mock(WepNetworkUsageController.class);
+        when(mWifiInjector.getWepNetworkUsageController())
+                .thenReturn(testWepNetworkUsageController);
+        when(mWifiPermissionsUtil.checkNetworkSettingsPermission(anyInt())).thenReturn(true);
+        ConcreteClientModeManager cmmWep = mock(ConcreteClientModeManager.class);
+        WifiInfo mockWifiInfoWep = mock(WifiInfo.class);
+        List<ClientModeManager> cmms = Arrays.asList(cmmWep);
+        when(mActiveModeWarden.getClientModeManagers()).thenReturn(cmms);
+        when(mockWifiInfoWep.getCurrentSecurityType()).thenReturn(WifiInfo.SECURITY_TYPE_WEP);
+        when(cmmWep.getConnectionInfo()).thenReturn(mockWifiInfoWep);
+        mWifiServiceImpl = makeWifiServiceImpl();
+        mWifiServiceImpl.checkAndStartWifi();
+        mWifiServiceImpl.handleBootCompleted();
+        mLooper.dispatchAll();
+        // Verify boot complete go through the new design.
+        verify(mWifiSettingsConfigStore, never()).registerChangeListener(
+                eq(WIFI_WEP_ALLOWED),
+                mWepAllowedSettingChangedListenerCaptor.capture(),
+                any(Handler.class));
+        verify(mWifiGlobals, never()).setWepAllowed(anyBoolean());
+        verify(testWepNetworkUsageController).handleBootCompleted();
+
+        mWifiServiceImpl.setWepAllowed(false);
+        mLooper.dispatchAll();
+        verify(mWifiGlobals, never()).setWepAllowed(anyBoolean());
+        verify(mWifiSettingsConfigStore).put(eq(WIFI_WEP_ALLOWED), eq(false));
+        // WEP disconnect logic moved to WepNetworkUsageController.
+        verify(cmmWep, never()).disconnect();
+        verify(mWifiGlobals, never()).setWepAllowed(anyBoolean());
+    }
+
+    @Test
+    public void testUpdateSoftApCapabilityCheckMLOSupport() throws Exception {
+        lenient().when(SubscriptionManager.getActiveDataSubscriptionId())
+                .thenReturn(SubscriptionManager.DEFAULT_SUBSCRIPTION_ID);
+        ArgumentCaptor<SoftApCapability> capabilityArgumentCaptor = ArgumentCaptor.forClass(
+                SoftApCapability.class);
+        when(mWifiNative.isMLDApSupportMLO()).thenReturn(true);
+        mWifiServiceImpl.checkAndStartWifi();
+        mLooper.dispatchAll();
+        verify(mContext).registerReceiver(mBroadcastReceiverCaptor.capture(),
+                argThat((IntentFilter filter) ->
+                        filter.hasAction(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED)),
+                isNull(),
+                any(Handler.class));
+
+        // Send the broadcast
+        Intent intent = new Intent(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
+        mBroadcastReceiverCaptor.getValue().onReceive(mContext, intent);
+        mLooper.dispatchAll();
+        verify(mActiveModeWarden).updateSoftApCapability(capabilityArgumentCaptor.capture(),
+                eq(WifiManager.IFACE_IP_MODE_TETHERED));
+        assertTrue(capabilityArgumentCaptor.getValue()
+                .areFeaturesSupported(SoftApCapability.SOFTAP_FEATURE_MLO));
+    }
+
+    @Test
+    public void testCustomUserLohs() {
+        assumeTrue(Environment.isSdkAtLeastB());
+        SoftApConfiguration customConfig = new SoftApConfiguration.Builder()
+                .setSsid("customConfig")
+                .build();
+        assertThrows(SecurityException.class,
+                () -> mWifiServiceImpl.startLocalOnlyHotspot(
+                mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
+                customConfig, mExtras, false));
+        setupLohsPermissions();
+        mWifiServiceImpl.startLocalOnlyHotspot(mLohsCallback, TEST_PACKAGE_NAME, TEST_FEATURE_ID,
+                customConfig, mExtras, false);
+    }
+
+    @Test
+    public void testDisallowCurrentSuggestedNetwork() {
+        BlockingOption blockingOption = new BlockingOption.Builder(100).build();
+        WifiInfo info = new WifiInfo();
+        info.setRequestingPackageName(TEST_PACKAGE_NAME);
+        when(mActiveModeWarden.getWifiState()).thenReturn(WIFI_STATE_ENABLED);
+        when(mActiveModeWarden.getConnectionInfo()).thenReturn(info);
+        mWifiServiceImpl.disallowCurrentSuggestedNetwork(blockingOption, TEST_PACKAGE_NAME);
+        mLooper.dispatchAll();
+        verify(mClientModeManager).blockNetwork(eq(blockingOption));
+    }
+
+    /**
+     * Test add and remove listener will go to ActiveModeWarden.
+     */
+    @Test
+    public void testAddRemoveWifiStateChangedListener() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastS());
+        when(mWifiStateChangedListener.asBinder()).thenReturn(mAppBinder);
+        mWifiServiceImpl.addWifiStateChangedListener(mWifiStateChangedListener);
+        mLooper.dispatchAll();
+        verify(mActiveModeWarden).addWifiStateChangedListener(mWifiStateChangedListener);
+        mWifiServiceImpl.removeWifiStateChangedListener(mWifiStateChangedListener);
+        mLooper.dispatchAll();
+        verify(mActiveModeWarden).removeWifiStateChangedListener(mWifiStateChangedListener);
+    }
+
+    /**
+     * Verify that a call to addWifiStateChangedListener throws a SecurityException if the
+     * caller does not have the ACCESS_WIFI_STATE permission.
+     */
+    @Test
+    public void testAddWifiStateChangedListenerThrowsSecurityExceptionOnMissingPermissions() {
+        doThrow(new SecurityException()).when(mContext)
+                .enforceCallingOrSelfPermission(eq(ACCESS_WIFI_STATE),
+                        eq("WifiService"));
+        try {
+            mWifiServiceImpl.addWifiStateChangedListener(mWifiStateChangedListener);
+            fail("expected SecurityException");
+        } catch (SecurityException expected) { }
+    }
+
+    /**
+     * Verify that a call to removeWifiStateChangedListener throws a SecurityException if the caller
+     * does not have the ACCESS_WIFI_STATE permission.
+     */
+    @Test
+    public void testRemoveWifiStateChangedListenerThrowsSecurityExceptionOnMissingPermissions() {
+        doThrow(new SecurityException()).when(mContext)
+                .enforceCallingOrSelfPermission(eq(ACCESS_WIFI_STATE),
+                        eq("WifiService"));
+        try {
+            mWifiServiceImpl.addWifiStateChangedListener(mWifiStateChangedListener);
+            fail("expected SecurityException");
+        } catch (SecurityException expected) { }
+    }
 }

@@ -23,8 +23,6 @@ import static android.hardware.wifi.V1_6.WifiChannelWidthInMhz.WIDTH_80;
 import static android.hardware.wifi.V1_6.WifiChannelWidthInMhz.WIDTH_80P80;
 import static android.net.wifi.CoexUnsafeChannel.POWER_CAP_NONE;
 
-import static com.android.server.wifi.util.GeneralUtil.getCapabilityIndex;
-
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
@@ -122,7 +120,8 @@ public class WifiChipHidlImpl implements IWifiChip {
      */
     @Override
     @Nullable
-    public WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData) {
+    public WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation) {
         String methodStr = "createBridgedApIface";
         return validateAndCall(methodStr, null,
                 () -> createBridgedApIfaceInternal(methodStr));
@@ -1750,7 +1749,7 @@ public class WifiChipHidlImpl implements IWifiChip {
         }
     }
 
-    private static final long[][] sChipFeatureCapabilityTranslation = {
+    private static final int[][] sChipFeatureCapabilityTranslation = {
             {WifiManager.WIFI_FEATURE_TX_POWER_LIMIT,
                     android.hardware.wifi.V1_1.IWifiChip.ChipCapabilityMask.SET_TX_POWER_LIMIT
             },
@@ -1766,7 +1765,7 @@ public class WifiChipHidlImpl implements IWifiChip {
      * Translation table used by getSupportedFeatureSet for translating IWifiChip caps for
      * additional capabilities introduced in V1.5
      */
-    private static final long[][] sChipFeatureCapabilityTranslation15 = {
+    private static final int[][] sChipFeatureCapabilityTranslation15 = {
             {WifiManager.WIFI_FEATURE_INFRA_60G,
                     android.hardware.wifi.V1_5.IWifiChip.ChipCapabilityMask.WIGIG
             }
@@ -1776,7 +1775,7 @@ public class WifiChipHidlImpl implements IWifiChip {
      * Translation table used by getSupportedFeatureSet for translating IWifiChip caps for
      * additional capabilities introduced in V1.3
      */
-    private static final long[][] sChipFeatureCapabilityTranslation13 = {
+    private static final int[][] sChipFeatureCapabilityTranslation13 = {
             {WifiManager.WIFI_FEATURE_LOW_LATENCY,
                     android.hardware.wifi.V1_3.IWifiChip.ChipCapabilityMask.SET_LATENCY_MODE
             },
@@ -1797,7 +1796,7 @@ public class WifiChipHidlImpl implements IWifiChip {
         BitSet features = new BitSet();
         for (int i = 0; i < sChipFeatureCapabilityTranslation.length; i++) {
             if ((capabilities & sChipFeatureCapabilityTranslation[i][1]) != 0) {
-                features.set(getCapabilityIndex(sChipFeatureCapabilityTranslation[i][0]));
+                features.set(sChipFeatureCapabilityTranslation[i][0]);
             }
         }
         return features;
@@ -1817,7 +1816,7 @@ public class WifiChipHidlImpl implements IWifiChip {
         // Next collect features for V1_5 version
         for (int i = 0; i < sChipFeatureCapabilityTranslation15.length; i++) {
             if ((capabilities & sChipFeatureCapabilityTranslation15[i][1]) != 0) {
-                features.set(getCapabilityIndex(sChipFeatureCapabilityTranslation15[i][0]));
+                features.set(sChipFeatureCapabilityTranslation15[i][0]);
             }
         }
         return features;
@@ -1837,7 +1836,7 @@ public class WifiChipHidlImpl implements IWifiChip {
         // Next collect features for V1_3 version
         for (int i = 0; i < sChipFeatureCapabilityTranslation13.length; i++) {
             if ((capabilities & sChipFeatureCapabilityTranslation13[i][1]) != 0) {
-                features.set(getCapabilityIndex(sChipFeatureCapabilityTranslation13[i][0]));
+                features.set(sChipFeatureCapabilityTranslation13[i][0]);
             }
         }
         return features;

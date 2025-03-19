@@ -556,16 +556,17 @@ public class WifiChip {
     }
 
     /**
-     * See comments for {@link IWifiChip#createBridgedApIface(List)}
+     * See comments for {@link IWifiChip#createBridgedApIface(List, boolean)}
      */
     @Nullable
-    public WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData) {
+    public WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation) {
         if (vendorData == null) {
             Log.e(TAG, "createBridgedApIface received null vendorData");
             return null;
         }
         return validateAndCall("createBridgedApIface", null,
-                () -> mWifiChip.createBridgedApIface(vendorData));
+                () -> mWifiChip.createBridgedApIface(vendorData, isUsingMultiLinkOperation));
     }
 
     /**

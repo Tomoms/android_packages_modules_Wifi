@@ -447,13 +447,17 @@ public class SupplicantP2pIfaceHalTest extends WifiBaseTest {
         initializeWithAidlImpl(true);
         String networkName = "someName";
         String passphrase = "somePassword";
+        @WifiP2pConfig.PccModeConnectionType int connectionType =
+                WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY;
         boolean persistent = true;
         boolean join = true;
         int freq = 10;
-        when(mP2pIfaceHalAidlMock.groupAdd(anyString(), anyString(),
+        when(mP2pIfaceHalAidlMock.groupAdd(anyString(), anyString(), anyInt(),
                 anyBoolean(), anyInt(), anyString(), anyBoolean())).thenReturn(true);
-        assertTrue(mDut.groupAdd(networkName, passphrase, persistent, freq, BSSID, join));
-        verify(mP2pIfaceHalAidlMock).groupAdd(eq(networkName), eq(passphrase), eq(persistent),
+        assertTrue(mDut.groupAdd(networkName, passphrase, connectionType, persistent,
+                freq, BSSID, join));
+        verify(mP2pIfaceHalAidlMock).groupAdd(eq(networkName), eq(passphrase),
+                eq(connectionType), eq(persistent),
                 eq(freq), eq(BSSID), eq(join));
     }
 

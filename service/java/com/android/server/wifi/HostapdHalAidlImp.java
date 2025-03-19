@@ -16,6 +16,7 @@
 package com.android.server.wifi;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.hardware.wifi.hostapd.ApInfo;
 import android.hardware.wifi.hostapd.BandMask;
 import android.hardware.wifi.hostapd.ChannelBandwidth;
@@ -32,6 +33,7 @@ import android.hardware.wifi.hostapd.Ieee80211ReasonCode;
 import android.hardware.wifi.hostapd.IfaceParams;
 import android.hardware.wifi.hostapd.NetworkParams;
 import android.net.MacAddress;
+import android.net.wifi.DeauthenticationReasonCode;
 import android.net.wifi.OuiKeyedData;
 import android.net.wifi.ScanResult;
 import android.net.wifi.SoftApConfiguration;
@@ -40,6 +42,7 @@ import android.net.wifi.SoftApInfo;
 import android.net.wifi.WifiAnnotations;
 import android.net.wifi.WifiContext;
 import android.net.wifi.WifiManager;
+import android.net.wifi.util.Environment;
 import android.net.wifi.util.WifiResourceCache;
 import android.os.Handler;
 import android.os.IBinder;
@@ -56,6 +59,7 @@ import com.android.server.wifi.WifiNative.SoftApHalCallback;
 import com.android.server.wifi.util.ApConfigUtil;
 import com.android.server.wifi.util.HalAidlUtil;
 import com.android.server.wifi.util.NativeUtil;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import java.io.PrintWriter;
@@ -232,7 +236,8 @@ public class HostapdHalAidlImp implements IHostapdHal {
      */
     @Override
     public boolean addAccessPoint(@NonNull String ifaceName, @NonNull SoftApConfiguration config,
-            boolean isMetered, Runnable onFailureListener) {
+            boolean isMetered, boolean isUsingMultiLinkOperation, List<String> instanceIdentities,
+            Runnable onFailureListener) {
         synchronized (mLock) {
             final String methodStr = "addAccessPoint";
             Log.d(TAG, methodStr + ": " + ifaceName);
@@ -240,7 +245,8 @@ public class HostapdHalAidlImp implements IHostapdHal {
                 return false;
             }
             try {
-                IfaceParams ifaceParams = prepareIfaceParams(ifaceName, config);
+                IfaceParams ifaceParams = prepareIfaceParams(ifaceName, config,
+                        isUsingMultiLinkOperation, instanceIdentities);
                 NetworkParams nwParams = prepareNetworkParams(isMetered, config);
                 if (ifaceParams == null || nwParams == null) {
                     Log.e(TAG, "addAccessPoint parameters could not be prepared.");
@@ -433,8 +439,12 @@ public class HostapdHalAidlImp implements IHostapdHal {
                         + " isConnected: " + info.isConnected);
                 SoftApHalCallback callback = mSoftApHalCallbacks.get(info.ifaceName);
                 if (callback != null) {
+                    int disconnectReasonCode = isServiceVersionAtLeast(3) && !info.isConnected
+                            ? mapHalToFrameworkDeauthenticationReasonCode(info.disconnectReasonCode)
+                            : DeauthenticationReasonCode.REASON_UNKNOWN;
                     callback.onConnectedClientsChanged(info.apIfaceInstance,
-                            MacAddress.fromBytes(info.clientAddress), info.isConnected);
+                            MacAddress.fromBytes(info.clientAddress), info.isConnected,
+                            disconnectReasonCode);
                 }
             } catch (IllegalArgumentException iae) {
                 Log.e(TAG, " Invalid clientAddress, " + iae);
@@ -856,6 +866,176 @@ public class HostapdHalAidlImp implements IHostapdHal {
         }
     }
 
+    /**
+     * Convert from a HAL DeauthenticationReasonCode to its framework equivalent.
+     *
+     * @param deauthenticationReasonCode The deauthentication reason code defined in HAL.
+     * @return The corresponding {@link DeauthenticationReasonCode}.
+     */
+    @VisibleForTesting
+    @WifiAnnotations.SoftApDisconnectReason int mapHalToFrameworkDeauthenticationReasonCode(
+            int deauthenticationReasonCode) {
+        return switch (deauthenticationReasonCode) {
+            case android.hardware.wifi.common.DeauthenticationReasonCode.HOSTAPD_NO_REASON ->
+                    DeauthenticationReasonCode.REASON_UNKNOWN;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.UNSPECIFIED ->
+                    DeauthenticationReasonCode.REASON_UNSPECIFIED;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.PREV_AUTH_NOT_VALID ->
+                    DeauthenticationReasonCode.REASON_PREV_AUTH_NOT_VALID;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.DEAUTH_LEAVING ->
+                    DeauthenticationReasonCode.REASON_DEAUTH_LEAVING;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.DISASSOC_DUE_TO_INACTIVITY ->
+                    DeauthenticationReasonCode.REASON_DISASSOC_DUE_TO_INACTIVITY;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.DISASSOC_AP_BUSY ->
+                    DeauthenticationReasonCode.REASON_DISASSOC_AP_BUSY;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.CLASS2_FRAME_FROM_NONAUTH_STA ->
+                    DeauthenticationReasonCode.REASON_CLASS2_FRAME_FROM_NONAUTH_STA;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.CLASS3_FRAME_FROM_NONASSOC_STA ->
+                    DeauthenticationReasonCode.REASON_CLASS3_FRAME_FROM_NONASSOC_STA;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.DISASSOC_STA_HAS_LEFT ->
+                    DeauthenticationReasonCode.REASON_DISASSOC_STA_HAS_LEFT;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.STA_REQ_ASSOC_WITHOUT_AUTH ->
+                    DeauthenticationReasonCode.REASON_STA_REQ_ASSOC_WITHOUT_AUTH;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.PWR_CAPABILITY_NOT_VALID ->
+                    DeauthenticationReasonCode.REASON_PWR_CAPABILITY_NOT_VALID;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.SUPPORTED_CHANNEL_NOT_VALID ->
+                    DeauthenticationReasonCode.REASON_SUPPORTED_CHANNEL_NOT_VALID;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.BSS_TRANSITION_DISASSOC ->
+                    DeauthenticationReasonCode.REASON_BSS_TRANSITION_DISASSOC;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.INVALID_IE ->
+                    DeauthenticationReasonCode.REASON_INVALID_IE;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MICHAEL_MIC_FAILURE ->
+                    DeauthenticationReasonCode.REASON_MICHAEL_MIC_FAILURE;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.FOURWAY_HANDSHAKE_TIMEOUT ->
+                    DeauthenticationReasonCode.REASON_FOURWAY_HANDSHAKE_TIMEOUT;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.GROUP_KEY_UPDATE_TIMEOUT ->
+                    DeauthenticationReasonCode.REASON_GROUP_KEY_UPDATE_TIMEOUT;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.IE_IN_4WAY_DIFFERS ->
+                    DeauthenticationReasonCode.REASON_IE_IN_4WAY_DIFFERS;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.GROUP_CIPHER_NOT_VALID ->
+                    DeauthenticationReasonCode.REASON_GROUP_CIPHER_NOT_VALID;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.PAIRWISE_CIPHER_NOT_VALID ->
+                    DeauthenticationReasonCode.REASON_PAIRWISE_CIPHER_NOT_VALID;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.AKMP_NOT_VALID ->
+                    DeauthenticationReasonCode.REASON_AKMP_NOT_VALID;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.UNSUPPORTED_RSN_IE_VERSION ->
+                    DeauthenticationReasonCode.REASON_UNSUPPORTED_RSN_IE_VERSION;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.INVALID_RSN_IE_CAPAB ->
+                    DeauthenticationReasonCode.REASON_INVALID_RSN_IE_CAPAB;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.IEEE_802_1X_AUTH_FAILED ->
+                    DeauthenticationReasonCode.REASON_IEEE_802_1X_AUTH_FAILED;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.CIPHER_SUITE_REJECTED ->
+                    DeauthenticationReasonCode.REASON_CIPHER_SUITE_REJECTED;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.TDLS_TEARDOWN_UNREACHABLE ->
+                    DeauthenticationReasonCode.REASON_TDLS_TEARDOWN_UNREACHABLE;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.TDLS_TEARDOWN_UNSPECIFIED ->
+                    DeauthenticationReasonCode.REASON_TDLS_TEARDOWN_UNSPECIFIED;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.SSP_REQUESTED_DISASSOC ->
+                    DeauthenticationReasonCode.REASON_SSP_REQUESTED_DISASSOC;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.NO_SSP_ROAMING_AGREEMENT ->
+                    DeauthenticationReasonCode.REASON_NO_SSP_ROAMING_AGREEMENT;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.BAD_CIPHER_OR_AKM ->
+                    DeauthenticationReasonCode.REASON_BAD_CIPHER_OR_AKM;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.NOT_AUTHORIZED_THIS_LOCATION ->
+                    DeauthenticationReasonCode.REASON_NOT_AUTHORIZED_THIS_LOCATION;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.SERVICE_CHANGE_PRECLUDES_TS ->
+                    DeauthenticationReasonCode.REASON_SERVICE_CHANGE_PRECLUDES_TS;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.UNSPECIFIED_QOS_REASON ->
+                    DeauthenticationReasonCode.REASON_UNSPECIFIED_QOS_REASON;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.NOT_ENOUGH_BANDWIDTH ->
+                    DeauthenticationReasonCode.REASON_NOT_ENOUGH_BANDWIDTH;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.DISASSOC_LOW_ACK ->
+                    DeauthenticationReasonCode.REASON_DISASSOC_LOW_ACK;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.EXCEEDED_TXOP ->
+                    DeauthenticationReasonCode.REASON_EXCEEDED_TXOP;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.STA_LEAVING ->
+                    DeauthenticationReasonCode.REASON_STA_LEAVING;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.END_TS_BA_DLS ->
+                    DeauthenticationReasonCode.REASON_END_TS_BA_DLS;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.UNKNOWN_TS_BA ->
+                    DeauthenticationReasonCode.REASON_UNKNOWN_TS_BA;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.TIMEOUT ->
+                    DeauthenticationReasonCode.REASON_TIMEOUT;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.PEERKEY_MISMATCH ->
+                    DeauthenticationReasonCode.REASON_PEERKEY_MISMATCH;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.AUTHORIZED_ACCESS_LIMIT_REACHED ->
+                    DeauthenticationReasonCode.REASON_AUTHORIZED_ACCESS_LIMIT_REACHED;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.EXTERNAL_SERVICE_REQUIREMENTS ->
+                    DeauthenticationReasonCode.REASON_EXTERNAL_SERVICE_REQUIREMENTS;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.INVALID_FT_ACTION_FRAME_COUNT ->
+                    DeauthenticationReasonCode.REASON_INVALID_FT_ACTION_FRAME_COUNT;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.INVALID_PMKID ->
+                    DeauthenticationReasonCode.REASON_INVALID_PMKID;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.INVALID_MDE ->
+                    DeauthenticationReasonCode.REASON_INVALID_MDE;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.INVALID_FTE ->
+                    DeauthenticationReasonCode.REASON_INVALID_FTE;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MESH_PEERING_CANCELLED ->
+                    DeauthenticationReasonCode.REASON_MESH_PEERING_CANCELLED;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MESH_MAX_PEERS ->
+                    DeauthenticationReasonCode.REASON_MESH_MAX_PEERS;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_CONFIG_POLICY_VIOLATION ->
+                    DeauthenticationReasonCode.REASON_MESH_CONFIG_POLICY_VIOLATION;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MESH_CLOSE_RCVD ->
+                    DeauthenticationReasonCode.REASON_MESH_CLOSE_RCVD;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MESH_MAX_RETRIES ->
+                    DeauthenticationReasonCode.REASON_MESH_MAX_RETRIES;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MESH_CONFIRM_TIMEOUT ->
+                    DeauthenticationReasonCode.REASON_MESH_CONFIRM_TIMEOUT;
+            case android.hardware.wifi.common.DeauthenticationReasonCode.MESH_INVALID_GTK ->
+                    DeauthenticationReasonCode.REASON_MESH_INVALID_GTK;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_INCONSISTENT_PARAMS ->
+                    DeauthenticationReasonCode.REASON_MESH_INCONSISTENT_PARAMS;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_INVALID_SECURITY_CAP ->
+                    DeauthenticationReasonCode.REASON_MESH_INVALID_SECURITY_CAP;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_PATH_ERROR_NO_PROXY_INFO ->
+                    DeauthenticationReasonCode.REASON_MESH_PATH_ERROR_NO_PROXY_INFO;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_PATH_ERROR_NO_FORWARDING_INFO ->
+                    DeauthenticationReasonCode.REASON_MESH_PATH_ERROR_NO_FORWARDING_INFO;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_PATH_ERROR_DEST_UNREACHABLE ->
+                    DeauthenticationReasonCode.REASON_MESH_PATH_ERROR_DEST_UNREACHABLE;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MAC_ADDRESS_ALREADY_EXISTS_IN_MBSS ->
+                    DeauthenticationReasonCode.REASON_MAC_ADDRESS_ALREADY_EXISTS_IN_MBSS;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_CHANNEL_SWITCH_REGULATORY_REQ ->
+                    DeauthenticationReasonCode.REASON_MESH_CHANNEL_SWITCH_REGULATORY_REQ;
+            case android.hardware.wifi.common
+                         .DeauthenticationReasonCode.MESH_CHANNEL_SWITCH_UNSPECIFIED ->
+                    DeauthenticationReasonCode.REASON_MESH_CHANNEL_SWITCH_UNSPECIFIED;
+            default -> {
+                Log.e(TAG, "Invalid DeauthenticationReasonCode: "
+                        + deauthenticationReasonCode);
+                yield DeauthenticationReasonCode.REASON_UNKNOWN;
+            }
+        };
+    }
+
+    @SuppressLint("NewApi")
     private NetworkParams prepareNetworkParams(boolean isMetered,
             SoftApConfiguration config) {
         NetworkParams nwParams = new NetworkParams();
@@ -885,6 +1065,9 @@ public class HostapdHalAidlImp implements IHostapdHal {
         nwParams.encryptionType = getEncryptionType(config);
         nwParams.passphrase = (config.getPassphrase() != null)
                     ? config.getPassphrase() : "";
+        if (Flags.apIsolate() && isServiceVersionAtLeast(3) && Environment.isSdkAtLeastB()) {
+            nwParams.isClientIsolationEnabled = config.isClientIsolationEnabled();
+        }
 
         if (nwParams.ssid == null || nwParams.passphrase == null) {
             return null;
@@ -892,12 +1075,18 @@ public class HostapdHalAidlImp implements IHostapdHal {
         return nwParams;
     }
 
-    private IfaceParams prepareIfaceParams(String ifaceName, SoftApConfiguration config)
+    private IfaceParams prepareIfaceParams(String ifaceName, SoftApConfiguration config,
+            boolean isUsingMultiLinkOperation, List<String> instanceIdentities)
             throws IllegalArgumentException {
         IfaceParams ifaceParams = new IfaceParams();
         ifaceParams.name = ifaceName;
         ifaceParams.hwModeParams = prepareHwModeParams(config);
         ifaceParams.channelParams = prepareChannelParamsList(config);
+        ifaceParams.usesMlo = isUsingMultiLinkOperation;
+        if (instanceIdentities != null) {
+            ifaceParams.instanceIdentities =
+                    instanceIdentities.toArray(new String[instanceIdentities.size()]);
+        }
         if (ifaceParams.name == null || ifaceParams.hwModeParams == null
                 || ifaceParams.channelParams == null) {
             return null;

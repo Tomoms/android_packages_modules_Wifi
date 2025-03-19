@@ -35,6 +35,7 @@ import android.content.AttributionSource;
 import android.content.Context;
 import android.net.wifi.ScanResult;
 import android.net.wifi.SynchronousExecutor;
+import android.net.wifi.util.Environment;
 import android.os.Bundle;
 import android.os.test.TestLooper;
 import android.view.Display;
@@ -280,5 +281,33 @@ public class WifiP2pManagerTest {
                 eq(PACKAGE_NAME), any(Bundle.class));
         mDut.unregisterWifiP2pListener(listener);
         verify(mP2pServiceMock).unregisterWifiP2pListener(any(IWifiP2pListener.Stub.class));
+    }
+
+    /**
+     * Test {@link WifiP2pManager#isWiFiDirectR2Supported()} works as
+     * expected.
+     */
+    @Test
+    public void testIsWiFiDirectR2Supported() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        when(mP2pServiceMock.getSupportedFeatures()).thenReturn(0L);
+        assertFalse(mDut.isWiFiDirectR2Supported());
+        when(mP2pServiceMock.getSupportedFeatures()).thenReturn(
+                WifiP2pManager.FEATURE_WIFI_DIRECT_R2);
+        assertTrue(mDut.isWiFiDirectR2Supported());
+    }
+
+    /**
+     * Test {@link WifiP2pManager#isPccModeSupported()} works as
+     * expected.
+     */
+    @Test
+    public void testIsPccModeSupported() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        when(mP2pServiceMock.getSupportedFeatures()).thenReturn(0L);
+        assertFalse(mDut.isPccModeSupported());
+        when(mP2pServiceMock.getSupportedFeatures()).thenReturn(
+                WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION);
+        assertTrue(mDut.isPccModeSupported());
     }
 }

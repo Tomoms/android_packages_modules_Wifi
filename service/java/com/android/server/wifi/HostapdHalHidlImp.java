@@ -26,6 +26,7 @@ import android.hardware.wifi.hostapd.V1_3.Generation;
 import android.hidl.manager.V1_0.IServiceManager;
 import android.hidl.manager.V1_0.IServiceNotification;
 import android.net.MacAddress;
+import android.net.wifi.DeauthenticationReasonCode;
 import android.net.wifi.ScanResult;
 import android.net.wifi.SoftApConfiguration;
 import android.net.wifi.SoftApConfiguration.BandType;
@@ -437,7 +438,9 @@ public class HostapdHalHidlImp implements IHostapdHal {
      */
     @Override
     public boolean addAccessPoint(@NonNull String ifaceName, @NonNull SoftApConfiguration config,
-            boolean isMetered, @NonNull Runnable onFailureListener) {
+            boolean isMetered, boolean isUsingMultiLinkOperation,
+            @NonNull List<String> instanceIdentities,
+            @NonNull Runnable onFailureListener) {
         synchronized (mLock) {
             final String methodStr = "addAccessPoint";
             IHostapd.IfaceParams ifaceParamsV1_0 = prepareIfaceParamsV1_0(ifaceName, config);
@@ -1299,7 +1302,8 @@ public class HostapdHalHidlImp implements IHostapdHal {
                 SoftApHalCallback callback = mSoftApHalCallbacks.get(ifaceName);
                 if (callback != null) {
                     callback.onConnectedClientsChanged(apIfaceInstance,
-                            MacAddress.fromBytes(clientAddress), isConnected);
+                            MacAddress.fromBytes(clientAddress), isConnected,
+                            DeauthenticationReasonCode.REASON_UNKNOWN);
                 }
             } catch (IllegalArgumentException iae) {
                 Log.e(TAG, " Invalid clientAddress, " + iae);

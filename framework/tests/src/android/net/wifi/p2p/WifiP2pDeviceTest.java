@@ -23,6 +23,7 @@ import static org.junit.Assume.assumeTrue;
 import android.net.MacAddress;
 import android.net.wifi.OuiKeyedDataUtil;
 import android.net.wifi.ScanResult;
+import android.net.wifi.util.Environment;
 import android.os.Parcel;
 
 import androidx.test.filters.SmallTest;
@@ -161,6 +162,10 @@ public class WifiP2pDeviceTest {
         if (SdkLevel.isAtLeastV()) {
             device.setVendorData(OuiKeyedDataUtil.createTestOuiKeyedDataList(5));
         }
+        if (Environment.isSdkAtLeastB()) {
+            device.setPairingBootStrappingMethods(WifiP2pPairingBootstrappingConfig
+                    .PAIRING_BOOTSTRAPPING_METHOD_OPPORTUNISTIC);
+        }
 
         Parcel parcel = Parcel.obtain();
         device.writeToParcel(parcel, 0);
@@ -177,6 +182,9 @@ public class WifiP2pDeviceTest {
         assertEquals(device.status, unparceledDevice.status);
         if (SdkLevel.isAtLeastV()) {
             assertEquals(device.getVendorData(), unparceledDevice.getVendorData());
+        }
+        if (Environment.isSdkAtLeastB()) {
+            assertTrue(device.isOpportunisticBootstrappingMethodSupported());
         }
     }
 
@@ -206,5 +214,26 @@ public class WifiP2pDeviceTest {
         }
         device.setIpAddress(ipAddress);
         assertEquals("192.168.49.1", device.getIpAddress().getHostAddress());
+    }
+
+    /**
+     * Test the setter/getter for pairing bootstrapping methods.
+     */
+    @Test
+    public void testSetPairingBootStrappingMethods() {
+        assumeTrue(Environment.isSdkAtLeastB());
+        WifiP2pDevice device = new WifiP2pDevice();
+        device.setPairingBootStrappingMethods(WifiP2pPairingBootstrappingConfig
+                .PAIRING_BOOTSTRAPPING_METHOD_OPPORTUNISTIC
+                | WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE
+                | WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE
+                | WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PINCODE
+                | WifiP2pPairingBootstrappingConfig
+                .PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PASSPHRASE);
+        assertTrue(device.isOpportunisticBootstrappingMethodSupported());
+        assertTrue(device.isPinCodeDisplayBootstrappingMethodSupported());
+        assertTrue(device.isPassphraseDisplayBootstrappingMethodSupported());
+        assertTrue(device.isPinCodeKeypadBootstrappingMethodSupported());
+        assertTrue(device.isPassphraseKeypadBootstrappingMethodSupported());
     }
 }

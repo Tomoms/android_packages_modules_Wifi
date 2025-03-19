@@ -1,0 +1,17 @@
+cc_library_shared {
+    name: "libservice-wifi-jni",
+    min_sdk_version: "30",
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+    srcs: [
+        "com_android_server_ServiceManagerWrapper.cpp",
+    ],
+    shared_libs: [
+        "libbinder_ndk",
+    ],
+    apex_available: [
+        "com.android.wifi",
+    ],
+}

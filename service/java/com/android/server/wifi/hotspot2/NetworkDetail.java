@@ -17,9 +17,11 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class NetworkDetail {
 
@@ -170,6 +172,8 @@ public class NetworkDetail {
     private int mMloLinkId = MloLink.INVALID_MLO_LINK_ID;
     private List<MloLink> mAffiliatedMloLinks = Collections.emptyList();
     private byte[] mDisabledSubchannelBitmap;
+    private final boolean mIsSecureHeLtfSupported;
+    private final boolean mIsRangingFrameProtectionRequired;
 
     public NetworkDetail(String bssid, ScanResult.InformationElement[] infoElements,
             List<String> anqpLines, int freq) {
@@ -225,6 +229,8 @@ public class NetworkDetail {
                 new InformationElementUtil.SupportedRates();
         InformationElementUtil.SupportedRates extendedSupportedRates =
                 new InformationElementUtil.SupportedRates();
+
+        InformationElementUtil.Rsnxe rsnxe = new InformationElementUtil.Rsnxe();
 
         RuntimeException exception = null;
 
@@ -298,6 +304,9 @@ public class NetworkDetail {
                             default:
                                 break;
                         }
+                        break;
+                    case ScanResult.InformationElement.EID_RSN_EXTENSION:
+                        rsnxe.from(ie);
                         break;
                     default:
                         break;
@@ -378,6 +387,8 @@ public class NetworkDetail {
         int channelWidth = ScanResult.UNSPECIFIED;
         int centerFreq0 = mPrimaryFreq;
         int centerFreq1 = 0;
+        mIsSecureHeLtfSupported = rsnxe.isSecureHeLtfSupported();
+        mIsRangingFrameProtectionRequired = rsnxe.isRangingFrameProtectionRequired();
 
         // Check if EHT Operation Info is present in EHT operation IE.
         if (ehtOperation.isEhtOperationInfoPresent()) {
@@ -567,6 +578,8 @@ public class NetworkDetail {
         mApType6GHz = base.mApType6GHz;
         mIs11azNtbResponder = base.mIs11azNtbResponder;
         mIs11azTbResponder = base.mIs11azTbResponder;
+        mIsSecureHeLtfSupported = base.mIsSecureHeLtfSupported;
+        mIsRangingFrameProtectionRequired = base.mIsRangingFrameProtectionRequired;
     }
 
     public NetworkDetail complete(Map<Constants.ANQPElementType, ANQPElement> anqpElements) {
@@ -715,36 +728,90 @@ public class NetworkDetail {
     }
 
     @Override
-    public boolean equals(Object thatObject) {
-        if (this == thatObject) {
-            return true;
-        }
-        if (thatObject == null || getClass() != thatObject.getClass()) {
-            return false;
-        }
-
-        NetworkDetail that = (NetworkDetail)thatObject;
-
-        return getSSID().equals(that.getSSID()) && getBSSID() == that.getBSSID();
-    }
-
-    @Override
-    public int hashCode() {
-        return ((mSSID.hashCode() * 31) + (int)(mBSSID >>> 32)) * 31 + (int)mBSSID;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof NetworkDetail that)) return false;
+        return mHESSID == that.mHESSID && mBSSID == that.mBSSID
+                && mIsHiddenSsid == that.mIsHiddenSsid
+                && mStationCount == that.mStationCount
+                && mChannelUtilization == that.mChannelUtilization && mCapacity == that.mCapacity
+                && mChannelWidth == that.mChannelWidth && mPrimaryFreq == that.mPrimaryFreq
+                && mCenterfreq0 == that.mCenterfreq0 && mCenterfreq1 == that.mCenterfreq1
+                && mWifiMode == that.mWifiMode && mMaxRate == that.mMaxRate
+                && mMaxNumberSpatialStreams == that.mMaxNumberSpatialStreams
+                && mInternet == that.mInternet && mAnqpDomainID == that.mAnqpDomainID
+                && mAnqpOICount == that.mAnqpOICount && mDtimInterval == that.mDtimInterval
+                && mMboAssociationDisallowedReasonCode == that.mMboAssociationDisallowedReasonCode
+                && mMboSupported == that.mMboSupported
+                && mMboCellularDataAware == that.mMboCellularDataAware
+                && mOceSupported == that.mOceSupported && mTwtRequired == that.mTwtRequired
+                && mIndividualTwtSupported == that.mIndividualTwtSupported
+                && mBroadcastTwtSupported == that.mBroadcastTwtSupported
+                && mRestrictedTwtSupported == that.mRestrictedTwtSupported
+                && mEpcsPriorityAccessSupported == that.mEpcsPriorityAccessSupported
+                && mFilsCapable == that.mFilsCapable
+                && mIs11azNtbResponder == that.mIs11azNtbResponder
+                && mIs11azTbResponder == that.mIs11azTbResponder && mMloLinkId == that.mMloLinkId
+                && mIsSecureHeLtfSupported == that.mIsSecureHeLtfSupported
+                && mIsRangingFrameProtectionRequired == that.mIsRangingFrameProtectionRequired
+                && Objects.equals(mSSID, that.mSSID) && mAnt == that.mAnt
+                && mHSRelease == that.mHSRelease && Arrays.equals(mRoamingConsortiums,
+                that.mRoamingConsortiums) && Objects.equals(mCountryCode, that.mCountryCode)
+                && Objects.equals(mExtendedCapabilities, that.mExtendedCapabilities)
+                && Objects.equals(mANQPElements, that.mANQPElements)
+                && mApType6GHz == that.mApType6GHz && Objects.equals(mMldMacAddress,
+                that.mMldMacAddress) && Objects.equals(mAffiliatedMloLinks,
+                that.mAffiliatedMloLinks) && Arrays.equals(mDisabledSubchannelBitmap,
+                that.mDisabledSubchannelBitmap);
     }
 
     @Override
     public String toString() {
-        return "NetworkInfo{SSID='" + mSSID
-                + "', HESSID=" + Utils.macToString(mHESSID)
-                + ", BSSID=" + Utils.macToString(mBSSID)
-                + ", StationCount=" + mStationCount
-                + ", ChannelUtilization=" + mChannelUtilization
-                + ", Capacity=" + mCapacity
-                + ", Ant=" + mAnt + ", Internet=" + mInternet + ", HSRelease="
-                + mHSRelease + ", AnqpDomainID" + mAnqpDomainID + ", AnqpOICount" + mAnqpOICount
-                + ", RoamingConsortiums=" + Utils.roamingConsortiumsToString(mRoamingConsortiums)
-                + "}";
+        return "NetworkDetail{" + "mSSID='" + mSSID + '\'' + ", mHESSID='" + Utils.macToString(
+                mHESSID) + '\'' + ", mBSSID='" + Utils.macToString(mBSSID) + '\''
+                + ", mIsHiddenSsid=" + mIsHiddenSsid + ", mStationCount=" + mStationCount
+                + ", mChannelUtilization=" + mChannelUtilization + ", mCapacity=" + mCapacity
+                + ", mChannelWidth=" + mChannelWidth + ", mPrimaryFreq=" + mPrimaryFreq
+                + ", mCenterfreq0=" + mCenterfreq0 + ", mCenterfreq1=" + mCenterfreq1
+                + ", mWifiMode=" + mWifiMode + ", mMaxRate=" + mMaxRate
+                + ", mMaxNumberSpatialStreams=" + mMaxNumberSpatialStreams + ", mAnt=" + mAnt
+                + ", mInternet=" + mInternet + ", mHSRelease=" + mHSRelease + ", mAnqpDomainID="
+                + mAnqpDomainID + ", mAnqpOICount=" + mAnqpOICount + ", mRoamingConsortiums="
+                + Utils.roamingConsortiumsToString(mRoamingConsortiums) + ", mDtimInterval="
+                + mDtimInterval + ", mCountryCode='" + mCountryCode + '\''
+                + ", mExtendedCapabilities=" + mExtendedCapabilities + ", mANQPElements="
+                + mANQPElements + ", mMboAssociationDisallowedReasonCode="
+                + mMboAssociationDisallowedReasonCode + ", mMboSupported=" + mMboSupported
+                + ", mMboCellularDataAware=" + mMboCellularDataAware + ", mOceSupported="
+                + mOceSupported + ", mTwtRequired=" + mTwtRequired + ", mIndividualTwtSupported="
+                + mIndividualTwtSupported + ", mBroadcastTwtSupported=" + mBroadcastTwtSupported
+                + ", mRestrictedTwtSupported=" + mRestrictedTwtSupported
+                + ", mEpcsPriorityAccessSupported=" + mEpcsPriorityAccessSupported
+                + ", mFilsCapable=" + mFilsCapable + ", mApType6GHz=" + mApType6GHz
+                + ", mIs11azNtbResponder=" + mIs11azNtbResponder + ", mIs11azTbResponder="
+                + mIs11azTbResponder + ", mMldMacAddress=" + mMldMacAddress + ", mMloLinkId="
+                + mMloLinkId + ", mAffiliatedMloLinks=" + mAffiliatedMloLinks
+                + ", mDisabledSubchannelBitmap=" + Arrays.toString(mDisabledSubchannelBitmap)
+                + ", mIsSecureHeLtfSupported=" + mIsSecureHeLtfSupported
+                + ", mIsRangingFrameProtectionRequired=" + mIsRangingFrameProtectionRequired + '}';
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(mSSID, mHESSID, mBSSID, mIsHiddenSsid, mStationCount,
+                mChannelUtilization, mCapacity, mChannelWidth, mPrimaryFreq, mCenterfreq0,
+                mCenterfreq1,
+                mWifiMode, mMaxRate, mMaxNumberSpatialStreams, mAnt, mInternet, mHSRelease,
+                mAnqpDomainID, mAnqpOICount, mDtimInterval, mCountryCode, mExtendedCapabilities,
+                mANQPElements, mMboAssociationDisallowedReasonCode, mMboSupported,
+                mMboCellularDataAware, mOceSupported, mTwtRequired, mIndividualTwtSupported,
+                mBroadcastTwtSupported, mRestrictedTwtSupported, mEpcsPriorityAccessSupported,
+                mFilsCapable, mApType6GHz, mIs11azNtbResponder, mIs11azTbResponder, mMldMacAddress,
+                mMloLinkId, mAffiliatedMloLinks, mIsSecureHeLtfSupported,
+                mIsRangingFrameProtectionRequired);
+        result = 31 * result + Arrays.hashCode(mRoamingConsortiums);
+        result = 31 * result + Arrays.hashCode(mDisabledSubchannelBitmap);
+        return result;
     }
 
     public String toKeyString() {
@@ -855,5 +922,15 @@ public class NetworkDetail {
      **/
     public InformationElementUtil.ApType6GHz getApType6GHz() {
         return mApType6GHz;
+    }
+
+    /** Return whether secure HE-LTF is supported or not. */
+    public boolean isSecureHeLtfSupported() {
+        return mIsSecureHeLtfSupported;
+    }
+
+    /** Return whether ranging frame protection is required or not */
+    public boolean isRangingFrameProtectionRequired() {
+        return mIsRangingFrameProtectionRequired;
     }
 }

@@ -74,6 +74,7 @@ import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -1115,7 +1116,7 @@ public class WifiNetworkSuggestionsManager {
             return false;
         }
 
-        long supportedFeatures = mWifiInjector.getActiveModeWarden()
+        BitSet supportedFeatures = mWifiInjector.getActiveModeWarden()
                 .getPrimaryClientModeManager().getSupportedFeatures();
 
         for (WifiNetworkSuggestion wns : networkSuggestions) {

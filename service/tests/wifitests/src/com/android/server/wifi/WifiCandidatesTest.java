@@ -19,6 +19,8 @@ package com.android.server.wifi;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_OWE;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA3_SAE;
 
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -97,7 +99,7 @@ public class WifiCandidatesTest extends WifiBaseTest {
         when(mWifiInjector.getActiveModeWarden()).thenReturn(mActiveModeWarden);
         when(mActiveModeWarden.getPrimaryClientModeManager()).thenReturn(mClientModeManager);
         when(mClientModeManager.getSupportedFeatures()).thenReturn(
-                WIFI_FEATURE_OWE | WIFI_FEATURE_WPA3_SAE);
+                createCapabilityBitset(WIFI_FEATURE_OWE, WIFI_FEATURE_WPA3_SAE));
         when(mWifiGlobals.isWpa3SaeUpgradeEnabled()).thenReturn(true);
         when(mWifiGlobals.isOweUpgradeEnabled()).thenReturn(true);
 

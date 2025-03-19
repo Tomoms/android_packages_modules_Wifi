@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"收件人："</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"输入所需的PIN码："</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN 码："</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"设备连接"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"设备连接"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"已向“<xliff:g id="DEVICE_NAME">%1$s</xliff:g>”发送邀请。"</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"请在“<xliff:g id="DEVICE_NAME">%1$s</xliff:g>”上输入此 PIN 码以建立连接。"</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"确定"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"设备连接"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"设备连接"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"设备连接"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"“<xliff:g id="DEVICE_NAME">%1$s</xliff:g>”想要连接到您的设备。"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"请输入“<xliff:g id="DEVICE_NAME">%1$s</xliff:g>”上显示的 PIN 码以建立连接。"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"“<xliff:g id="DEVICE_NAME">%1$s</xliff:g>”想要使用以下 PIN 码连接到您的设备。"</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{“{device}”想要连接到您的设备。{countdown} 秒后接受。}other{“{device}”想要连接到您的设备。{countdown} 秒后接受。}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{请在 {countdown} 秒内输入“{device}”上显示的 PIN 码以建立连接。}other{请在 {countdown} 秒内输入“{device}”上显示的 PIN 码以建立连接。}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{“{device}”想要使用以下 PIN 码连接到您的设备。{countdown} 秒后接受。}other{“{device}”想要使用以下 PIN 码连接到您的设备。{countdown} 秒后接受。}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"连接"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"取消"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN 码"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN 码"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"当设备连接到<xliff:g id="DEVICE_NAME">%1$s</xliff:g>时，它会暂时断开 WLAN 连接"</string>
     <string name="dlg_ok" msgid="254496739491689405">"确定"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"无法连接到“<xliff:g id="SSID">%1$s</xliff:g>”"</string>

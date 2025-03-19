@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Προς:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Πληκτρολογήστε τον απαιτούμενο κωδικό PIN:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Σύνδεση συσκευής"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Σύνδεση συσκευής"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Η πρόσκληση εστάλη στη συσκευή <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Εισαγάγετε αυτό το PIN στη συσκευή <xliff:g id="DEVICE_NAME">%1$s</xliff:g> για σύνδεση."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"ΟΚ"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Σύνδεση συσκευής"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Σύνδεση συσκευής"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Σύνδεση συσκευής"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"Η συσκευή <xliff:g id="DEVICE_NAME">%1$s</xliff:g> θέλει να συνδεθεί στη συσκευή σας."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Εισαγάγετε το PIN που εμφανίζεται στη συσκευή <xliff:g id="DEVICE_NAME">%1$s</xliff:g> για σύνδεση."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"Η συσκευή <xliff:g id="DEVICE_NAME">%1$s</xliff:g> θέλει να συνδεθεί στη συσκευή σας με τον ακόλουθο κωδικό PIN."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{Η συσκευή {device} θέλει να συνδεθεί στη συσκευή σας. Αποδοχή σε {countdown} δευτερόλεπτο.}other{Η συσκευή {device} θέλει να συνδεθεί στη συσκευή σας. Αποδοχή σε {countdown} δευτερόλεπτα.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Εισαγάγετε το PIN που εμφανίζεται στη συσκευή {device} εντός {countdown} δευτερολέπτου για σύνδεση.}other{Εισαγάγετε το PIN που εμφανίζεται στη συσκευή {device} εντός {countdown} δευτερολέπτων για σύνδεση.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{Η συσκευή {device} θέλει να συνδεθεί στη συσκευή σας με τον ακόλουθο κωδικό PIN. Αποδοχή σε {countdown} δευτερόλεπτο.}other{Η συσκευή {device} θέλει να συνδεθεί στη συσκευή σας με τον ακόλουθο κωδικό PIN. Αποδοχή σε {countdown} δευτερόλεπτα.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Σύνδεση"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Ακύρωση"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Η συσκευή σας θα αποσυνδεθεί προσωρινά από το δίκτυο Wi-Fi ενώ είναι συνδεδεμένη στη συσκευή <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"ΟΚ"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Δεν είναι δυνατή η σύνδεση με <xliff:g id="SSID">%1$s</xliff:g>"</string>

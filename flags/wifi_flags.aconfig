@@ -84,6 +84,7 @@ flag {
     description: "Add new API to get channel width"
     bug: "335358378"
     is_fixed_read_only: true
+    is_exported: true
 }
 
 flag {
@@ -123,6 +124,7 @@ flag {
     description: "optimize local-only connection API"
     bug: "347117408"
     is_fixed_read_only: true
+    is_exported: true
 }
 
 flag {
@@ -134,6 +136,15 @@ flag {
     metadata {
         purpose: PURPOSE_BUGFIX
     }
+}
+
+flag {
+    name: "autojoin_restriction_security_types_api"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add new API to set or get Autojoin Restriction security types"
+    bug: "340351634"
+    is_fixed_read_only: true
 }
 
 flag {
@@ -169,4 +180,102 @@ flag {
     namespace: "wifi"
     description: "Gate WiFi Scorer new stats collection"
     bug: "367362809"
+}
+
+flag {
+    name: "softap_disconnect_reason"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add SoftAP disconnect reason code"
+    bug: "361651437"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "secure_ranging"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add secure ranging support"
+    bug: "364722301"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "mainline_supplicant"
+    namespace: "wifi"
+    description: "Use the secondary supplicant binary stored in the mainline module"
+    bug: "365585450"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "mlo_sap"
+    is_exported: true
+    namespace: "wifi"
+    description: "Mlo SoftAp"
+    bug: "362355566"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "wifi_direct_r2"
+    is_exported: true
+    namespace: "wifi"
+    description: "Wi-Fi Alliance Wi-Fi Direct R2 feature"
+    bug: "341971059"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "wep_disabled_in_apm"
+    is_exported: true
+    namespace: "wifi"
+    description: "Wep should be disabled in advanced protection mode"
+    bug: "362586268"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "bssid_blocklist_for_suggestion"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add BSSID to blocklist for network suggestion"
+    bug: "340263610"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "ap_isolate"
+    is_exported: true
+    namespace: "wifi"
+    description: "Supports Soft AP client isolation configuration"
+    bug: "364333929"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "public_bands_for_lohs"
+    is_exported: true
+    namespace: "wifi"
+    description: "Public bands api for local only hotspot from system api"
+    bug: "362355566"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "wifi_state_changed_listener"
+    is_exported: true
+    namespace: "wifi"
+    description: "Wifi state changed listener API"
+    bug: "349530934"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "p2p_dialog2"
+    is_exported: true
+    namespace: "wifi"
+    description: "Updated P2P dialogs"
+    bug: "349253691"
+    is_fixed_read_only: true
 }

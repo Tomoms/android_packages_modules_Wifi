@@ -66,6 +66,7 @@ public class WifiVoipDetectorTest extends WifiBaseTest {
     @Mock private TelephonyManager mTelephonyManager;
     @Mock private WifiNative mWifiNative;
     @Mock private WifiCarrierInfoManager mWifiCarrierInfoManager;
+    @Mock private WifiMetrics mWifiMetrics;
 
     private WifiVoipDetector mWifiVoipDetector;
     private TestLooper mLooper;
@@ -84,13 +85,15 @@ public class WifiVoipDetectorTest extends WifiBaseTest {
         when(mWifiInjector.makeTelephonyManager()).thenReturn(mTelephonyManager);
         when(mContext.getSystemService(AudioManager.class)).thenReturn(mAudioManager);
         when(mWifiInjector.getWifiNative()).thenReturn(mWifiNative);
+        when(mWifiInjector.getWifiMetrics()).thenReturn(mWifiMetrics);
         when(mWifiNative.setVoipMode(anyInt())).thenReturn(true);
         mWifiVoipDetector = new WifiVoipDetector(mContext,
                 new Handler(mLooper.getLooper()), mWifiInjector, mWifiCarrierInfoManager);
     }
 
-    private void resetWifiNativeAndReSetupforMock() {
+    private void resetWifiNativeAndWifiMetricsAndReSetupforMock() {
         reset(mWifiNative);
+        reset(mWifiMetrics);
         when(mWifiNative.setVoipMode(anyInt())).thenReturn(true);
     }
 
@@ -111,38 +114,46 @@ public class WifiVoipDetectorTest extends WifiBaseTest {
         when(mWifiCarrierInfoManager.isWifiCallingAvailable()).thenReturn(true);
         mWifiVoipDetector.notifyWifiConnected(true, true, TEST_PRIMARY_INTERFACE_NAME);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
         // Test VoWifi call off -> switch to VoLte
         mTelephonyCallbackCaptor.getValue().onCallAttributesChanged(TEST_LTE_CALL_ATT);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
-        resetWifiNativeAndReSetupforMock();
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         // Test VoWifi Call
         mTelephonyCallbackCaptor.getValue().onCallAttributesChanged(TEST_VOWIFI_CALL_ATT);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
-        resetWifiNativeAndReSetupforMock();
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         // Test VoWifi call off -> switch to VoLte
         mTelephonyCallbackCaptor.getValue().onCallAttributesChanged(TEST_LTE_CALL_ATT);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
-        resetWifiNativeAndReSetupforMock();
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         // Test MODE_IN_COMMUNICATION to trigger voice mode
         mAudioModeChangedListeneCaptor.getValue().onModeChanged(AudioManager.MODE_IN_COMMUNICATION);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
-        resetWifiNativeAndReSetupforMock();
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         // Test MODE_NORMAL off WifiChip.WIFI_VOIP_MODE_OFF
         mAudioModeChangedListeneCaptor.getValue().onModeChanged(AudioManager.MODE_NORMAL);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
-        resetWifiNativeAndReSetupforMock();
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         // Test MODE_COMMUNICATION_REDIRECT  to trigger voice mode
         mAudioModeChangedListeneCaptor.getValue().onModeChanged(
                 AudioManager.MODE_COMMUNICATION_REDIRECT);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
-        resetWifiNativeAndReSetupforMock();
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         // Do nothing when mode change between two OTT modes.
         mAudioModeChangedListeneCaptor.getValue().onModeChanged(AudioManager.MODE_IN_COMMUNICATION);
         verify(mWifiNative, never()).setVoipMode(anyInt());
         mWifiVoipDetector.notifyWifiConnected(false, true, TEST_PRIMARY_INTERFACE_NAME);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_OFF);
         // Test OTT on when wifi is disconnected, should do nothing since it doesn't relate to wifi.
-        resetWifiNativeAndReSetupforMock();
+        resetWifiNativeAndWifiMetricsAndReSetupforMock();
         mAudioModeChangedListeneCaptor.getValue().onModeChanged(
                 AudioManager.MODE_COMMUNICATION_REDIRECT);
         verify(mWifiNative, never()).setVoipMode(anyInt());
@@ -150,6 +161,7 @@ public class WifiVoipDetectorTest extends WifiBaseTest {
         when(mAudioManager.getMode()).thenReturn(AudioManager.MODE_COMMUNICATION_REDIRECT);
         mWifiVoipDetector.notifyWifiConnected(true, true, TEST_PRIMARY_INTERFACE_NAME);
         verify(mWifiNative).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
+        verify(mWifiInjector.getWifiMetrics()).setVoipMode(WifiChip.WIFI_VOIP_MODE_VOICE);
     }
 
     @Test

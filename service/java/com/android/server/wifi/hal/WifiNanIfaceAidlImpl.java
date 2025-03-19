@@ -55,6 +55,7 @@ import android.hardware.wifi.NanRespondToPairingIndicationRequest;
 import android.hardware.wifi.NanSubscribeRequest;
 import android.hardware.wifi.NanTransmitFollowupRequest;
 import android.hardware.wifi.NanTxType;
+import android.hardware.wifi.WifiChannelInfo;
 import android.net.MacAddress;
 import android.net.wifi.aware.AwarePairingConfig;
 import android.net.wifi.aware.ConfigRequest;
@@ -866,6 +867,7 @@ public class WifiNanIfaceAidlImpl implements IWifiNanIface {
         req.baseConfigs.enableSessionSuspendability = SdkLevel.isAtLeastU()
                 && publishConfig.isSuspendable();
 
+        req.rangingResultsRequired = publishConfig.mEnablePeriodicRangingResults;
         req.publishType = publishConfig.mPublishType;
         req.txType = NanTxType.BROADCAST;
         req.pairingConfig = createAidlPairingConfig(publishConfig.getPairingConfig());
@@ -951,6 +953,21 @@ public class WifiNanIfaceAidlImpl implements IWifiNanIface {
         if (SdkLevel.isAtLeastV() && !subscribeConfig.getVendorData().isEmpty()) {
             req.vendorData =
                     HalAidlUtil.frameworkToHalOuiKeyedDataList(subscribeConfig.getVendorData());
+        }
+
+        if (subscribeConfig.mPeriodicRangingEnabled) {
+            req.baseConfigs.configRangingIndications |=
+                    NanRangingIndication.CONTINUOUS_INDICATION_MASK;
+            req.baseConfigs.rangingIntervalMs = subscribeConfig.mPeriodicRangingInterval;
+            req.baseConfigs.rttBurstSize = subscribeConfig.mRttBurstSize;
+            req.baseConfigs.preamble = WifiRttControllerAidlImpl
+                    .frameworkToHalResponderPreamble(subscribeConfig.mPreamble);
+            req.baseConfigs.channelInfo = new WifiChannelInfo();
+            req.baseConfigs.channelInfo.width = WifiRttControllerAidlImpl
+                    .frameworkToHalChannelWidth(subscribeConfig.mChannelWidth);
+            req.baseConfigs.channelInfo.centerFreq = subscribeConfig.mFrequencyMhz;
+            req.baseConfigs.channelInfo.centerFreq0 = subscribeConfig.mCenterFrequency0Mhz;
+            req.baseConfigs.channelInfo.centerFreq1 = subscribeConfig.mCenterFrequency1Mhz;
         }
 
         return req;

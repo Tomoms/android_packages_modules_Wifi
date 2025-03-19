@@ -337,4 +337,12 @@ public class WifiGlobalsTest extends WifiBaseTest {
         mWifiGlobals.setD2dStaConcurrencySupported(false);
         assertTrue(mWifiGlobals.isD2dSupportedWhenInfraStaDisabled());
     }
+
+    @Test
+    public void testIsMLDApSupported() {
+        assertFalse(mWifiGlobals.isMLDApSupported());
+        mWifiResourceCache.reset();
+        mResources.setInteger(R.integer.config_wifiSoftApMaxNumberMLDSupported, 1);
+        assertTrue(mWifiGlobals.isMLDApSupported());
+    }
 }

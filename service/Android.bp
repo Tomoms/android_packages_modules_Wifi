@@ -61,10 +61,12 @@ java_library {
         "framework-bluetooth.stubs.module_lib",
         "framework-configinfrastructure.stubs.module_lib",
         "framework-connectivity.stubs.module_lib",
+        "framework-connectivity-b.stubs.module_lib",
         "framework-connectivity-t.stubs.module_lib",
         "framework-location.stubs.module_lib",
         "framework-statsd.stubs.module_lib",
         "framework-tethering.stubs.module_lib",
+        "framework-uwb.stubs.module_lib",
         "unsupportedappusage",
         "app-compat-annotations",
         "auto_value_annotations",
@@ -76,9 +78,9 @@ java_library {
 
     static_libs: [
         // Types-only package shared across the HALs
-        "android.hardware.wifi.common-V1-java",
+        "android.hardware.wifi.common-V2-java",
         // AIDL vendor hal implementation
-        "android.hardware.wifi-V2-java",
+        "android.hardware.wifi-V3-java",
         // HIDL vendor hal implementation
         "android.hardware.wifi-V1.0-java",
         "android.hardware.wifi-V1.1-java",
@@ -88,7 +90,7 @@ java_library {
         "android.hardware.wifi-V1.5-java",
         "android.hardware.wifi-V1.6-java",
         // AIDL hostapd implementation
-        "android.hardware.wifi.hostapd-V2-java",
+        "android.hardware.wifi.hostapd-V3-java",
         // HIDL hostapd implementation
         "android.hardware.wifi.hostapd-V1.0-java",
         "android.hardware.wifi.hostapd-V1.1-java",
@@ -103,6 +105,7 @@ java_library {
         "android.hardware.wifi.supplicant-V1.3-java",
         "android.hardware.wifi.supplicant-V1.4-java",
         "android.hidl.manager-V1.2-java",
+        "android.system.wifi.mainline_supplicant-java",
         "bouncycastle-unbundled",
         "ksoap2",
         // Note: libprotobuf-java-lite uses a few core platform APIs which
@@ -121,6 +124,7 @@ java_library {
         "wifi-lite-protos",
         "wifi-nano-protos",
         "android.net.wifi.flags-aconfig-java",
+        "android.security.flags-aconfig-java-export",
         "net-utils-service-wifi",
     ],
     apex_available: ["com.android.wifi"],
@@ -136,6 +140,16 @@ java_library {
     ],
     installable: true,
     static_libs: ["wifi-service-pre-jarjar"],
+
+    dex_preopt: {
+        // The profile is updated monthly with the bootclasspath/system_server
+        // profiles based on the data from Dogfooders, and before mainline
+        // releases. go/boot-image-profiles.
+        profile: select(release_flag("RELEASE_SERVICE_WIFI_SPEED_PROFILE_ART_COMPILATION"), {
+            true: "art-profile",
+            false: "",
+        }),
+    },
 
     // need to include `libs` so that Soong doesn't complain about missing classes after jarjaring
     libs: [

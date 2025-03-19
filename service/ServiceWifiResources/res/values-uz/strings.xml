@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Kimga:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"So‘ralgan PIN kodni kiriting:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN kod:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Qurilma aloqasi"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Qurilma aloqasi"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Taklifnoma yuborildi: <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Ulash uchun <xliff:g id="DEVICE_NAME">%1$s</xliff:g> qurilmasida bu PIN kodni kiriting."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"OK"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Qurilma aloqasi"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Qurilma aloqasi"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Qurilma aloqasi"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> sizning qurilmangizga ulanmoqchi."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Ulash uchun <xliff:g id="DEVICE_NAME">%1$s</xliff:g> ekranidagi PIN kodni kiriting."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> sizning qurilmangizga mazkur PIN kod orqali ulanmoqchi."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} sizning qurilmangizga ulanmoqchi. {countdown} soniya ichida qabul qiling.}other{{device} sizning qurilmangizga ulanmoqchi. {countdown} soniya ichida qabul qiling.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Ulash uchun {device} ekranidagi PIN kodni {countdown} soniya ichida kiriting.}other{Ulash uchun {device} ekranidagi PIN kodni {countdown} soniya ichida kiriting.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} sizning qurilmangizga mazkur PIN kod orqali ulanmoqchi. {countdown} soniya ichida qabul qiling.}other{{device} sizning qurilmangizga mazkur PIN kod orqali ulanmoqchi. {countdown} soniya ichida qabul qiling.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Ulash"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Bekor qilish"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN kod"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN kod"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Qurilmangiz <xliff:g id="DEVICE_NAME">%1$s</xliff:g> qurilmasiga ulangani uchun u vaqtincha Wi-Fi tarmoqdan uzildi."</string>
     <string name="dlg_ok" msgid="254496739491689405">"OK"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g> bilan aloqa oʻrnatilmadi"</string>

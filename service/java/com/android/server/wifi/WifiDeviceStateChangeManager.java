@@ -16,14 +16,21 @@
 
 package com.android.server.wifi;
 
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.PowerManager;
+import android.security.Flags;
+import android.security.advancedprotection.AdvancedProtectionManager;
 import android.text.TextUtils;
 import android.util.ArraySet;
+
+import com.android.modules.utils.HandlerExecutor;
+import com.android.wifi.flags.FeatureFlags;
 
 import java.util.Set;
 
@@ -33,6 +40,10 @@ public class WifiDeviceStateChangeManager {
     private final Context mContext;
 
     private final PowerManager mPowerManager;
+    private final WifiInjector mWifiInjector;
+    private AdvancedProtectionManager mAdvancedProtectionManager;
+    private FeatureFlags mFeatureFlags;
+
     private final Set<StateChangeCallback> mChangeCallbackList = new ArraySet<>();
     private boolean mIsWifiServiceStarted = false;
 
@@ -47,17 +58,28 @@ public class WifiDeviceStateChangeManager {
          * @param screenOn true for ON, false otherwise
          */
         default void onScreenStateChanged(boolean screenOn) {}
+
+        /**
+         * Called when the Advanced protection mode state changes
+         *
+         * @param apmOn true for ON, false otherwise
+         */
+        default void onAdvancedProtectionModeStateChanged(boolean apmOn) {}
     }
 
     /** Create the instance of WifiDeviceStateChangeManager. */
-    public WifiDeviceStateChangeManager(Context context, Handler handler) {
+    public WifiDeviceStateChangeManager(Context context, Handler handler,
+            WifiInjector wifiInjector) {
         mHandler = handler;
         mContext = context;
+        mWifiInjector = wifiInjector;
         mPowerManager = mContext.getSystemService(PowerManager.class);
     }
 
     /** Handle the boot completed event. Start to register the receiver and callback. */
+    @SuppressLint("NewApi")
     public void handleBootCompleted() {
+        mFeatureFlags = mWifiInjector.getDeviceConfigFacade().getFeatureFlags();
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
@@ -76,6 +98,23 @@ public class WifiDeviceStateChangeManager {
                 },
                 filter);
         handleScreenStateChanged(mPowerManager.isInteractive());
+        if (Environment.isSdkAtLeastB() && mFeatureFlags.wepDisabledInApm() && Flags.aapmApi()) {
+            mAdvancedProtectionManager =
+                    mContext.getSystemService(AdvancedProtectionManager.class);
+            if (mAdvancedProtectionManager != null) {
+                mAdvancedProtectionManager.registerAdvancedProtectionCallback(
+                        new HandlerExecutor(mHandler),
+                        state -> {
+                            handleAdvancedProtectionModeStateChanged(state);
+                        });
+                handleAdvancedProtectionModeStateChanged(
+                        mAdvancedProtectionManager.isAdvancedProtectionEnabled());
+            } else {
+                handleAdvancedProtectionModeStateChanged(false);
+            }
+        } else {
+            handleAdvancedProtectionModeStateChanged(false);
+        }
         mIsWifiServiceStarted = true;
     }
 
@@ -83,10 +122,17 @@ public class WifiDeviceStateChangeManager {
      * Register a state change callback. When the state is changed, caller with receive the callback
      * event
      */
+    @SuppressLint("NewApi")
     public void registerStateChangeCallback(StateChangeCallback callback) {
         mChangeCallbackList.add(callback);
         if (!mIsWifiServiceStarted) return;
         callback.onScreenStateChanged(mPowerManager.isInteractive());
+        if (Environment.isSdkAtLeastB() && mAdvancedProtectionManager != null) {
+            callback.onAdvancedProtectionModeStateChanged(
+                    mAdvancedProtectionManager.isAdvancedProtectionEnabled());
+        } else {
+            callback.onAdvancedProtectionModeStateChanged(false);
+        }
     }
 
     /**
@@ -99,6 +145,12 @@ public class WifiDeviceStateChangeManager {
     private void handleScreenStateChanged(boolean screenOn) {
         for (StateChangeCallback callback : mChangeCallbackList) {
             callback.onScreenStateChanged(screenOn);
+        }
+    }
+
+    private void handleAdvancedProtectionModeStateChanged(boolean apmOn) {
+        for (StateChangeCallback callback : mChangeCallbackList) {
+            callback.onAdvancedProtectionModeStateChanged(apmOn);
         }
     }
 }

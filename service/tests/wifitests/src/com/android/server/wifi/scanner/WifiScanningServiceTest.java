@@ -461,6 +461,7 @@ public class WifiScanningServiceTest extends WifiBaseTest {
         String serviceDump = dumpService();
         Pattern logLineRegex = Pattern.compile("^.+" + type
                         + ": ClientInfo\\[uid=\\d+, package=" + TEST_PACKAGE_NAME
+                        + ", attributionTag=" + TEST_FEATURE_ID
                         + ", Mock for Stub, hashCode: \\d+\\]",
                 Pattern.MULTILINE);
         assertTrue("dump did not contain log with {" + logLineRegex
@@ -473,6 +474,7 @@ public class WifiScanningServiceTest extends WifiBaseTest {
         String extraPattern = extra == null ? "" : "," + extra;
         Pattern logLineRegex = Pattern.compile("^.+" + callback
                 + ": ClientInfo\\[uid=\\d+, package=" + TEST_PACKAGE_NAME
+                + ", attributionTag=" + TEST_FEATURE_ID
                 + ", Mock for Stub, hashCode: \\d+\\]"
                 + extraPattern + "$", Pattern.MULTILINE);
         assertTrue("dump did not contain callback log with callback {" + logLineRegex
@@ -2178,7 +2180,7 @@ public class WifiScanningServiceTest extends WifiBaseTest {
         verifyNoMoreInteractions(client.listener);
         verifyNoMoreInteractions(client1.listener);
         assertDumpContainsRequestLog("registerScanListener");
-        assertDumpContainsCallbackLog("singleScanResults",
+        assertDumpContainsCallbackLog("singleScanResults listener",
                 "results=" + results.getScanData().getResults().length);
     }
 
@@ -2314,9 +2316,9 @@ public class WifiScanningServiceTest extends WifiBaseTest {
         client.verifyScanResultsReceived(results2and3.getScanData());
 
         assertDumpContainsRequestLog("registerScanListener");
-        assertDumpContainsCallbackLog("singleScanResults",
+        assertDumpContainsCallbackLog("singleScanResults listener",
                 "results=" + results1.getRawScanResults().length);
-        assertDumpContainsCallbackLog("singleScanResults",
+        assertDumpContainsCallbackLog("singleScanResults listener",
                 "results=" + results2and3.getRawScanResults().length);
     }
 
@@ -2754,6 +2756,7 @@ public class WifiScanningServiceTest extends WifiBaseTest {
         Pattern logLineRegex = Pattern.compile(
                 "^.+" + "Successfully stopped all requests for client "
                         + "ClientInfo\\[uid=\\d+, package=" + TEST_PACKAGE_NAME
+                        + ", attributionTag=" + TEST_FEATURE_ID
                         + ", Mock for Stub, hashCode: \\d+\\]",
                 Pattern.MULTILINE);
         assertTrue("dump did not contain log with [" + logLineRegex + "]\n" + serviceDump + "\n",

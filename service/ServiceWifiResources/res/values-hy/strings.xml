@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Ում`"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Մուտքագրեք պահանջվող PIN-ը:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN-ը՝"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Սարքի միացում"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Սարքի միացում"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Հրավերն ուղարկվել է <xliff:g id="DEVICE_NAME">%1$s</xliff:g> սարքին։"</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Միանալու համար մուտքագրեք այս PIN կոդը <xliff:g id="DEVICE_NAME">%1$s</xliff:g> սարքում։"</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"Եղավ"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Սարքի միացում"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Սարքի միացում"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Սարքի միացում"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> սարքն ուզում է միանալ ձեր սարքին։"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Միանալու համար մուտքագրեք <xliff:g id="DEVICE_NAME">%1$s</xliff:g> սարքում ցուցադրվող PIN կոդը։"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> սարքն ուզում է միանալ ձեր սարքին հետևյալ PIN կոդով։"</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} սարքն ուզում է միանալ ձեր սարքին։ Մնաց {countdown} վայրկյան։}one{{device} սարքն ուզում է միանալ ձեր սարքին։ Մնաց {countdown} վայրկյան։}other{{device} սարքն ուզում է միանալ ձեր սարքին։ Մնաց {countdown} վայրկյան։}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Միանալու համար {countdown} վայրկյանի ընթացքում մուտքագրեք {device} սարքում ցուցադրվող PIN կոդը։}one{Միանալու համար {countdown} վայրկյանի ընթացքում մուտքագրեք {device} սարքում ցուցադրվող PIN կոդը։}other{Միանալու համար {countdown} վայրկյանի ընթացքում մուտքագրեք {device} սարքում ցուցադրվող PIN կոդը։}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} սարքն ուզում է միանալ ձեր սարքին հետևյալ PIN կոդով։ Մնաց {countdown} վայրկյան։}one{{device} սարքն ուզում է միանալ ձեր սարքին հետևյալ PIN կոդով։ Մնաց {countdown} վայրկյան։}other{{device} սարքն ուզում է միանալ ձեր սարքին հետևյալ PIN կոդով։ Մնաց {countdown} վայրկյան։}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Միանալ"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Չեղարկել"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN կոդ"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN կոդ"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Ձեր սարքը ժամանակավորապես կանջատվի Wi-Fi-ից, քանի դեռ միացված է <xliff:g id="DEVICE_NAME">%1$s</xliff:g>-ին"</string>
     <string name="dlg_ok" msgid="254496739491689405">"Եղավ"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Չհաջողվեց միանալ <xliff:g id="SSID">%1$s</xliff:g> սարքին"</string>

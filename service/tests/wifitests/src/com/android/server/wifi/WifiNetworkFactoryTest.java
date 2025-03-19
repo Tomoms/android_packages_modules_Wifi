@@ -22,6 +22,7 @@ import static android.net.wifi.WifiManager.STATUS_LOCAL_ONLY_CONNECTION_FAILURE_
 
 import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.server.wifi.WifiNetworkFactory.PERIODIC_SCAN_INTERVAL_MS;
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 import static com.android.server.wifi.util.NativeUtil.addEnclosingQuotes;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -299,7 +300,8 @@ public class WifiNetworkFactoryTest extends WifiBaseTest {
                 new WorkSource(Process.SYSTEM_UID, "system-service"));
 
         when(mPrimaryClientModeManager.getSupportedFeatures()).thenReturn(
-                WifiManager.WIFI_FEATURE_WPA3_SAE | WifiManager.WIFI_FEATURE_OWE);
+                createCapabilityBitset(
+                        WifiManager.WIFI_FEATURE_WPA3_SAE, WifiManager.WIFI_FEATURE_OWE));
 
         mWifiNetworkFactory = new WifiNetworkFactory(mLooper.getLooper(), mContext,
                 mNetworkCapabilities, mActivityManager, mAlarmManager, mAppOpsManager,

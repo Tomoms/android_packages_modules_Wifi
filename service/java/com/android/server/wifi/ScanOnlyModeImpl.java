@@ -18,6 +18,8 @@ package com.android.server.wifi;
 
 import android.annotation.NonNull;
 
+import java.util.BitSet;
+
 /**
  * Used to respond to calls to ClientMode interface when ClientModeImpl is not up
  * i.e. in scan only mode.
@@ -40,7 +42,7 @@ public class ScanOnlyModeImpl implements ClientModeDefaults {
     }
 
     @Override
-    public long getSupportedFeatures() {
+    public @NonNull BitSet getSupportedFeatures() {
         return mWifiNative.getSupportedFeatureSet(mIfaceName);
     }
 

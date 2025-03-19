@@ -29,9 +29,11 @@ import android.net.wifi.OuiKeyedData;
 import android.net.wifi.WifiScanner;
 import android.net.wifi.aware.AwarePairingConfig;
 import android.net.wifi.aware.IWifiAwareDiscoverySessionCallback;
+import android.net.wifi.aware.PeerHandle;
 import android.net.wifi.aware.PublishConfig;
 import android.net.wifi.aware.SubscribeConfig;
 import android.net.wifi.aware.WifiAwareManager;
+import android.net.wifi.rtt.RangingResult;
 import android.net.wifi.util.HexEncoding;
 import android.os.RemoteException;
 import android.os.SystemClock;
@@ -42,6 +44,7 @@ import com.android.server.wifi.hal.WifiNanIface.NanStatusCode;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -75,10 +78,12 @@ public class WifiAwareDiscoverySessionState {
         PeerInfo(int instanceId, byte[] mac) {
             mInstanceId = instanceId;
             mMac = mac;
+            mPeerHandle = new PeerHandle(instanceId);
         }
 
         int mInstanceId;
         byte[] mMac;
+        PeerHandle mPeerHandle;
 
         @Override
         public String toString() {
@@ -688,6 +693,29 @@ public class WifiAwareDiscoverySessionState {
     }
 
     /**
+     * Callback from HAL when ranging results are available
+     */
+    public void onRangingResultsReceived(List<RangingResult> rangingResults) {
+        List<RangingResult> validResults = new ArrayList<>();
+        try {
+            for (RangingResult rangingResult : rangingResults) {
+                PeerHandle peerHandle =
+                        getPeerHandleFromPeerMac(rangingResult.getMacAddress().toByteArray());
+                if (peerHandle == null) {
+                    Log.e(TAG, "Could not find Peer Handle for the ranging result");
+                    continue;
+                }
+                RangingResult result = new RangingResult.Builder(
+                        rangingResult).setPeerHandle(peerHandle).build();
+                validResults.add(result);
+            }
+            mCallback.onRangingResultsReceived(validResults);
+        } catch (RemoteException e) {
+            Log.w(TAG, "onRangingResultsReceived: RemoteException (FYI): " + e);
+        }
+    }
+
+    /**
      * Event that receive the bootstrapping request finished
      */
     public void onBootStrappingConfirmReceived(int peerId, boolean accept, int method) {
@@ -717,6 +745,19 @@ public class WifiAwareDiscoverySessionState {
         Log.d(TAG, "New peer info: peerId=" + newPeerId + ", peerInfo=" + newPeerInfo);
 
         return newPeerId;
+    }
+
+    /**
+     * Get the peerHandle assigned by the framework from the peer mac.
+     */
+    public PeerHandle getPeerHandleFromPeerMac(byte[] peerMac) {
+        for (int i = 0; i < mPeerInfoByRequestorInstanceId.size(); ++i) {
+            PeerInfo peerInfo = mPeerInfoByRequestorInstanceId.valueAt(i);
+            if (Arrays.equals(peerMac, peerInfo.mMac)) {
+                return peerInfo.mPeerHandle;
+            }
+        }
+        return null;
     }
 
     /**

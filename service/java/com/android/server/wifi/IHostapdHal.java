@@ -23,6 +23,7 @@ import com.android.server.wifi.WifiNative.HostapdDeathEventHandler;
 import com.android.server.wifi.WifiNative.SoftApHalCallback;
 
 import java.io.PrintWriter;
+import java.util.List;
 
 /** Abstraction of HAL interface */
 interface IHostapdHal {
@@ -53,11 +54,13 @@ interface IHostapdHal {
      * @param ifaceName Name of the interface.
      * @param config Configuration to use for the AP.
      * @param isMetered Indicates the network is metered or not. Ignored in AIDL imp.
+     * @param isUsingMultiLinkOperation Indicate the AP is using MLO or not.
      * @param onFailureListener A runnable to be triggered on failure.
      * @return true on success, false otherwise.
      */
     boolean addAccessPoint(@NonNull String ifaceName,
             @NonNull SoftApConfiguration config, boolean isMetered,
+            boolean isUsingMultiLinkOperation, @NonNull List<String> instanceIdentities,
             Runnable onFailureListener);
 
     /**

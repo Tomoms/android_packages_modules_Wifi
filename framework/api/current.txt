@@ -1,6 +1,20 @@
 // Signature format: 2.0
 package android.net.wifi {
 
+  @FlaggedApi("com.android.wifi.flags.bssid_blocklist_for_suggestion") public final class BlockingOption implements android.os.Parcelable {
+    method public int describeContents();
+    method public int getBlockingTimeSeconds();
+    method public boolean isBlockingBssidOnly();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.BlockingOption> CREATOR;
+  }
+
+  @FlaggedApi("com.android.wifi.flags.bssid_blocklist_for_suggestion") public static final class BlockingOption.Builder {
+    ctor public BlockingOption.Builder(@IntRange(from=1, to=86400) int);
+    method @NonNull public android.net.wifi.BlockingOption build();
+    method @NonNull public android.net.wifi.BlockingOption.Builder setBlockingBssidOnly(boolean);
+  }
+
   public abstract class EasyConnectStatusCallback {
     field public static final int EASY_CONNECT_EVENT_FAILURE_AUTHENTICATION = -2; // 0xfffffffe
     field public static final int EASY_CONNECT_EVENT_FAILURE_BUSY = -5; // 0xfffffffb
@@ -55,6 +69,8 @@ package android.net.wifi {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public boolean is80211azNtbResponder();
     method public boolean is80211mcResponder();
     method public boolean isPasspointNetwork();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isRangingFrameProtectionRequired();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isSecureHeLtfSupported();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public boolean isTwtResponder();
     method public void writeToParcel(android.os.Parcel, int);
     field public String BSSID;
@@ -108,12 +124,17 @@ package android.net.wifi {
   public final class SoftApConfiguration implements android.os.Parcelable {
     method public int describeContents();
     method @Nullable public android.net.MacAddress getBssid();
+    method @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") @NonNull public android.util.SparseIntArray getChannels();
     method @Nullable public String getPassphrase();
     method public int getSecurityType();
     method @Deprecated @Nullable public String getSsid();
     method @Nullable public android.net.wifi.WifiSsid getWifiSsid();
     method public boolean isHiddenSsid();
     method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") public static final int BAND_2GHZ = 1; // 0x1
+    field @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") public static final int BAND_5GHZ = 2; // 0x2
+    field @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") public static final int BAND_60GHZ = 8; // 0x8
+    field @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") public static final int BAND_6GHZ = 4; // 0x4
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.SoftApConfiguration> CREATOR;
     field public static final int SECURITY_TYPE_OPEN = 0; // 0x0
     field public static final int SECURITY_TYPE_WPA2_PSK = 1; // 0x1
@@ -121,6 +142,12 @@ package android.net.wifi {
     field public static final int SECURITY_TYPE_WPA3_OWE_TRANSITION = 4; // 0x4
     field public static final int SECURITY_TYPE_WPA3_SAE = 3; // 0x3
     field public static final int SECURITY_TYPE_WPA3_SAE_TRANSITION = 2; // 0x2
+  }
+
+  @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") public static final class SoftApConfiguration.Builder {
+    ctor public SoftApConfiguration.Builder();
+    method @NonNull public android.net.wifi.SoftApConfiguration build();
+    method @NonNull public android.net.wifi.SoftApConfiguration.Builder setChannels(@NonNull android.util.SparseIntArray);
   }
 
   public enum SupplicantState implements android.os.Parcelable {
@@ -442,6 +469,7 @@ package android.net.wifi {
     method public void addOrUpdatePasspointConfiguration(android.net.wifi.hotspot2.PasspointConfiguration);
     method @RequiresPermission(allOf={android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_WIFI_STATE}) public void addSuggestionConnectionStatusListener(@NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.WifiManager.SuggestionConnectionStatusListener);
     method @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void addSuggestionUserApprovalStatusListener(@NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.WifiManager.SuggestionUserApprovalStatusListener);
+    method @FlaggedApi("com.android.wifi.flags.wifi_state_changed_listener") @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void addWifiStateChangedListener(@NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.WifiManager.WifiStateChangedListener);
     method public void allowAutojoinGlobal(boolean);
     method @Deprecated public static int calculateSignalLevel(int, int);
     method @IntRange(from=0) public int calculateSignalLevel(int);
@@ -451,6 +479,7 @@ package android.net.wifi {
     method public android.net.wifi.WifiManager.WifiLock createWifiLock(int, String);
     method @Deprecated public android.net.wifi.WifiManager.WifiLock createWifiLock(String);
     method @Deprecated public boolean disableNetwork(int);
+    method @FlaggedApi("com.android.wifi.flags.bssid_blocklist_for_suggestion") @RequiresPermission(android.Manifest.permission.CHANGE_WIFI_STATE) public void disallowCurrentSuggestedNetwork(@NonNull android.net.wifi.BlockingOption);
     method @Deprecated public boolean disconnect();
     method @Deprecated public boolean enableNetwork(int, boolean);
     method @RequiresPermission(anyOf={android.Manifest.permission.NETWORK_SETTINGS, android.Manifest.permission.NETWORK_MANAGED_PROVISIONING, android.Manifest.permission.NETWORK_CARRIER_PROVISIONING}, conditional=true) public void flushPasspointAnqpCache();
@@ -532,6 +561,7 @@ package android.net.wifi {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public void removePerSsidRoamingMode(@NonNull android.net.wifi.WifiSsid);
     method @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void removeSuggestionConnectionStatusListener(@NonNull android.net.wifi.WifiManager.SuggestionConnectionStatusListener);
     method @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void removeSuggestionUserApprovalStatusListener(@NonNull android.net.wifi.WifiManager.SuggestionUserApprovalStatusListener);
+    method @FlaggedApi("com.android.wifi.flags.wifi_state_changed_listener") @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void removeWifiStateChangedListener(@NonNull android.net.wifi.WifiManager.WifiStateChangedListener);
     method @RequiresPermission(allOf={android.Manifest.permission.MANAGE_WIFI_INTERFACES, android.Manifest.permission.ACCESS_WIFI_STATE}) public void reportCreateInterfaceImpact(int, boolean, @NonNull java.util.concurrent.Executor, @NonNull java.util.function.BiConsumer<java.lang.Boolean,java.util.Set<android.net.wifi.WifiManager.InterfaceCreationImpact>>);
     method @Deprecated public boolean saveConfiguration();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public void setPerSsidRoamingMode(@NonNull android.net.wifi.WifiSsid, int);
@@ -542,6 +572,7 @@ package android.net.wifi {
     method public void setTdlsEnabledWithMacAddress(@NonNull String, boolean, @NonNull java.util.concurrent.Executor, @NonNull java.util.function.Consumer<java.lang.Boolean>);
     method @Deprecated public boolean setWifiEnabled(boolean);
     method @RequiresPermission(allOf={android.Manifest.permission.CHANGE_WIFI_STATE, android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.NEARBY_WIFI_DEVICES}, conditional=true) public void startLocalOnlyHotspot(android.net.wifi.WifiManager.LocalOnlyHotspotCallback, @Nullable android.os.Handler);
+    method @FlaggedApi("com.android.wifi.flags.public_bands_for_lohs") @RequiresPermission(allOf={android.Manifest.permission.CHANGE_WIFI_STATE, android.Manifest.permission.NEARBY_WIFI_DEVICES}) public void startLocalOnlyHotspotWithConfiguration(@NonNull android.net.wifi.SoftApConfiguration, @NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.WifiManager.LocalOnlyHotspotCallback);
     method @Deprecated public boolean startScan();
     method @Deprecated public void startWps(android.net.wifi.WpsInfo, android.net.wifi.WifiManager.WpsCallback);
     method @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void unregisterScanResultsCallback(@NonNull android.net.wifi.WifiManager.ScanResultsCallback);
@@ -709,6 +740,10 @@ package android.net.wifi {
     method public void release();
     method public void setReferenceCounted(boolean);
     method public void setWorkSource(android.os.WorkSource);
+  }
+
+  @FlaggedApi("com.android.wifi.flags.wifi_state_changed_listener") public static interface WifiManager.WifiStateChangedListener {
+    method public void onWifiStateChanged();
   }
 
   @Deprecated public abstract static class WifiManager.WpsCallback {
@@ -1254,19 +1289,30 @@ package android.net.wifi.p2p {
     method public int describeContents();
     method public int getGroupClientIpProvisioningMode();
     method public int getGroupOwnerBand();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public int getGroupOwnerVersion();
     method public int getNetworkId();
     method @Nullable public String getNetworkName();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @Nullable public android.net.wifi.p2p.WifiP2pPairingBootstrappingConfig getPairingBootstrappingConfig();
     method @Nullable public String getPassphrase();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public int getPccModeConnectionType();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isAuthorizeConnectionFromPeer();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public void setGroupOwnerVersion(int);
     method public void writeToParcel(android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pConfig> CREATOR;
     field public static final int GROUP_CLIENT_IP_PROVISIONING_MODE_IPV4_DHCP = 0; // 0x0
     field public static final int GROUP_CLIENT_IP_PROVISIONING_MODE_IPV6_LINK_LOCAL = 1; // 0x1
     field public static final int GROUP_OWNER_BAND_2GHZ = 1; // 0x1
     field public static final int GROUP_OWNER_BAND_5GHZ = 2; // 0x2
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int GROUP_OWNER_BAND_6GHZ = 3; // 0x3
     field public static final int GROUP_OWNER_BAND_AUTO = 0; // 0x0
     field public static final int GROUP_OWNER_INTENT_AUTO = -1; // 0xffffffff
     field public static final int GROUP_OWNER_INTENT_MAX = 15; // 0xf
     field public static final int GROUP_OWNER_INTENT_MIN = 0; // 0x0
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int P2P_VERSION_1 = 0; // 0x0
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int P2P_VERSION_2 = 1; // 0x1
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY = 0; // 0x0
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2 = 1; // 0x1
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int PCC_MODE_CONNECTION_TYPE_R2_ONLY = 2; // 0x2
     field public String deviceAddress;
     field @IntRange(from=0, to=15) public int groupOwnerIntent;
     field public android.net.wifi.WpsInfo wps;
@@ -1276,12 +1322,15 @@ package android.net.wifi.p2p {
     ctor public WifiP2pConfig.Builder();
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig build();
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder enablePersistentMode(boolean);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setAuthorizeConnectionFromPeer(boolean);
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setDeviceAddress(@Nullable android.net.MacAddress);
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setGroupClientIpProvisioningMode(int);
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setGroupOperatingBand(int);
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setGroupOperatingFrequency(int);
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setNetworkName(@NonNull String);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setPairingBootstrappingConfig(@NonNull android.net.wifi.p2p.WifiP2pPairingBootstrappingConfig);
     method @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setPassphrase(@NonNull String);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @NonNull public android.net.wifi.p2p.WifiP2pConfig.Builder setPccModeConnectionType(int);
   }
 
   public class WifiP2pDevice implements android.os.Parcelable {
@@ -1292,6 +1341,11 @@ package android.net.wifi.p2p {
     method @NonNull public java.util.List<android.net.wifi.ScanResult.InformationElement> getVendorElements();
     method @Nullable public android.net.wifi.p2p.WifiP2pWfdInfo getWfdInfo();
     method public boolean isGroupOwner();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isOpportunisticBootstrappingMethodSupported();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isPassphraseDisplayBootstrappingMethodSupported();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isPassphraseKeypadBootstrappingMethodSupported();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isPinCodeDisplayBootstrappingMethodSupported();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isPinCodeKeypadBootstrappingMethodSupported();
     method public boolean isServiceDiscoveryCapable();
     method public void update(@NonNull android.net.wifi.p2p.WifiP2pDevice);
     method public boolean wpsDisplaySupported();
@@ -1321,6 +1375,16 @@ package android.net.wifi.p2p {
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pDeviceList> CREATOR;
   }
 
+  @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pDirInfo implements android.os.Parcelable {
+    ctor public WifiP2pDirInfo(@NonNull android.net.MacAddress, @NonNull byte[], @NonNull byte[]);
+    method public int describeContents();
+    method @NonNull public byte[] getDirTag();
+    method @NonNull public android.net.MacAddress getMacAddress();
+    method @NonNull public byte[] getNonce();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pDirInfo> CREATOR;
+  }
+
   @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public final class WifiP2pDiscoveryConfig implements android.os.Parcelable {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public int describeContents();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public int getFrequencyMhz();
@@ -1341,16 +1405,22 @@ package android.net.wifi.p2p {
     method public int describeContents();
     method public java.util.Collection<android.net.wifi.p2p.WifiP2pDevice> getClientList();
     method public int getFrequency();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @Nullable public android.net.MacAddress getGroupOwnerBssid();
     method public String getInterface();
     method public int getNetworkId();
     method public String getNetworkName();
     method public android.net.wifi.p2p.WifiP2pDevice getOwner();
     method public String getPassphrase();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public int getSecurityType();
     method public boolean isGroupOwner();
     method public void writeToParcel(android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pGroup> CREATOR;
     field public static final int NETWORK_ID_PERSISTENT = -2; // 0xfffffffe
     field public static final int NETWORK_ID_TEMPORARY = -1; // 0xffffffff
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int SECURITY_TYPE_UNKNOWN = -1; // 0xffffffff
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int SECURITY_TYPE_WPA2_PSK = 0; // 0x0
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int SECURITY_TYPE_WPA3_COMPATIBILITY = 1; // 0x1
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int SECURITY_TYPE_WPA3_SAE = 2; // 0x2
   }
 
   public class WifiP2pInfo implements android.os.Parcelable {
@@ -1378,13 +1448,16 @@ package android.net.wifi.p2p {
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void discoverPeersOnSocialChannels(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void discoverPeersOnSpecificFrequency(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, int, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void discoverServices(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.WifiP2pManager.ActionListener);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void discoverUsdBasedServices(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pUsdBasedServiceDiscoveryConfig, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void getListenState(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull java.util.concurrent.Executor, @NonNull java.util.function.Consumer<java.lang.Integer>);
     method public static int getP2pMaxAllowedVendorElementsLengthBytes();
     method public android.net.wifi.p2p.WifiP2pManager.Channel initialize(android.content.Context, android.os.Looper, android.net.wifi.p2p.WifiP2pManager.ChannelListener);
     method public boolean isChannelConstrainedDiscoverySupported();
     method public boolean isGroupClientRemovalSupported();
     method public boolean isGroupOwnerIPv6LinkLocalAddressProvided();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isPccModeSupported();
     method public boolean isSetVendorElementsSupported();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public boolean isWiFiDirectR2Supported();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_WIFI_STATE}, conditional=true) public void registerWifiP2pListener(@NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.p2p.WifiP2pManager.WifiP2pListener);
     method public void removeClient(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.MacAddress, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @RequiresPermission(android.Manifest.permission.MANAGE_WIFI_NETWORK_SELECTION) public void removeExternalApprover(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.MacAddress, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
@@ -1393,6 +1466,7 @@ package android.net.wifi.p2p {
     method public void removeServiceRequest(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.nsd.WifiP2pServiceRequest, android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method public void requestConnectionInfo(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.WifiP2pManager.ConnectionInfoListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void requestDeviceInfo(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pManager.DeviceInfoListener);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void requestDirInfo(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<android.net.wifi.p2p.WifiP2pDirInfo,java.lang.Exception>);
     method public void requestDiscoveryState(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pManager.DiscoveryStateListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void requestGroupInfo(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.WifiP2pManager.GroupInfoListener);
     method public void requestNetworkInfo(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pManager.NetworkInfoListener);
@@ -1407,9 +1481,11 @@ package android.net.wifi.p2p {
     method @RequiresPermission(android.Manifest.permission.CONFIGURE_WIFI_DISPLAY) public void setWfdInfo(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pWfdInfo, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void startListening(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void startPeerDiscovery(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pDiscoveryConfig, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void startUsdBasedLocalServiceAdvertisement(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.nsd.WifiP2pServiceInfo, @NonNull android.net.wifi.p2p.WifiP2pUsdBasedLocalServiceAdvertisementConfig, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method public void stopListening(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @Nullable android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method public void stopPeerDiscovery(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public void unregisterWifiP2pListener(@NonNull android.net.wifi.p2p.WifiP2pManager.WifiP2pListener);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void validateDirInfo(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.wifi.p2p.WifiP2pDirInfo, @NonNull java.util.concurrent.Executor, @NonNull android.os.OutcomeReceiver<java.lang.Boolean,java.lang.Exception>);
     field public static final String ACTION_WIFI_P2P_LISTEN_STATE_CHANGED = "android.net.wifi.p2p.action.WIFI_P2P_LISTEN_STATE_CHANGED";
     field public static final String ACTION_WIFI_P2P_REQUEST_RESPONSE_CHANGED = "android.net.wifi.p2p.action.WIFI_P2P_REQUEST_RESPONSE_CHANGED";
     field public static final int BUSY = 2; // 0x2
@@ -1434,6 +1510,7 @@ package android.net.wifi.p2p {
     field @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public static final int GROUP_CREATION_FAILURE_REASON_PROVISION_DISCOVERY_FAILED = 3; // 0x3
     field @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public static final int GROUP_CREATION_FAILURE_REASON_TIMED_OUT = 1; // 0x1
     field @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public static final int GROUP_CREATION_FAILURE_REASON_USER_REJECTED = 2; // 0x2
+    field @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public static final int NO_PERMISSION = 4; // 0x4
     field public static final int NO_SERVICE_REQUESTS = 3; // 0x3
     field public static final int P2P_UNSUPPORTED = 1; // 0x1
     field public static final String WIFI_P2P_CONNECTION_CHANGED_ACTION = "android.net.wifi.p2p.CONNECTION_STATE_CHANGE";
@@ -1517,6 +1594,7 @@ package android.net.wifi.p2p {
 
   public static interface WifiP2pManager.ServiceResponseListener {
     method public void onServiceAvailable(int, byte[], android.net.wifi.p2p.WifiP2pDevice);
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public default void onUsdBasedServiceAvailable(@NonNull android.net.wifi.p2p.WifiP2pDevice, @NonNull android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceResponse);
   }
 
   public static interface WifiP2pManager.UpnpServiceResponseListener {
@@ -1537,6 +1615,47 @@ package android.net.wifi.p2p {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public default void onPeerClientDisconnected(@NonNull android.net.wifi.p2p.WifiP2pInfo, @NonNull android.net.wifi.p2p.WifiP2pGroup);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public default void onPeerClientJoined(@NonNull android.net.wifi.p2p.WifiP2pInfo, @NonNull android.net.wifi.p2p.WifiP2pGroup);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public default void onPeerListChanged(@NonNull android.net.wifi.p2p.WifiP2pDeviceList);
+  }
+
+  @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pPairingBootstrappingConfig implements android.os.Parcelable {
+    ctor public WifiP2pPairingBootstrappingConfig(int, @Nullable String);
+    method public int describeContents();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pPairingBootstrappingConfig> CREATOR;
+    field public static final int PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE = 4; // 0x4
+    field public static final int PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE = 2; // 0x2
+    field public static final int PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PASSPHRASE = 16; // 0x10
+    field public static final int PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PINCODE = 8; // 0x8
+    field public static final int PAIRING_BOOTSTRAPPING_METHOD_OPPORTUNISTIC = 1; // 0x1
+    field public static final int PAIRING_BOOTSTRAPPING_METHOD_OUT_OF_BAND = 32; // 0x20
+  }
+
+  @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pUsdBasedLocalServiceAdvertisementConfig implements android.os.Parcelable {
+    method public int describeContents();
+    method @IntRange(from=0) public int getFrequencyMhz();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pUsdBasedLocalServiceAdvertisementConfig> CREATOR;
+  }
+
+  public static final class WifiP2pUsdBasedLocalServiceAdvertisementConfig.Builder {
+    ctor public WifiP2pUsdBasedLocalServiceAdvertisementConfig.Builder();
+    method @NonNull public android.net.wifi.p2p.WifiP2pUsdBasedLocalServiceAdvertisementConfig build();
+    method @NonNull public android.net.wifi.p2p.WifiP2pUsdBasedLocalServiceAdvertisementConfig.Builder setFrequencyMhz(@IntRange(from=0) int);
+  }
+
+  @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pUsdBasedServiceDiscoveryConfig implements android.os.Parcelable {
+    method public int describeContents();
+    method public int getBand();
+    method @Nullable public int[] getFrequenciesMhz();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pUsdBasedServiceDiscoveryConfig> CREATOR;
+  }
+
+  public static final class WifiP2pUsdBasedServiceDiscoveryConfig.Builder {
+    ctor public WifiP2pUsdBasedServiceDiscoveryConfig.Builder();
+    method @NonNull public android.net.wifi.p2p.WifiP2pUsdBasedServiceDiscoveryConfig build();
+    method @NonNull public android.net.wifi.p2p.WifiP2pUsdBasedServiceDiscoveryConfig.Builder setBand(int);
+    method @NonNull public android.net.wifi.p2p.WifiP2pUsdBasedServiceDiscoveryConfig.Builder setFrequenciesMhz(@NonNull int[]);
   }
 
   public final class WifiP2pWfdInfo implements android.os.Parcelable {
@@ -1601,7 +1720,9 @@ package android.net.wifi.p2p.nsd {
   }
 
   public class WifiP2pServiceInfo implements android.os.Parcelable {
+    ctor @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public WifiP2pServiceInfo(@NonNull android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig);
     method public int describeContents();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @Nullable public android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig getWifiP2pUsdBasedServiceConfig();
     method public void writeToParcel(android.os.Parcel, int);
     field public static final int SERVICE_TYPE_ALL = 0; // 0x0
     field public static final int SERVICE_TYPE_BONJOUR = 1; // 0x1
@@ -1610,7 +1731,9 @@ package android.net.wifi.p2p.nsd {
   }
 
   public class WifiP2pServiceRequest implements android.os.Parcelable {
+    ctor @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public WifiP2pServiceRequest(@NonNull android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig);
     method public int describeContents();
+    method @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") @Nullable public android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig getWifiP2pUsdBasedServiceConfig();
     method public static android.net.wifi.p2p.nsd.WifiP2pServiceRequest newInstance(int, String);
     method public static android.net.wifi.p2p.nsd.WifiP2pServiceRequest newInstance(int);
     method public void writeToParcel(android.os.Parcel, int);
@@ -1623,6 +1746,33 @@ package android.net.wifi.p2p.nsd {
   public class WifiP2pUpnpServiceRequest extends android.net.wifi.p2p.nsd.WifiP2pServiceRequest {
     method public static android.net.wifi.p2p.nsd.WifiP2pUpnpServiceRequest newInstance();
     method public static android.net.wifi.p2p.nsd.WifiP2pUpnpServiceRequest newInstance(String);
+  }
+
+  @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pUsdBasedServiceConfig implements android.os.Parcelable {
+    ctor public WifiP2pUsdBasedServiceConfig();
+    method public int describeContents();
+    method @NonNull public String getServiceName();
+    method @IntRange(from=0, to=255) public int getServiceProtocolType();
+    method @Nullable public byte[] getServiceSpecificInfo();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig> CREATOR;
+    field public static final int SERVICE_PROTOCOL_TYPE_BONJOUR = 1; // 0x1
+    field public static final int SERVICE_PROTOCOL_TYPE_GENERIC = 2; // 0x2
+  }
+
+  public static final class WifiP2pUsdBasedServiceConfig.Builder {
+    ctor public WifiP2pUsdBasedServiceConfig.Builder(@NonNull String);
+    method @NonNull public android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig build();
+    method @NonNull public android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig.Builder setServiceProtocolType(@IntRange(from=0, to=255) int);
+    method @NonNull public android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceConfig.Builder setServiceSpecificInfo(@Nullable byte[]);
+  }
+
+  @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pUsdBasedServiceResponse implements android.os.Parcelable {
+    method public int describeContents();
+    method @IntRange(from=0, to=255) public int getServiceProtocolType();
+    method @Nullable public byte[] getServiceSpecificInfo();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.nsd.WifiP2pUsdBasedServiceResponse> CREATOR;
   }
 
 }
@@ -1664,6 +1814,39 @@ package android.net.wifi.rtt {
     field public static final int TYPE_OF_PLACE = 29; // 0x1d
   }
 
+  @FlaggedApi("com.android.wifi.flags.secure_ranging") public final class PasnConfig implements android.os.Parcelable {
+    method public int describeContents();
+    method public int getBaseAkms();
+    method public int getCiphers();
+    method @Nullable public byte[] getPasnComebackCookie();
+    method @Nullable public String getPassword();
+    method @Nullable public android.net.wifi.WifiSsid getWifiSsid();
+    method public void writeToParcel(@NonNull android.os.Parcel, int);
+    field public static final int AKM_FILS_EAP_SHA256 = 64; // 0x40
+    field public static final int AKM_FILS_EAP_SHA384 = 128; // 0x80
+    field public static final int AKM_FT_EAP_SHA256 = 4; // 0x4
+    field public static final int AKM_FT_EAP_SHA384 = 16; // 0x10
+    field public static final int AKM_FT_PSK_SHA256 = 8; // 0x8
+    field public static final int AKM_FT_PSK_SHA384 = 32; // 0x20
+    field public static final int AKM_NONE = 0; // 0x0
+    field public static final int AKM_PASN = 1; // 0x1
+    field public static final int AKM_SAE = 2; // 0x2
+    field public static final int CIPHER_CCMP_128 = 1; // 0x1
+    field public static final int CIPHER_CCMP_256 = 2; // 0x2
+    field public static final int CIPHER_GCMP_128 = 4; // 0x4
+    field public static final int CIPHER_GCMP_256 = 8; // 0x8
+    field public static final int CIPHER_NONE = 0; // 0x0
+    field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.rtt.PasnConfig> CREATOR;
+  }
+
+  @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final class PasnConfig.Builder {
+    ctor public PasnConfig.Builder(int, int);
+    method @NonNull public android.net.wifi.rtt.PasnConfig build();
+    method @NonNull public android.net.wifi.rtt.PasnConfig.Builder setPasnComebackCookie(@NonNull byte[]);
+    method @NonNull public android.net.wifi.rtt.PasnConfig.Builder setPassword(@NonNull String);
+    method @NonNull public android.net.wifi.rtt.PasnConfig.Builder setWifiSsid(@NonNull android.net.wifi.WifiSsid);
+  }
+
   public final class RangingRequest implements android.os.Parcelable {
     method public int describeContents();
     method public static int getDefaultRttBurstSize();
@@ -1671,8 +1854,12 @@ package android.net.wifi.rtt {
     method public static int getMaxRttBurstSize();
     method public static int getMinRttBurstSize();
     method public int getRttBurstSize();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public int getSecurityMode();
     method public void writeToParcel(android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.rtt.RangingRequest> CREATOR;
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final int SECURITY_MODE_OPEN = 0; // 0x0
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final int SECURITY_MODE_OPPORTUNISTIC = 1; // 0x1
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final int SECURITY_MODE_SECURE_AUTH = 2; // 0x2
   }
 
   public static final class RangingRequest.Builder {
@@ -1687,6 +1874,7 @@ package android.net.wifi.rtt {
     method public android.net.wifi.rtt.RangingRequest.Builder addWifiAwarePeer(@NonNull android.net.wifi.aware.PeerHandle);
     method public android.net.wifi.rtt.RangingRequest build();
     method @NonNull public android.net.wifi.rtt.RangingRequest.Builder setRttBurstSize(int);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingRequest.Builder setSecurityMode(int);
   }
 
   public final class RangingResult implements android.os.Parcelable {
@@ -1706,13 +1894,19 @@ package android.net.wifi.rtt {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public long getMinTimeBetweenNtbMeasurementsMicros();
     method public int getNumAttemptedMeasurements();
     method public int getNumSuccessfulMeasurements();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public long getPasnComebackAfterMillis();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @Nullable public byte[] getPasnComebackCookie();
     method @Nullable public android.net.wifi.aware.PeerHandle getPeerHandle();
     method public long getRangingTimestampMillis();
     method public int getRssi();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @IntRange(from=0, to=7) public int getSecureHeLtfProtocolVersion();
     method public int getStatus();
     method @Nullable public android.net.wifi.rtt.ResponderLocation getUnverifiedResponderLocation();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public boolean is80211azNtbMeasurement();
     method public boolean is80211mcMeasurement();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isRangingAuthenticated();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isRangingFrameProtected();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isSecureHeLtfEnabled();
     method public void writeToParcel(android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.rtt.RangingResult> CREATOR;
     field public static final int STATUS_FAIL = 1; // 0x1
@@ -1741,9 +1935,15 @@ package android.net.wifi.rtt {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setMinTimeBetweenNtbMeasurementsMicros(long);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setNumAttemptedMeasurements(int);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setNumSuccessfulMeasurements(int);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingResult.Builder setPasnComebackAfterMillis(long);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingResult.Builder setPasnComebackCookie(@NonNull byte[]);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setPeerHandle(@Nullable android.net.wifi.aware.PeerHandle);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingResult.Builder setRangingAuthenticated(boolean);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingResult.Builder setRangingFrameProtected(boolean);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setRangingTimestampMillis(long);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setRssi(int);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingResult.Builder setSecureHeLtfEnabled(boolean);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.RangingResult.Builder setSecureHeLtfProtocolVersion(@IntRange(from=0, to=7) int);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setStatus(int);
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.RangingResult.Builder setUnverifiedResponderLocation(@Nullable android.net.wifi.rtt.ResponderLocation);
   }
@@ -1766,6 +1966,7 @@ package android.net.wifi.rtt {
     method @Nullable public android.net.MacAddress getMacAddress();
     method public int getPreamble();
     method public int getResponderType();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @Nullable public android.net.wifi.rtt.SecureRangingConfig getSecureRangingConfig();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public boolean is80211azNtbSupported();
     method public boolean is80211mcSupported();
     method public void writeToParcel(@NonNull android.os.Parcel, int);
@@ -1786,6 +1987,7 @@ package android.net.wifi.rtt {
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setMacAddress(@NonNull android.net.MacAddress);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setPreamble(int);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setResponderType(int);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setSecureRangingConfig(@NonNull android.net.wifi.rtt.SecureRangingConfig);
   }
 
   public final class ResponderLocation implements android.os.Parcelable {
@@ -1828,6 +2030,22 @@ package android.net.wifi.rtt {
     field public static final int LOCATION_VARIABLE = 1; // 0x1
   }
 
+  @FlaggedApi("com.android.wifi.flags.secure_ranging") public final class SecureRangingConfig implements android.os.Parcelable {
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public int describeContents();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.PasnConfig getPasnConfig();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isRangingFrameProtectionEnabled();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public boolean isSecureHeLtfEnabled();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") public void writeToParcel(@NonNull android.os.Parcel, int);
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.rtt.SecureRangingConfig> CREATOR;
+  }
+
+  @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final class SecureRangingConfig.Builder {
+    ctor @FlaggedApi("com.android.wifi.flags.secure_ranging") public SecureRangingConfig.Builder(@NonNull android.net.wifi.rtt.PasnConfig);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.SecureRangingConfig build();
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.SecureRangingConfig.Builder setRangingFrameProtectionEnabled(boolean);
+    method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.SecureRangingConfig.Builder setSecureHeLtfEnabled(boolean);
+  }
+
   public class WifiRttManager {
     method @NonNull @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public android.os.Bundle getRttCharacteristics();
     method public boolean isAvailable();
@@ -1837,7 +2055,10 @@ package android.net.wifi.rtt {
     field public static final String CHARACTERISTICS_KEY_BOOLEAN_LCR = "key_lcr";
     field @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") public static final String CHARACTERISTICS_KEY_BOOLEAN_NTB_INITIATOR = "key_ntb_initiator";
     field public static final String CHARACTERISTICS_KEY_BOOLEAN_ONE_SIDED_RTT = "key_one_sided_rtt";
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final String CHARACTERISTICS_KEY_BOOLEAN_RANGING_FRAME_PROTECTION_SUPPORTED = "key_rnm_mfp_supported";
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final String CHARACTERISTICS_KEY_BOOLEAN_SECURE_HE_LTF_SUPPORTED = "key_secure_he_ltf_supported";
     field public static final String CHARACTERISTICS_KEY_BOOLEAN_STA_RESPONDER = "key_sta_responder";
+    field @FlaggedApi("com.android.wifi.flags.secure_ranging") public static final String CHARACTERISTICS_KEY_INT_MAX_SUPPORTED_SECURE_HE_LTF_PROTO_VERSION = "key_max_supported_secure_he_ltf_proto_ver";
   }
 
 }

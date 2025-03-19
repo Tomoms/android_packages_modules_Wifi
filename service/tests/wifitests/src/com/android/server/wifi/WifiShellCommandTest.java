@@ -598,7 +598,7 @@ public class WifiShellCommandTest extends WifiBaseTest {
         ArgumentCaptor<SoftApConfiguration> softApConfigurationCaptor = ArgumentCaptor.forClass(
                 SoftApConfiguration.class);
         verify(mWifiService).startLocalOnlyHotspot(any(), eq(SHELL_PACKAGE_NAME), any(),
-                softApConfigurationCaptor.capture(), any());
+                softApConfigurationCaptor.capture(), any(), eq(false));
         assertEquals(SoftApConfiguration.BAND_5GHZ,
                 softApConfigurationCaptor.getValue().getBand());
         assertEquals(SoftApConfiguration.SECURITY_TYPE_WPA2_PSK,

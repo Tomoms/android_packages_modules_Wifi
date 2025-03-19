@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Ku:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Faka i-PIN edingekayo:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Uxhumo lwedivayisi"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Uxhumo lwedivayisi"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Isimemo sithunyelwe ku-<xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Faka le Phinikhodi ku-<xliff:g id="DEVICE_NAME">%1$s</xliff:g> ukuze uxhumeke."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"KULUNGILE"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Uxhumo lwedivayisi"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Uxhumo lwedivayisi"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Uxhumo lwedivayisi"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"I-<xliff:g id="DEVICE_NAME">%1$s</xliff:g> ifuna ukuxhumana nedivayisi yakho."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Faka Iphinikhodi eboniswe ku-<xliff:g id="DEVICE_NAME">%1$s</xliff:g> ukuze uxhumeke."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"I-<xliff:g id="DEVICE_NAME">%1$s</xliff:g> ifuna ukuxhumana nedivayisi yakho Ngephinikhodi elandelayo."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{I-{device} ifuna ukuxhumana nedivayisi yakho. Yamukela kumzuzwana ongu-{countdown}.}one{I-{device} ifuna ukuxhumana nedivayisi yakho. Yamukela emizuzwaneni engu-{countdown}.}other{I-{device} ifuna ukuxhumana nedivayisi yakho. Yamukela emizuzwaneni engu-{countdown}.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Faka Iphinikhodi eboniswe ku-{device} kumzuzwana ongu-{countdown} ukuze uxhumeke.}one{Faka Iphinikhodi eboniswe ku-{device} emizuzwaneni engu-{countdown} ukuze uxhumeke.}other{Faka Iphinikhodi eboniswe ku-{device} emizuzwaneni engu-{countdown} ukuze uxhumeke.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{I-{device} ifuna ukuxhumana nedivayisi yakho Ngephinikhodi elandelayo. Yamukela kumzuzwana ongu-{countdown}.}one{I-{device} ifuna ukuxhumana nedivayisi yakho Ngephinikhodi elandelayo. Yamukela emizuzwaneni engu-{countdown}.}other{I-{device} ifuna ukuxhumana nedivayisi yakho Ngephinikhodi elandelayo. Yamukela emizuzwaneni engu-{countdown}.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Xhuma"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Khansela"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"Iphinikhodi"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"Iphinikhodi"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Idivayisi yakho izonqamuka okwesikhashana ku-Wi-Fi ngenkathi uxhume ku-<xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"KULUNGILE"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Ayikwazi ukuxhumeka ku-<xliff:g id="SSID">%1$s</xliff:g>"</string>

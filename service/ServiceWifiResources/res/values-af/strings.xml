@@ -48,8 +48,8 @@
     <string name="wifi_watchdog_network_disabled" msgid="5769226742956006362">"Kon nie aan Wi-Fikoppel nie"</string>
     <string name="wifi_watchdog_network_disabled_detailed" msgid="1725243835135539125">" het \'n swak internetverbinding."</string>
     <string name="wifi_connect_alert_title" msgid="2368200646665663612">"Laat verbinding toe?"</string>
-    <string name="wifi_connect_alert_message" msgid="7226456300982080746">"Program %1$s wil aan Wi-Fi-netwerk %2$s koppel"</string>
-    <string name="wifi_connect_default_application" msgid="8917703737222707062">"\'n Program"</string>
+    <string name="wifi_connect_alert_message" msgid="7226456300982080746">"App %1$s wil aan wi-fi-netwerk %2$s koppel"</string>
+    <string name="wifi_connect_default_application" msgid="8917703737222707062">"\'n App"</string>
     <string name="accept" msgid="8346431649376483879">"Aanvaar"</string>
     <string name="decline" msgid="4172251727603762084">"Weier"</string>
     <string name="ok" msgid="847575529546290102">"OK"</string>
@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Aan:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Voer die vereiste PIN in:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Toestelverbinding"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Toestelverbinding"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Uitnodiging gestuur na <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Voer hierdie PIN op <xliff:g id="DEVICE_NAME">%1$s</xliff:g> in om te koppel."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"OK"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Toestelverbinding"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Toestelverbinding"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Toestelverbinding"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> wil aan jou toestel koppel."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Voer die PIN in wat op <xliff:g id="DEVICE_NAME">%1$s</xliff:g> wys om te koppel."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> wil met die volgende PIN aan jou toestel koppel."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} wil aan jou toestel koppel. Aanvaar oor {countdown} sekonde.}other{{device} wil aan jou toestel koppel. Aanvaar oor {countdown} sekondes.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Voer die PIN wat op {device} wys binne {countdown} sekonde in om te koppel.}other{Voer die PIN wat op {device} wys binne {countdown} sekondes in om te koppel.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} wil met die volgende PIN aan jou toestel koppel. Aanvaar oor {countdown} sekonde.}other{{device} wil met die volgende PIN aan jou toestel koppel. Aanvaar oor {countdown} sekondes.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Koppel"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Kanselleer"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Jou toestel sal tydelik van wi-fi af ontkoppel word terwyl dit aan <xliff:g id="DEVICE_NAME">%1$s</xliff:g> gekoppel is"</string>
     <string name="dlg_ok" msgid="254496739491689405">"OK"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Kan nie aan <xliff:g id="SSID">%1$s</xliff:g> koppel nie"</string>

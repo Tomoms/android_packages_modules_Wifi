@@ -40,11 +40,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import android.app.test.MockAnswerUtil;
 import android.net.wifi.OuiKeyedData;
 import android.net.wifi.SoftApConfiguration;
 import android.net.wifi.WifiContext;
+import android.net.wifi.WifiMigration;
 import android.net.wifi.WifiScanner;
 import android.net.wifi.nl80211.WifiNl80211Manager;
 import android.os.Handler;
@@ -53,6 +55,7 @@ import android.os.test.TestLooper;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.HalDeviceManager.InterfaceDestroyedListener;
 import com.android.server.wifi.WifiNative.SupplicantDeathEventHandler;
@@ -61,6 +64,7 @@ import com.android.server.wifi.hal.WifiNanIface;
 import com.android.server.wifi.p2p.WifiP2pNative;
 import com.android.server.wifi.util.NetdWrapper;
 import com.android.server.wifi.util.NetdWrapper.NetdEventObserver;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import org.junit.After;
@@ -70,6 +74,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -85,6 +90,7 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
     private static final String IFACE_NAME_0 = "mockWlan0";
     private static final String IFACE_NAME_1 = "mockWlan1";
     private static final String SELF_RECOVERY_IFACE_NAME = "mockWlan2";
+    private static final String IFACE_NAME_AWARE = "MockAware";
     private static final WorkSource TEST_WORKSOURCE = new WorkSource();
     private static final long[] TEST_SUPPORTED_FEATURES = new long[]{ 0 };
     private static final int STA_FAILURE_CODE_START_DAEMON = 1;
@@ -127,6 +133,7 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
     @Mock private SoftApManager mSoftApManager;
     @Mock private WifiNanIface mActiveWifiNanIface;
     @Mock DeviceConfigFacade mDeviceConfigFacade;
+    private MockitoSession mSession;
 
     private TestLooper mLooper;
     private WifiNative.Iface mActiveP2pIface;
@@ -214,7 +221,8 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
         when(mHostapdHal.isInitializationStarted()).thenReturn(false);
         when(mHostapdHal.isInitializationComplete()).thenReturn(true);
         when(mHostapdHal.startDaemon()).thenReturn(true);
-        when(mHostapdHal.addAccessPoint(any(), any(), anyBoolean(), any())).thenReturn(true);
+        when(mHostapdHal.addAccessPoint(any(), any(), anyBoolean(),
+                anyBoolean(), any(), any())).thenReturn(true);
         when(mHostapdHal.removeAccessPoint(any())).thenReturn(true);
         when(mHostapdHal.registerApCallback(any(), any())).thenReturn(true);
 
@@ -241,6 +249,13 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
                 eq(WifiSettingsConfigStore.WIFI_NATIVE_SUPPORTED_STA_BANDS)))
                 .thenReturn(TEST_SUPPORTED_BANDS);
 
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(Flags.class, withSettings().lenient())
+                .mockStatic(WifiMigration.class, withSettings().lenient())
+                .startMocking();
+        when(Flags.rsnOverriding()).thenReturn(false);
+        when(mActiveWifiNanIface.getName()).thenReturn(IFACE_NAME_AWARE);
+
         mInOrder = inOrder(mWifiVendorHal, mWificondControl, mSupplicantStaIfaceHal, mHostapdHal,
                 mWifiMonitor, mNetdWrapper, mIfaceCallback0, mIfaceCallback1, mIfaceEventCallback0,
                 mWifiMetrics, mWifiP2pNative);
@@ -263,6 +278,9 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
 
     @After
     public void tearDown() throws Exception {
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
         verifyNoMoreInteractions(mWifiVendorHal, mWificondControl, mSupplicantStaIfaceHal,
                 mHostapdHal, mWifiMonitor, mNetdWrapper, mIfaceCallback0, mIfaceCallback1,
                 mIfaceEventCallback0, mWifiMetrics);
@@ -562,7 +580,7 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
         }).when(mWifiVendorHal).createApIface(any(), any(), anyInt(), eq(false), any(), anyList());
         assertEquals(IFACE_NAME_0, mWifiNative.setupInterfaceForSoftApMode(mIfaceCallback1,
                 TEST_WORKSOURCE, SoftApConfiguration.BAND_2GHZ, false, mSoftApManager,
-                new ArrayList<>()));
+                new ArrayList<>(), false));
 
         validateHostApdStart();
         // Creation of AP interface should trigger the STA interface destroy
@@ -881,7 +899,7 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
 
         assertEquals(IFACE_NAME_0, mWifiNative.setupInterfaceForSoftApMode(mIfaceCallback1,
                 TEST_WORKSOURCE, SoftApConfiguration.BAND_2GHZ, false, mSoftApManager,
-                new ArrayList<>()));
+                new ArrayList<>(), false));
         validateHostApdStart();
         // Creation of AP interface should trigger the STA interface destroy
         validateOnDestroyedClientInterface(
@@ -973,11 +991,14 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
         // Start softap
         assertEquals(SoftApManager.START_RESULT_SUCCESS,
                 mWifiNative.startSoftAp(IFACE_NAME_0, new SoftApConfiguration.Builder().build(),
-                        true, mock(WifiNative.SoftApHalCallback.class)));
+                        true, mock(WifiNative.SoftApHalCallback.class), false));
 
         mInOrder.verify(mHostapdHal).isApInfoCallbackSupported();
         mInOrder.verify(mHostapdHal).registerApCallback(any(), any());
-        mInOrder.verify(mHostapdHal).addAccessPoint(any(), any(), anyBoolean(), any());
+        mInOrder.verify(mWifiVendorHal).isVendorHalSupported();
+        mInOrder.verify(mWifiVendorHal).getBridgedApInstances(IFACE_NAME_0);
+        mInOrder.verify(mHostapdHal).addAccessPoint(any(), any(), anyBoolean(),
+                anyBoolean(), any(), any());
 
         // Trigger vendor HAL death
         mHostapdDeathHandlerCaptor.getValue().onDeath();
@@ -1002,12 +1023,15 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
         // Start softap
         assertEquals(SoftApManager.START_RESULT_SUCCESS,
                 mWifiNative.startSoftAp(IFACE_NAME_0, new SoftApConfiguration.Builder().build(),
-                        true, mock(WifiNative.SoftApHalCallback.class)));
+                        true, mock(WifiNative.SoftApHalCallback.class), false));
 
         mInOrder.verify(mHostapdHal).isApInfoCallbackSupported();
         mInOrder.verify(mWificondControl).registerApCallback(any(), any(), any());
         verify(mHostapdHal, never()).registerApCallback(any(), any());
-        mInOrder.verify(mHostapdHal).addAccessPoint(any(), any(), anyBoolean(), any());
+        mInOrder.verify(mWifiVendorHal).isVendorHalSupported();
+        mInOrder.verify(mWifiVendorHal).getBridgedApInstances(IFACE_NAME_0);
+        mInOrder.verify(mHostapdHal).addAccessPoint(any(), any(), anyBoolean(),
+                anyBoolean(), any(), any());
 
         // Trigger vendor HAL death
         mHostapdDeathHandlerCaptor.getValue().onDeath();
@@ -1130,7 +1154,7 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
         when(mWifiVendorHal.startVendorHal()).thenReturn(false);
         assertNull(mWifiNative.setupInterfaceForSoftApMode(mIfaceCallback0, TEST_WORKSOURCE,
                 SoftApConfiguration.BAND_2GHZ, false, mSoftApManager,
-                new ArrayList<>()));
+                new ArrayList<>(), false));
 
         mInOrder.verify(mWifiVendorHal).isVendorHalSupported();
         mInOrder.verify(mWifiVendorHal).startVendorHal();
@@ -1572,6 +1596,30 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
         executeAndValidateTeardownNanInterface(false, false, false, false, mActiveNanIface);
     }
 
+    @Test
+    public void testCreateNanIfaceFailureWhenFailToCreateNan() throws Exception {
+        when(mHalDeviceManager.createNanIface(any(), any(), any()))
+                .thenReturn(null);
+        mActiveNanIface = mWifiNative.createNanIface(mTestInterfaceDestroyedListener,
+                    mCreateIfaceEventHandler, TEST_WORKSOURCE);
+        validateStartHal(false, true);
+        assertNull(mActiveNanIface);
+        validateOnDestroyedNanInterface(false, false, false, false);
+    }
+
+    @Test
+    public void testCreateNanIfaceFailureWhenFailToGetNanIfaceName() throws Exception {
+        when(mHalDeviceManager.createNanIface(any(), any(), any()))
+                .thenReturn(mActiveWifiNanIface);
+        // The empty aware iface will cause failure
+        when(mActiveWifiNanIface.getName()).thenReturn(null);
+        mActiveNanIface = mWifiNative.createNanIface(mTestInterfaceDestroyedListener,
+                    mCreateIfaceEventHandler, TEST_WORKSOURCE);
+        validateStartHal(false, true);
+        assertNull(mActiveNanIface);
+        validateOnDestroyedNanInterface(false, false, false, false);
+    }
+
     private void executeAndValidateSetupClientInterface(
             boolean hasStaIface, boolean hasApIface,
             String ifaceName, @Mock WifiNative.InterfaceCallback callback,
@@ -1955,7 +2003,7 @@ public class WifiNativeInterfaceManagementTest extends WifiBaseTest {
                 .thenReturn(ifaceName);
         assertEquals(failureCode == 0 ? ifaceName : null, mWifiNative.setupInterfaceForSoftApMode(
                 callback, TEST_WORKSOURCE, SoftApConfiguration.BAND_2GHZ, isBridged,
-                mSoftApManager, new ArrayList<>()));
+                mSoftApManager, new ArrayList<>(), false));
 
         validateSetupSoftApInterface(
                 hasStaIface, hasApIface, hasP2pIface, hasNanIface, ifaceName,

@@ -653,6 +653,15 @@ public class WifiGlobals {
                 .getInteger(R.integer.config_wifiDisableTemporaryMaximumDurationMs);
     }
 
+    /**
+     * Returns whether device support Wi-Fi 7 multi-link device Soft Ap.
+     */
+    public boolean isMLDApSupported() {
+        int numberOfMLDSupported = mWifiResourceCache
+                .getInteger(R.integer.config_wifiSoftApMaxNumberMLDSupported);
+        return numberOfMLDSupported != 0;
+    }
+
     /** Dump method for debugging */
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("Dump of WifiGlobals");

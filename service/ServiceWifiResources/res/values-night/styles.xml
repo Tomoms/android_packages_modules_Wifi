@@ -23,4 +23,18 @@
         <item name="android:inputType">number</item>
         <item name="android:textColor">@android:color/primary_text_dark</item>
     </style>
+
+    <style name="wifi_p2p_dialog2" parent="@android:style/Theme.DeviceDefault.Dialog.Alert" />
+    <style name="wifi_p2p_dialog2_pin_label">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@android:color/secondary_text_dark</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+    <style name="wifi_p2p_dialog2_pin">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:textColor">@android:color/primary_text_dark</item>
+    </style>
 </resources>

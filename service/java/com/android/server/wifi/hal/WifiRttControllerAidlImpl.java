@@ -312,7 +312,10 @@ public class WifiRttControllerAidlImpl implements IWifiRttController {
         return rangingResults;
     }
 
-    private static @WifiAnnotations.ChannelWidth int halToFrameworkChannelBandwidth(
+    /**
+     *  AIDL Hal to framework mapping for Channel width
+     */
+    public static @WifiAnnotations.ChannelWidth int halToFrameworkChannelBandwidth(
             @RttBw int packetBw) {
         switch (packetBw) {
             case RttBw.BW_20MHZ:
@@ -330,7 +333,10 @@ public class WifiRttControllerAidlImpl implements IWifiRttController {
         }
     }
 
-    private static @WifiRttController.FrameworkRttStatus int halToFrameworkRttStatus(
+    /**
+     *  AIDL Hal to framework mapping for RTT status
+     */
+    public static @WifiRttController.FrameworkRttStatus int halToFrameworkRttStatus(
             int halStatus) {
         switch (halStatus) {
             case RttStatus.SUCCESS:
@@ -575,7 +581,10 @@ public class WifiRttControllerAidlImpl implements IWifiRttController {
         }
     }
 
-    private static int frameworkToHalChannelWidth(int responderChannelWidth)
+    /**
+     *  Framework to AIDL Hal mapping for Channel Width
+     */
+    public static int frameworkToHalChannelWidth(int responderChannelWidth)
             throws IllegalArgumentException {
         switch (responderChannelWidth) {
             case ResponderConfig.CHANNEL_WIDTH_20MHZ:
@@ -616,7 +625,10 @@ public class WifiRttControllerAidlImpl implements IWifiRttController {
         }
     }
 
-    private static int frameworkToHalResponderPreamble(int responderPreamble)
+    /**
+     *  Framework to AIDL Hal mapping for Preamble
+     */
+    public static int frameworkToHalResponderPreamble(int responderPreamble)
             throws IllegalArgumentException {
         switch (responderPreamble) {
             case ResponderConfig.PREAMBLE_LEGACY:
@@ -627,6 +639,8 @@ public class WifiRttControllerAidlImpl implements IWifiRttController {
                 return RttPreamble.VHT;
             case ResponderConfig.PREAMBLE_HE:
                 return RttPreamble.HE;
+            case ResponderConfig.PREAMBLE_EHT:
+                return RttPreamble.EHT;
             default:
                 throw new IllegalArgumentException(
                         "frameworkToHalResponderPreamble: bad " + responderPreamble);

@@ -15,7 +15,7 @@
  */
 package com.android.server.wifi;
 
-import static com.android.server.wifi.util.GeneralUtil.longToBitset;
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -192,7 +192,7 @@ public class SupplicantStaNetworkHalHidlImplTest extends WifiBaseTest {
         when(mWifiGlobals.isWpa3SaeUpgradeOffloadEnabled()).thenReturn(true);
         when(mWifiGlobals.isWpaPersonalDeprecated()).thenReturn(false);
 
-        mAdvanceKeyMgmtFeatures = longToBitset(WifiManager.WIFI_FEATURE_WPA3_SUITE_B);
+        mAdvanceKeyMgmtFeatures = createCapabilityBitset(WifiManager.WIFI_FEATURE_WPA3_SUITE_B);
         createSupplicantStaNetwork(SupplicantStaNetworkVersion.V1_0);
     }
 

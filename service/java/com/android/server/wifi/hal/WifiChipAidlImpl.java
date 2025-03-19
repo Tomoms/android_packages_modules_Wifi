@@ -23,8 +23,6 @@ import static android.hardware.wifi.WifiChannelWidthInMhz.WIDTH_80;
 import static android.hardware.wifi.WifiChannelWidthInMhz.WIDTH_80P80;
 import static android.net.wifi.CoexUnsafeChannel.POWER_CAP_NONE;
 
-import static com.android.server.wifi.util.GeneralUtil.getCapabilityIndex;
-
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
@@ -32,6 +30,7 @@ import android.hardware.wifi.AfcChannelAllowance;
 import android.hardware.wifi.AvailableAfcChannelInfo;
 import android.hardware.wifi.AvailableAfcFrequencyInfo;
 import android.hardware.wifi.IWifiApIface;
+import android.hardware.wifi.IWifiChip.ApIfaceParams;
 import android.hardware.wifi.IWifiChip.ChannelCategoryMask;
 import android.hardware.wifi.IWifiChip.CoexRestriction;
 import android.hardware.wifi.IWifiChip.FeatureSetMask;
@@ -134,7 +133,11 @@ public class WifiChipAidlImpl implements IWifiChip {
             try {
                 if (!checkIfaceAndLogFailure(methodStr)) return null;
                 IWifiApIface iface;
-                if (WifiHalAidlImpl.isServiceVersionAtLeast(2) && !vendorData.isEmpty()) {
+                if (WifiHalAidlImpl.isServiceVersionAtLeast(3)) {
+                    iface = mWifiChip.createApOrBridgedApIfaceWithParams(prepareApIfaceParams(
+                            IfaceConcurrencyType.AP, vendorData,
+                            false /* usesMlo */));
+                } else if (WifiHalAidlImpl.isServiceVersionAtLeast(2) && !vendorData.isEmpty()) {
                     android.hardware.wifi.common.OuiKeyedData[] halVendorData =
                             HalAidlUtil.frameworkToHalOuiKeyedDataList(vendorData);
                     iface = mWifiChip.createApOrBridgedApIface(
@@ -152,18 +155,34 @@ public class WifiChipAidlImpl implements IWifiChip {
         }
     }
 
+    private ApIfaceParams prepareApIfaceParams(int ifaceType,
+            @NonNull List<OuiKeyedData> vendorData, boolean usesMlo)
+            throws IllegalArgumentException {
+        ApIfaceParams ifaceParams = new ApIfaceParams();
+        ifaceParams.ifaceType = ifaceType;
+        ifaceParams.vendorData =
+                    HalAidlUtil.frameworkToHalOuiKeyedDataList(vendorData);
+        ifaceParams.usesMlo = usesMlo;
+        return ifaceParams;
+    }
+
     /**
      * See comments for {@link IWifiChip#createBridgedApIface(List)}
      */
     @Override
     @Nullable
-    public WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData) {
+    public WifiApIface createBridgedApIface(@NonNull List<OuiKeyedData> vendorData,
+            boolean isUsingMultiLinkOperation) {
         final String methodStr = "createBridgedApIface";
         synchronized (mLock) {
             try {
                 if (!checkIfaceAndLogFailure(methodStr)) return null;
                 IWifiApIface iface;
-                if (WifiHalAidlImpl.isServiceVersionAtLeast(2) && !vendorData.isEmpty()) {
+                if (WifiHalAidlImpl.isServiceVersionAtLeast(3)) {
+                    iface = mWifiChip.createApOrBridgedApIfaceWithParams(prepareApIfaceParams(
+                            IfaceConcurrencyType.AP_BRIDGED, vendorData,
+                            isUsingMultiLinkOperation));
+                } else if (WifiHalAidlImpl.isServiceVersionAtLeast(2) && !vendorData.isEmpty()) {
                     android.hardware.wifi.common.OuiKeyedData[] halVendorData =
                             HalAidlUtil.frameworkToHalOuiKeyedDataList(vendorData);
                     iface = mWifiChip.createApOrBridgedApIface(
@@ -1596,25 +1615,28 @@ public class WifiChipAidlImpl implements IWifiChip {
     protected static BitSet halToFrameworkChipFeatureSet(long halFeatureSet) {
         BitSet features = new BitSet();
         if (bitmapContains(halFeatureSet, FeatureSetMask.SET_TX_POWER_LIMIT)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_TX_POWER_LIMIT));
+            features.set(WifiManager.WIFI_FEATURE_TX_POWER_LIMIT);
         }
         if (bitmapContains(halFeatureSet, FeatureSetMask.D2D_RTT)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_D2D_RTT));
+            features.set(WifiManager.WIFI_FEATURE_D2D_RTT);
         }
         if (bitmapContains(halFeatureSet, FeatureSetMask.D2AP_RTT)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_D2AP_RTT));
+            features.set(WifiManager.WIFI_FEATURE_D2AP_RTT);
         }
         if (bitmapContains(halFeatureSet, FeatureSetMask.SET_LATENCY_MODE)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_LOW_LATENCY));
+            features.set(WifiManager.WIFI_FEATURE_LOW_LATENCY);
         }
         if (bitmapContains(halFeatureSet, FeatureSetMask.P2P_RAND_MAC)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_P2P_RAND_MAC));
+            features.set(WifiManager.WIFI_FEATURE_P2P_RAND_MAC);
         }
         if (bitmapContains(halFeatureSet, FeatureSetMask.WIGIG)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_INFRA_60G));
+            features.set(WifiManager.WIFI_FEATURE_INFRA_60G);
         }
         if (bitmapContains(halFeatureSet, FeatureSetMask.T2LM_NEGOTIATION)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_T2LM_NEGOTIATION));
+            features.set(WifiManager.WIFI_FEATURE_T2LM_NEGOTIATION);
+        }
+        if (bitmapContains(halFeatureSet, FeatureSetMask.MLO_SAP)) {
+            features.set(WifiManager.WIFI_FEATURE_SOFTAP_MLO);
         }
         return features;
     }

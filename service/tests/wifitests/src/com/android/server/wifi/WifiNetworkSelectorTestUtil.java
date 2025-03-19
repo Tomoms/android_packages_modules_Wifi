@@ -46,6 +46,7 @@ import com.android.server.wifi.util.InformationElementUtil;
 import com.android.server.wifi.util.NativeUtil;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -57,7 +58,7 @@ import java.util.Set;
  */
 public class WifiNetworkSelectorTestUtil {
     private static final String TAG = "WifiNetworkSelectorTestUtil";
-    private static final long SUPPORTED_FEATURES_ALL = Long.MAX_VALUE;
+
     /**
      * A class that holds a list of scanDetail and their associated WifiConfiguration.
      */
@@ -273,6 +274,9 @@ public class WifiNetworkSelectorTestUtil {
             throw new IllegalArgumentException();
         }
 
+        BitSet supportedFeaturesAll = new BitSet();
+        supportedFeaturesAll.set(0, 63); // mark all features as supported
+
         Map<String, Integer> netIdMap = new HashMap<>();
         int netId = 0;
 
@@ -292,7 +296,7 @@ public class WifiNetworkSelectorTestUtil {
                     || (securities[index] & SECURITY_WAPI_PSK) != 0) {
                 configs[index].preSharedKey = "\"PA55W0RD\""; // needed to validate with PSK
             }
-            if (!WifiConfigurationUtil.validate(configs[index], SUPPORTED_FEATURES_ALL, true)) {
+            if (!WifiConfigurationUtil.validate(configs[index], supportedFeaturesAll, true)) {
                 throw new IllegalArgumentException("Invalid generated config: " + configs[index]);
             }
         }

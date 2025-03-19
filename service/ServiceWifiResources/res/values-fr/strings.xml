@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"À :"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Saisissez le code PIN requis :"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"Code :"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Connexion de l\'appareil"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Connexion de l\'appareil"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Invitation envoyée à <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Saisissez ce code sur <xliff:g id="DEVICE_NAME">%1$s</xliff:g> pour vous connecter."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"OK"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Connexion de l\'appareil"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Connexion de l\'appareil"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Connexion de l\'appareil"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> souhaite se connecter à votre appareil."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Saisissez le code qui s\'affiche sur <xliff:g id="DEVICE_NAME">%1$s</xliff:g> pour vous connecter."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> souhaite se connecter à votre appareil avec le code suivant."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} souhaite se connecter à votre appareil. {countdown} seconde restante pour accepter.}one{{device} souhaite se connecter à votre appareil. {countdown} seconde restante pour accepter.}many{{device} souhaite se connecter à votre appareil. {countdown} de secondes restantes pour accepter.}other{{device} souhaite se connecter à votre appareil. {countdown} secondes restantes pour accepter.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Il vous reste {countdown} seconde pour saisir le code qui s\'affiche sur {device} et vous connecter.}one{Il vous reste {countdown} seconde pour saisir le code qui s\'affiche sur {device} et vous connecter.}many{Il vous reste {countdown} de secondes pour saisir le code qui s\'affiche sur {device} et vous connecter.}other{Il vous reste {countdown} secondes pour saisir le code qui s\'affiche sur {device} et vous connecter.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} souhaite se connecter à votre appareil avec le code suivant. {countdown} seconde restante pour accepter.}one{{device} souhaite se connecter à votre appareil avec le code suivant. {countdown} seconde restante pour accepter.}many{{device} souhaite se connecter à votre appareil avec le code suivant. {countdown} de secondes restantes pour accepter.}other{{device} souhaite se connecter à votre appareil avec le code suivant. {countdown} secondes restantes pour accepter.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Connecter"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Annuler"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"Code"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"Code"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Tant que votre appareil sera connecté à <xliff:g id="DEVICE_NAME">%1$s</xliff:g>, il sera temporairement déconnecté du Wi-Fi"</string>
     <string name="dlg_ok" msgid="254496739491689405">"OK"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Impossible de se connecter à <xliff:g id="SSID">%1$s</xliff:g>"</string>

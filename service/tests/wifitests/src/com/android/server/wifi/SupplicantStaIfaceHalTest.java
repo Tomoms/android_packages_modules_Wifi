@@ -16,7 +16,9 @@
 
 package com.android.server.wifi;
 
-import static com.android.server.wifi.util.GeneralUtil.longToBitset;
+import static android.net.wifi.WifiManager.WIFI_FEATURE_OWE;
+
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -928,7 +930,7 @@ public class SupplicantStaIfaceHalTest extends WifiBaseTest {
     @Test
     public void testGetAdvancedCapabilities() {
         initializeWithAidlImpl(true);
-        BitSet capabilities = longToBitset(0X1234);
+        BitSet capabilities = createCapabilityBitset(WIFI_FEATURE_OWE);  // arbitrary feature
         when(mStaIfaceHalAidlMock.getAdvancedCapabilities(anyString())).thenReturn(capabilities);
         assertTrue(capabilities.equals(mDut.getAdvancedCapabilities(IFACE_NAME)));
         verify(mStaIfaceHalAidlMock).getAdvancedCapabilities(eq(IFACE_NAME));
@@ -940,7 +942,7 @@ public class SupplicantStaIfaceHalTest extends WifiBaseTest {
     @Test
     public void testGetWpaDriverFeatureSet() {
         initializeWithAidlImpl(true);
-        BitSet capabilities = longToBitset(0X1234);
+        BitSet capabilities = createCapabilityBitset(WIFI_FEATURE_OWE);  // arbitrary feature
         when(mStaIfaceHalAidlMock.getWpaDriverFeatureSet(anyString())).thenReturn(capabilities);
         assertTrue(capabilities.equals(mDut.getWpaDriverFeatureSet(IFACE_NAME)));
         verify(mStaIfaceHalAidlMock).getWpaDriverFeatureSet(eq(IFACE_NAME));

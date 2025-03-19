@@ -18,7 +18,6 @@ package com.android.server.wifi;
 import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_AP;
 import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_AP_BRIDGE;
 import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_STA;
-import static com.android.server.wifi.util.GeneralUtil.getCapabilityIndex;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -380,10 +379,10 @@ public class WifiVendorHal {
         }
     }
 
-    private long getNecessaryCapabilitiesForSoftApMode(@SoftApConfiguration.BandType int band) {
-        long caps = HalDeviceManager.CHIP_CAPABILITY_ANY;
+    private BitSet getNecessaryCapabilitiesForSoftApMode(@SoftApConfiguration.BandType int band) {
+        BitSet caps = new BitSet();
         if ((band & SoftApConfiguration.BAND_60GHZ) != 0) {
-            caps |= WifiManager.WIFI_FEATURE_INFRA_60G;
+            caps.set(WifiManager.WIFI_FEATURE_INFRA_60G);
         }
         return caps;
     }
@@ -795,7 +794,7 @@ public class WifiVendorHal {
         final PackageManager pm = sContext.getPackageManager();
         for (Pair pair: sSystemFeatureCapabilityTranslation) {
             if (pm.hasSystemFeature((String) pair.second)) {
-                featureSet.set(getCapabilityIndex((long) pair.first));
+                featureSet.set((int) pair.first);
             }
         }
         enter("System feature set: %").c(featureSet.toString()).flush();
@@ -898,28 +897,27 @@ public class WifiVendorHal {
                 featureSet.or(iface.getCapabilities());
                 if (mHalDeviceManager.is24g5gDbsSupported(iface)
                         || mHalDeviceManager.is5g6gDbsSupported(iface)) {
-                    featureSet.set(
-                            getCapabilityIndex(WifiManager.WIFI_FEATURE_DUAL_BAND_SIMULTANEOUS));
+                    featureSet.set(WifiManager.WIFI_FEATURE_DUAL_BAND_SIMULTANEOUS);
                 }
             }
         }
 
         if (mWifiGlobals.isWpa3SaeH2eSupported()) {
-            featureSet.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_SAE_H2E));
+            featureSet.set(WifiManager.WIFI_FEATURE_SAE_H2E);
         }
 
         Set<Integer> supportedIfaceTypes = mHalDeviceManager.getSupportedIfaceTypes();
         if (supportedIfaceTypes.contains(WifiChip.IFACE_TYPE_STA)) {
-            featureSet.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_INFRA));
+            featureSet.set(WifiManager.WIFI_FEATURE_INFRA);
         }
         if (supportedIfaceTypes.contains(WifiChip.IFACE_TYPE_AP)) {
-            featureSet.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_MOBILE_HOTSPOT));
+            featureSet.set(WifiManager.WIFI_FEATURE_MOBILE_HOTSPOT);
         }
         if (supportedIfaceTypes.contains(WifiChip.IFACE_TYPE_P2P)) {
-            featureSet.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_P2P));
+            featureSet.set(WifiManager.WIFI_FEATURE_P2P);
         }
         if (supportedIfaceTypes.contains(WifiChip.IFACE_TYPE_NAN)) {
-            featureSet.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_AWARE));
+            featureSet.set(WifiManager.WIFI_FEATURE_AWARE);
         }
 
         return featureSet;

@@ -650,8 +650,9 @@ public class CoexUtils {
         public CoexCellChannel(@Annotation.NetworkType int rat, int band,
                 int downlinkFreqKhz, int downlinkBandwidthKhz,
                 int uplinkFreqKhz, int uplinkBandwidthKhz, int subId) {
-            if (band < 1 || band > 261) {
-                Log.wtf(TAG, "Band is " + band + " but should be a value from 1 to 261");
+            if ((band < 1 || band > 261) && band != PhysicalChannelConfig.BAND_UNKNOWN) {
+                Log.wtf(TAG, "Band is " + band + " but should be a value from 1 to 261"
+                        + " or PhysicalChannelConfig.BAND_UNKNOWN");
             }
             if (downlinkFreqKhz < 0 && downlinkFreqKhz != PhysicalChannelConfig.FREQUENCY_UNKNOWN) {
                 Log.wtf(TAG, "Downlink frequency is " + downlinkFreqKhz + " but should be >= 0"

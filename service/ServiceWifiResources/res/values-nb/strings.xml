@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Til:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Skriv inn påkrevd PIN-kode:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Enhetstilkobling"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Enhetstilkobling"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Invitasjonen er sendt til <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Skriv inn denne PIN-koden på <xliff:g id="DEVICE_NAME">%1$s</xliff:g> for å koble til."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"OK"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Enhetstilkobling"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Enhetstilkobling"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Enhetstilkobling"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> vil koble til enheten din."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Skriv inn PIN-koden som vises på <xliff:g id="DEVICE_NAME">%1$s</xliff:g>, for å koble til."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> vil koble til enheten din med den følgende PIN-koden."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} vil koble til enheten din. Godta om {countdown} sekund.}other{{device} vil koble til enheten din. Godta om {countdown} sekunder.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Skriv inn PIN-koden som vises på {device}, innen {countdown} sekund for å koble til.}other{Skriv inn PIN-koden som vises på {device}, innen {countdown} sekunder for å koble til.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} vil koble til enheten din med den følgende PIN-koden. Godta om {countdown} sekund.}other{{device} vil koble til enheten din med den følgende PIN-koden. Godta om {countdown} sekunder.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Koble til"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Avbryt"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN-kode"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN-kode"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Enheten din blir midlertidig koblet fra wifi mens den er koblet til <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"OK"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Kan ikke koble til <xliff:g id="SSID">%1$s</xliff:g>"</string>

@@ -41,6 +41,7 @@ public class SoftApInfoTest {
     private static final int TEST_BANDWIDTH = SoftApInfo.CHANNEL_WIDTH_20MHZ;
     private static final int TEST_WIFI_STANDARD = ScanResult.WIFI_STANDARD_LEGACY;
     private static final MacAddress TEST_AP_MAC = MacAddress.fromString("aa:bb:cc:dd:ee:ff");
+    private static final MacAddress TEST_MLD_MAC = MacAddress.fromString("11:22:33:44:55:66");
     private static final long TEST_SHUTDOWN_TIMEOUT_MILLIS = 100_000;
     private static final List<OuiKeyedData> TEST_VENDOR_DATA =
             OuiKeyedDataUtil.createTestOuiKeyedDataList(5);
@@ -56,6 +57,7 @@ public class SoftApInfoTest {
         info.setBssid(TEST_AP_MAC);
         info.setWifiStandard(TEST_WIFI_STANDARD);
         info.setApInstanceIdentifier(TEST_AP_INSTANCE);
+        info.setMldAddress(TEST_MLD_MAC);
         if (SdkLevel.isAtLeastV()) {
             info.setVendorData(TEST_VENDOR_DATA);
         }
@@ -77,6 +79,7 @@ public class SoftApInfoTest {
         info.setBssid(TEST_AP_MAC);
         info.setWifiStandard(TEST_WIFI_STANDARD);
         info.setApInstanceIdentifier(TEST_AP_INSTANCE);
+        info.setMldAddress(TEST_MLD_MAC);
         if (SdkLevel.isAtLeastV()) {
             info.setVendorData(TEST_VENDOR_DATA);
         }
@@ -112,6 +115,7 @@ public class SoftApInfoTest {
         if (SdkLevel.isAtLeastV()) {
             assertNotNull(info.getVendorData());
         }
+        assertEquals(info.getMldAddress(), null);
     }
 
     /**
@@ -126,6 +130,7 @@ public class SoftApInfoTest {
         info.setWifiStandard(TEST_WIFI_STANDARD);
         info.setApInstanceIdentifier(TEST_AP_INSTANCE);
         info.setAutoShutdownTimeoutMillis(TEST_SHUTDOWN_TIMEOUT_MILLIS);
+        info.setMldAddress(TEST_MLD_MAC);
         assertEquals(info.getFrequency(), TEST_FREQUENCY);
         assertEquals(info.getBandwidth(), TEST_BANDWIDTH);
         if (SdkLevel.isAtLeastS()) {
@@ -138,6 +143,7 @@ public class SoftApInfoTest {
             info.setVendorData(TEST_VENDOR_DATA);
             assertTrue(TEST_VENDOR_DATA.equals(info.getVendorData()));
         }
+        assertEquals(info.getMldAddress(), TEST_MLD_MAC);
     }
 
 }

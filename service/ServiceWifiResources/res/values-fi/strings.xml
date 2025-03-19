@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Kohde:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Kirjoita pyydetty PIN-koodi:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN-koodi:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Laitteen yhteys"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Laitteen yhteys"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Kutsu lähetetty seuraavalle henkilölle: <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Lisää tämä PIN-koodi laitteeseen (<xliff:g id="DEVICE_NAME">%1$s</xliff:g>), jotta voit yhdistää sen."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"OK"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Laitteen yhteys"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Laitteen yhteys"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Laitteen yhteys"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> haluaa yhdistää laitteeseen."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Yhdistä lisäämällä PIN-koodi, joka näkyy laitteessa <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> haluaa yhdistää laitteeseen seuraavalla PIN-koodilla."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} haluaa yhdistää laitteeseen. Hyväksy {countdown} sekunnissa.}other{{device} haluaa yhdistää laitteeseen. Hyväksy {countdown} sekunnissa.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Yhdistä laitteeseen lisäämällä laitteessa ({device}) näkyvä PIN-koodi {countdown} sekunnin kuluessa.}other{Yhdistä laitteeseen ({device}) lisäämällä PIN-koodi {countdown} sekunnin kuluessa.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} haluaa yhdistää laitteeseen seuraavalla PIN-koodilla. Hyväksy {countdown} sekunnissa.}other{{device} haluaa yhdistää laitteeseen seuraavalla PIN-koodilla. Hyväksy {countdown} sekunnissa.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Yhdistä"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Peru"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Laitteen Wi-Fi-yhteys katkeaa tilapäisesti, kun siihen on yhdistetty <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"OK"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Verkkoon <xliff:g id="SSID">%1$s</xliff:g> ei saada yhteyttä"</string>

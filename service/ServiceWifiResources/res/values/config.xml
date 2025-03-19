@@ -1060,6 +1060,8 @@
     <!-- Indicate the time in milliseconds to wait before auto-cancelling a P2P invitation received
          dialog that the user has not responded to. A value of 0 indicates no timeout. -->
     <integer translatable="false" name="config_p2pInvitationReceivedDialogTimeoutMs">0</integer>
+    <!-- Whether to show the timeout in the P2P invitation received dialog -->
+    <bool translatable="false" name="config_p2pInvitationReceivedDialogShowRemainingTime">true</bool>
     <!-- Indicates whether or not to play a notification sound upon displaying a P2P invitation
          received dialog that the user has not responded to. If the device is in vibrate mode, then
          the device will vibrate instead of playing a sound. -->
@@ -1107,6 +1109,14 @@
     <!-- list of package names that the framework will allow to use P2P/Aware concurrency. If this
          list is empty, then all packages are allowed -->
     <string-array translatable="false" name="config_wifiP2pAwareConcurrencyAllowlist">
+        <!-- Below is a sample configuration for this list:
+        <item>com.company1.example.test.name1</item>
+        <item>com.company2.example.test.name2</item>
+        -->
+    </string-array>
+    <!-- list of package names that the framework will allow to use SoftAp/Aware concurrency. If
+         this list is empty, then all packages are allowed -->
+    <string-array translatable="false" name="config_wifiSoftApAwareConcurrencyAllowlist">
         <!-- Below is a sample configuration for this list:
         <item>com.company1.example.test.name1</item>
         <item>com.company2.example.test.name2</item>
@@ -1344,7 +1354,19 @@
         -->
     </integer-array>
 
-    <!-- Wi-Fi chip supports single link MLO SoftAp instances in the bridged mode -->
+
+    <!-- integer indicating the maximum number of MLDs supported for multi-link operation (MLO)
+         SoftAp. Each multi-link device (AP MLD) can be operated with multiple links or single link.
+         It is required to configure it at least 1 for multiple links MLO SoftAp. Default value 0 is
+         treated as device does NOT support multiple links MLO SoftAp and the maximum
+         number of MLDs is decided by configuration, config_wifiSoftApSingleLinkMloInBridgedModeSupported.
+         (i.e. 2 when config_wifiSoftApSingleLinkMloInBridgedModeSupported is true and 1 when
+         config_wifiSoftApSingleLinkMloInBridgedModeSupported is false.)
+         -->
+    <integer translatable="false" name="config_wifiSoftApMaxNumberMLDSupported">0</integer>
+
+    <!-- (Deprecated) Wi-Fi chip supports single link MLO SoftAp instances in the bridged mode.
+         The value will be used only when config_wifiSoftApMaxNumberMLDSupported isn't configured -->
     <bool translatable="false" name="config_wifiSoftApSingleLinkMloInBridgedModeSupported">false</bool>
 
     <!-- Boolean indicating whether Target Wake Time (TWT) feature is supported or not. This flag
@@ -1364,7 +1386,11 @@
          feature are included in the array by default.
      -->
     <integer-array translatable="false" name="config_wifiDelayedSelectionCarrierIds">
-        <item>2032</item>
+
+        <!-- Below is a sample configuration for this list:
+        <item>1234</item>
+        <item>5678</item>
+        -->
     </integer-array>
 
     <!-- Delay time in milliseconds for delayed carrier network selection.
@@ -1374,8 +1400,19 @@
 
     <!-- Boolean indicating whether the device supports Wi-Fi Alliance WPA3 Specification
          version 3.3 Section 14 - RSN Overriding.
-         Enabling this config allows framework to parse the RSNO IE and RSNO2 IE.
-         Only enable this flag if Supplicant and driver/firmware supports RSN Overriding. otherwise
-         the connection may fail or downgrade to WPA2 -->
+         Enabling this config allows framework to parse the RSNO IE and RSNO2 IE on devices running
+         Supplicant AIDL interface version lower than 4. Only enable this flag if Supplicant and
+         driver/firmware supports RSN Overriding. otherwise the connection may fail or downgrade to
+         WPA2.
+         If the device is running the AIDL interface version 4 or later, this config item has
+         no effect. The feature will be enabled/disabled based on the chip capability for RSN
+         Overriding advertised via Supplicant AIDL wpa driver capability interface -->
     <bool translatable="false" name ="config_wifiRsnOverridingEnabled">false</bool>
+
+    <!-- Boolean indicating whether to trigger bugreport for WiFi subsystem restart issue -->
+    <bool translatable="false" name ="config_wifi_subsystem_restart_bugreport_enabled">true</bool>
+
+    <!-- Boolean indicating whether to use the common nl80211 implementation of the WiFi Hal. This
+         will be used instead of the AIDL or HIDL implementation if enabled. -->
+    <bool translatable="false" name="config_wifiNl80211HalEnabled">false</bool>
 </resources>

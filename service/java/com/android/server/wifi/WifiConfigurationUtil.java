@@ -515,7 +515,10 @@ public class WifiConfigurationUtil {
         return true;
     }
 
-    private static boolean validatePassword(String password, boolean isAdd, boolean isSae,
+    /**
+     * Checks that a password is formatted correctly.
+     */
+    public static boolean validatePassword(String password, boolean isAdd, boolean isSae,
             boolean isWapi) {
         if (isAdd) {
             if (password == null) {
@@ -753,7 +756,7 @@ public class WifiConfigurationUtil {
      *              update could contain only the fields that are being changed.
      * @return true if the parameters are valid, false otherwise.
      */
-    public static boolean validate(WifiConfiguration config, long supportedFeatureSet,
+    public static boolean validate(WifiConfiguration config, BitSet supportedFeatureSet,
             boolean isAdd) {
         if (!validateSsid(config.SSID, isAdd)) {
             return false;
@@ -799,7 +802,7 @@ public class WifiConfigurationUtil {
             return false;
         }
         if (config.isSecurityType(WifiConfiguration.SECURITY_TYPE_DPP)
-                && (supportedFeatureSet & WifiManager.WIFI_FEATURE_DPP_AKM) == 0) {
+                && !supportedFeatureSet.get(WifiManager.WIFI_FEATURE_DPP_AKM)) {
             Log.e(TAG, "DPP AKM is not supported");
             return false;
         }
@@ -1182,14 +1185,14 @@ public class WifiConfigurationUtil {
     }
 
     private static boolean isSecurityParamsSupported(SecurityParams params) {
-        final long wifiFeatures = WifiInjector.getInstance()
+        final BitSet wifiFeatures = WifiInjector.getInstance()
                 .getActiveModeWarden().getPrimaryClientModeManager()
                 .getSupportedFeatures();
         switch (params.getSecurityType()) {
             case WifiConfiguration.SECURITY_TYPE_SAE:
-                return 0 != (wifiFeatures & WifiManager.WIFI_FEATURE_WPA3_SAE);
+                return wifiFeatures.get(WifiManager.WIFI_FEATURE_WPA3_SAE);
             case WifiConfiguration.SECURITY_TYPE_OWE:
-                return 0 != (wifiFeatures & WifiManager.WIFI_FEATURE_OWE);
+                return wifiFeatures.get(WifiManager.WIFI_FEATURE_OWE);
         }
         return true;
     }

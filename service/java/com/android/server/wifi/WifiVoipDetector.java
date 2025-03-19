@@ -181,6 +181,7 @@ public class WifiVoipDetector {
                 log = "Failed to set Voip Mode to " + newMode + " (maybe not supported?)";
             } else {
                 mCurrentMode = newMode;
+                mWifiInjector.getWifiMetrics().setVoipMode(mCurrentMode);
             }
             mLocalLog.log(log);
             if (mVerboseLoggingEnabled) {

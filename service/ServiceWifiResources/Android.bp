@@ -35,6 +35,7 @@ android_app {
         "test_com.android.wifi",
     ],
     certificate: ":com.android.wifi.resources.certificate",
+    updatable: true,
 }
 
 android_app_certificate {

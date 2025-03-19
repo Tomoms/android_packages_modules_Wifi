@@ -17,11 +17,17 @@
 package com.google.snippet.wifi.aware;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.net.MacAddress;
 import android.net.wifi.aware.AttachCallback;
 import android.net.wifi.aware.Characteristics;
 import android.net.wifi.aware.DiscoverySession;
 import android.net.wifi.aware.DiscoverySessionCallback;
+import android.net.wifi.aware.IdentityChangedListener;
 import android.net.wifi.aware.PeerHandle;
 import android.net.wifi.aware.PublishConfig;
 import android.net.wifi.aware.PublishDiscoverySession;
@@ -31,11 +37,13 @@ import android.net.wifi.aware.SubscribeDiscoverySession;
 import android.net.wifi.aware.WifiAwareManager;
 import android.net.wifi.aware.WifiAwareNetworkSpecifier;
 import android.net.wifi.aware.WifiAwareSession;
+import android.net.wifi.rtt.RangingRequest;
+import android.net.wifi.rtt.RangingResult;
+import android.net.wifi.rtt.RangingResultCallback;
+import android.net.wifi.rtt.WifiRttManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Parcel;
-import android.util.Base64;
 
 import androidx.annotation.NonNull;
 import androidx.test.core.app.ApplicationProvider;
@@ -45,14 +53,15 @@ import com.google.android.mobly.snippet.event.EventCache;
 import com.google.android.mobly.snippet.event.SnippetEvent;
 import com.google.android.mobly.snippet.rpc.AsyncRpc;
 import com.google.android.mobly.snippet.rpc.Rpc;
+import com.google.android.mobly.snippet.rpc.RpcOptional;
 import com.google.android.mobly.snippet.util.Log;
 
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Snippet class for exposing {@link WifiAwareManager} APIs.
@@ -60,14 +69,22 @@ import java.util.Map;
 public class WifiAwareManagerSnippet implements Snippet {
     private final Context mContext;
     private final WifiAwareManager mWifiAwareManager;
+    private final WifiRttManager mWifiRttManager;
     private final Handler mHandler;
     // WifiAwareSession will be initialized after attach.
-    private final Map<String, WifiAwareSession> mAttachSessions = new HashMap<>();
+    private final ConcurrentHashMap<String, WifiAwareSession> mAttachSessions =
+            new ConcurrentHashMap<>();
     // DiscoverySession will be initialized after publish or subscribe
-    private final Map<String, DiscoverySession> mDiscoverySessions = new HashMap<>();
-    private final Map<Integer, PeerHandle> mPeerHandles = new HashMap<>();
-    private final Object mLock = new Object();
+    private final ConcurrentHashMap<String, DiscoverySession> mDiscoverySessions =
+            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, PeerHandle> mPeerHandles = new ConcurrentHashMap<>();
+    private final EventCache eventCache = EventCache.getInstance();
+    private WifiAwareStateChangedReceiver stateChangedReceiver;
 
+    /**
+     * Custom exception class for handling specific errors related to the WifiAwareManagerSnippet
+     * operations.
+     */
     private static class WifiAwareManagerSnippetException extends Exception {
         WifiAwareManagerSnippetException(String msg) {
             super(msg);
@@ -78,22 +95,63 @@ public class WifiAwareManagerSnippet implements Snippet {
         mContext = ApplicationProvider.getApplicationContext();
         PermissionUtils.checkPermissions(mContext, Manifest.permission.ACCESS_WIFI_STATE,
                 Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.NEARBY_WIFI_DEVICES);
+                Manifest.permission.NEARBY_WIFI_DEVICES
+        );
         mWifiAwareManager = mContext.getSystemService(WifiAwareManager.class);
         checkWifiAwareManager();
+        mWifiRttManager = mContext.getSystemService(WifiRttManager.class);
         HandlerThread handlerThread = new HandlerThread("Snippet-Aware");
         handlerThread.start();
         mHandler = new Handler(handlerThread.getLooper());
     }
 
     /**
+     * Returns whether Wi-Fi Aware is supported.
+     */
+    @Rpc(description = "Is Wi-Fi Aware supported.")
+    public boolean wifiAwareIsSupported() {
+        return mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE);
+    }
+
+    /**
+     * Returns whether Wi-Fi RTT is supported.
+     */
+    @Rpc(description = "Is Wi-Fi RTT supported.")
+    public boolean wifiAwareIsRttSupported() {
+        return mContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_RTT);
+    }
+
+    /**
      * Use {@link WifiAwareManager#attach(AttachCallback, Handler)} to attach to the Wi-Fi Aware.
+     *
      * @param callbackId Assigned automatically by mobly. Also will be used as Attach session id for
      *                   further operations
      */
-    @AsyncRpc(description = "Attach to the Wi-Fi Aware service - enabling the application to "
-            + "create discovery sessions or publish or subscribe to services.")
-    public void wifiAwareAttach(String callbackId) throws WifiAwareManagerSnippetException {
+    @AsyncRpc(
+            description = "Attach to the Wi-Fi Aware service - enabling the application to "
+                    + "create discovery sessions or publish or subscribe to services."
+    )
+    public void wifiAwareAttach(String callbackId) {
+        attach(callbackId, false);
+    }
+
+    /**
+     * Use {@link WifiAwareManager#attach(AttachCallback, Handler)} to attach to the Wi-Fi Aware.
+     *
+     * @param callbackId Assigned automatically by mobly. Also will be used as Attach session id for
+     *                   further operations
+     * @param identityCb If true, the application will be notified of changes to the device's
+     */
+    @AsyncRpc(
+            description = "Attach to the Wi-Fi Aware service - enabling the application to "
+                    + "create discovery sessions or publish or subscribe to services."
+    )
+    public void wifiAwareAttached(String callbackId, boolean identityCb)
+            throws WifiAwareManagerSnippetException {
+        attach(callbackId, identityCb);
+    }
+
+    private void attach(String callbackId, boolean identityCb) {
         AttachCallback attachCallback = new AttachCallback() {
             @Override
             public void onAttachFailed() {
@@ -104,20 +162,87 @@ public class WifiAwareManagerSnippet implements Snippet {
             @Override
             public void onAttached(WifiAwareSession session) {
                 super.onAttached(session);
+                mAttachSessions.put(callbackId, session);
                 sendEvent(callbackId, "onAttached");
-                synchronized (mLock) {
-                    mAttachSessions.put(callbackId, session);
-                }
+
             }
 
             @Override
             public void onAwareSessionTerminated() {
                 super.onAwareSessionTerminated();
-                wifiAwareDetach(callbackId);
+                mAttachSessions.remove(callbackId);
                 sendEvent(callbackId, "onAwareSessionTerminated");
             }
         };
-        mWifiAwareManager.attach(attachCallback, mHandler);
+        if (identityCb) {
+            mWifiAwareManager.attach(attachCallback,
+                    new AwareIdentityChangeListenerPostsEvents(eventCache, callbackId), mHandler
+            );
+        } else {
+            mWifiAwareManager.attach(attachCallback, mHandler);
+        }
+
+    }
+
+    private static class AwareIdentityChangeListenerPostsEvents extends IdentityChangedListener {
+        private final EventCache eventCache;
+        private final String callbackId;
+
+        public AwareIdentityChangeListenerPostsEvents(EventCache eventCache, String callbackId) {
+            this.eventCache = eventCache;
+            this.callbackId = callbackId;
+        }
+
+        @Override
+        public void onIdentityChanged(byte[] mac) {
+            SnippetEvent event = new SnippetEvent(callbackId, "WifiAwareAttachOnIdentityChanged");
+            event.getData().putLong("timestampMs", System.currentTimeMillis());
+            event.getData().putString("mac", MacAddress.fromBytes(mac).toString());
+            eventCache.postEvent(event);
+            Log.d("WifiAwareattach identity changed called for WifiAwareAttachOnIdentityChanged");
+        }
+    }
+
+    /**
+     * Starts listening for wifiAware state change related broadcasts.
+     *
+     * @param callbackId the callback id
+     */
+    @AsyncRpc(description = "Start listening for wifiAware state change related broadcasts.")
+    public void wifiAwareMonitorStateChange(String callbackId) {
+        stateChangedReceiver = new WifiAwareStateChangedReceiver(eventCache, callbackId);
+        IntentFilter filter = new IntentFilter(WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED);
+        mContext.registerReceiver(stateChangedReceiver, filter);
+    }
+
+    /**
+     * Stops listening for wifiAware state change related broadcasts.
+     */
+    @Rpc(description = "Stop listening for wifiAware state change related broadcasts.")
+    public void wifiAwareMonitorStopStateChange() {
+        if (stateChangedReceiver != null) {
+            mContext.unregisterReceiver(stateChangedReceiver);
+            stateChangedReceiver = null;
+        }
+    }
+
+    class WifiAwareStateChangedReceiver extends BroadcastReceiver {
+        private final EventCache eventCache;
+        private final String callbackId;
+
+        public WifiAwareStateChangedReceiver(EventCache eventCache, String callbackId) {
+            this.eventCache = eventCache;
+            this.callbackId = callbackId;
+        }
+
+        @Override
+        public void onReceive(Context c, Intent intent) {
+            boolean isAvailable = mWifiAwareManager.isAvailable();
+            SnippetEvent event = new SnippetEvent(callbackId,
+                    "WifiAwareState" + (isAvailable ? "Available" : "NotAvailable")
+            );
+            eventCache.postEvent(event);
+        }
     }
 
     /**
@@ -127,9 +252,8 @@ public class WifiAwareManagerSnippet implements Snippet {
      */
     @Rpc(description = "Detach from the Wi-Fi Aware service.")
     public void wifiAwareDetach(String sessionId) {
-        synchronized (mLock) {
-            WifiAwareSession session = mAttachSessions.remove(sessionId);
-            if (session == null) return;
+        WifiAwareSession session = mAttachSessions.remove(sessionId);
+        if (session != null) {
             session.close();
         }
 
@@ -137,12 +261,12 @@ public class WifiAwareManagerSnippet implements Snippet {
 
     /**
      * Check if Wi-Fi Aware is attached.
+     *
+     * @param sessionId The Id of the Aware attached event callback id
      */
     @Rpc(description = "Check if Wi-Fi aware is attached")
-    public boolean wifiAwareIsSessionAttached() {
-        synchronized (mLock) {
-            return !mAttachSessions.isEmpty();
-        }
+    public boolean wifiAwareIsSessionAttached(String sessionId) {
+        return !mAttachSessions.isEmpty() && mAttachSessions.containsKey(sessionId);
     }
 
     /**
@@ -170,6 +294,24 @@ public class WifiAwareManagerSnippet implements Snippet {
     private void checkWifiAwareManager() throws WifiAwareManagerSnippetException {
         if (mWifiAwareManager == null) {
             throw new WifiAwareManagerSnippetException("Device does not support Wi-Fi Aware.");
+        }
+    }
+
+    /**
+     * Checks if Wi-Fi RTT Manager has been set.
+     */
+    private void checkWifiRttManager() throws WifiAwareManagerSnippetException {
+        if (mWifiRttManager == null) {
+            throw new WifiAwareManagerSnippetException("Device does not support Wi-Fi Rtt.");
+        }
+    }
+
+    /**
+     * Checks if Wi-Fi RTT is available.
+     */
+    private void checkWifiRttAvailable() throws WifiAwareManagerSnippetException {
+        if (!mWifiRttManager.isAvailable()) {
+            throw new WifiAwareManagerSnippetException("WiFi RTT is not available now.");
         }
     }
 
@@ -234,9 +376,7 @@ public class WifiAwareManagerSnippet implements Snippet {
 
         @Override
         public void onSessionConfigFailed() {
-            SnippetEvent snippetEvent = new SnippetEvent(mCallBackId, "discoveryResult");
-            snippetEvent.getData().putString("callbackName", "onSessionConfigFailed");
-            EventCache.getInstance().postEvent(snippetEvent);
+            sendEvent(mCallBackId, "onSessionConfigFailed");
         }
 
         @Override
@@ -245,32 +385,22 @@ public class WifiAwareManagerSnippet implements Snippet {
         }
 
         @Override
-        public void onServiceDiscovered(PeerHandle peerHandle, byte[] serviceSpecificInfo,
-                                        List<byte[]> matchFilter) {
-            mPeerHandles.put(peerHandle.hashCode(), peerHandle);
-            SnippetEvent event = new SnippetEvent(mCallBackId, "onServiceDiscovered");
-            event.getData().putByteArray("serviceSpecificInfo", serviceSpecificInfo);
-            event.getData().putInt("peerId", peerHandle.hashCode());
-            putMatchFilterData(matchFilter, event);
-            EventCache.getInstance().postEvent(event);
-        }
-
-        @Override
         public void onServiceDiscovered(ServiceDiscoveryInfo info) {
             mPeerHandles.put(info.getPeerHandle().hashCode(), info.getPeerHandle());
-            List<byte[]> matchFilter = info.getMatchFilters();
             SnippetEvent event = new SnippetEvent(mCallBackId, "onServiceDiscovered");
             event.getData().putByteArray("serviceSpecificInfo", info.getServiceSpecificInfo());
             event.getData().putString("pairedAlias", info.getPairedAlias());
             event.getData().putInt("peerId", info.getPeerHandle().hashCode());
+            List<byte[]> matchFilter = info.getMatchFilters();
             putMatchFilterData(matchFilter, event);
             EventCache.getInstance().postEvent(event);
         }
 
         @Override
-        public void onServiceDiscoveredWithinRange(PeerHandle peerHandle,
-                                                   byte[] serviceSpecificInfo,
-                                                   List<byte[]> matchFilter, int distanceMm) {
+        public void onServiceDiscoveredWithinRange(
+                PeerHandle peerHandle, byte[] serviceSpecificInfo, List<byte[]> matchFilter,
+                int distanceMm
+        ) {
             mPeerHandles.put(peerHandle.hashCode(), peerHandle);
             SnippetEvent event = new SnippetEvent(mCallBackId, "onServiceDiscoveredWithinRange");
             event.getData().putByteArray("serviceSpecificInfo", serviceSpecificInfo);
@@ -330,7 +460,8 @@ public class WifiAwareManagerSnippet implements Snippet {
 
         @Override
         public void onPairingVerificationSucceed(
-                @NonNull PeerHandle peerHandle, @NonNull String alias) {
+                @NonNull PeerHandle peerHandle, @NonNull String alias
+        ) {
             super.onPairingVerificationSucceed(peerHandle, alias);
             SnippetEvent event = new SnippetEvent(mCallBackId, "onPairingVerificationSucceed");
             event.getData().putString("pairedAlias", alias);
@@ -359,39 +490,46 @@ public class WifiAwareManagerSnippet implements Snippet {
             event.getData().putInt("peerId", peerHandle.hashCode());
             EventCache.getInstance().postEvent(event);
         }
+
+        @Override
+        public void onServiceLost(PeerHandle peerHandle, int reason) {
+            SnippetEvent event = new SnippetEvent(mCallBackId, "WifiAwareSessionOnServiceLost");
+            event.getData().putString("discoverySessionId", mCallBackId);
+            event.getData().putInt("peerId", peerHandle.hashCode());
+            event.getData().putInt("lostReason", reason);
+            EventCache.getInstance().postEvent(event);
+        }
     }
 
     private WifiAwareSession getWifiAwareSession(String sessionId)
             throws WifiAwareManagerSnippetException {
-        synchronized (mLock) {
-            WifiAwareSession session = mAttachSessions.get(sessionId);
-            if (session == null) {
-                throw new WifiAwareManagerSnippetException(
-                        "Wi-Fi Aware session is not attached. Please call wifiAwareAttach first.");
-            }
-            return session;
+        WifiAwareSession session = mAttachSessions.get(sessionId);
+        if (session == null) {
+            throw new WifiAwareManagerSnippetException(
+                    "Wi-Fi Aware session is not attached. Please call wifiAwareAttach first.");
         }
+        return session;
     }
 
 
     /**
-     * Creates a new Aware subscribe discovery session.
-     * For Android T and later, this method requires NEARBY_WIFI_DEVICES permission and user
-     * permission flag "neverForLocation". For earlier versions, this method requires
-     * NEARBY_WIFI_DEVICES and ACCESS_FINE_LOCATION permissions.
+     * Creates a new Aware subscribe discovery session. For Android T and later, this method
+     * requires NEARBY_WIFI_DEVICES permission and user permission flag "neverForLocation". For
+     * earlier versions, this method requires NEARBY_WIFI_DEVICES and ACCESS_FINE_LOCATION
+     * permissions.
      *
      * @param sessionId       The Id of the Aware attach session, should be the callbackId from
      *                        {@link #wifiAwareAttach(String)}
      * @param callbackId      Assigned automatically by mobly. Also will be used as discovery
      *                        session id for further operations
-     * @param subscribeConfig Defines the subscription configuration via
-     *                        WifiAwareJsonDeserializer.
+     * @param subscribeConfig Defines the subscription configuration via WifiAwareJsonDeserializer.
      */
     @AsyncRpc(
-            description = "Create a Wi-Fi Aware subscribe discovery session and handle callbacks.")
-    public void wifiAwareSubscribe(String callbackId, String sessionId,
-            SubscribeConfig subscribeConfig) throws JSONException,
-            WifiAwareManagerSnippetException {
+            description = "Create a Wi-Fi Aware subscribe discovery session and handle callbacks."
+    )
+    public void wifiAwareSubscribe(
+            String callbackId, String sessionId, SubscribeConfig subscribeConfig
+    ) throws JSONException, WifiAwareManagerSnippetException {
         WifiAwareSession session = getWifiAwareSession(sessionId);
         Log.v("Creating a new Aware subscribe session with config: " + subscribeConfig.toString());
         WifiAwareDiscoverySessionCallback myDiscoverySessionCallback =
@@ -400,15 +538,14 @@ public class WifiAwareManagerSnippet implements Snippet {
     }
 
     /**
-     * Creates a new Aware publish discovery session.
-     * Requires NEARBY_WIFI_DEVICES (with neverForLocation) or ACCESS_FINE_LOCATION for Android
-     * TIRAMISU+.
-     * ACCESS_FINE_LOCATION is required for earlier versions.
+     * Creates a new Aware publish discovery session. Requires NEARBY_WIFI_DEVICES (with
+     * neverForLocation) or ACCESS_FINE_LOCATION for Android TIRAMISU+. ACCESS_FINE_LOCATION is
+     * required for earlier versions.
      *
      * @param sessionId     The Id of the Aware attach session, should be the callbackId from
      *                      {@link #wifiAwareAttach(String)}
-     * @param callbackId    Assigned automatically by mobly. Also will be used as discovery
-     *                      session id for further operations
+     * @param callbackId    Assigned automatically by mobly. Also will be used as discovery session
+     *                      id for further operations
      * @param publishConfig Defines the publish configuration via WifiAwareJsonDeserializer.
      */
     @AsyncRpc(description = "Create a Wi-Fi Aware publish discovery session and handle callbacks.")
@@ -424,7 +561,9 @@ public class WifiAwareManagerSnippet implements Snippet {
     private PeerHandle getPeerHandler(int peerId) throws WifiAwareManagerSnippetException {
         PeerHandle handle = mPeerHandles.get(peerId);
         if (handle == null) {
-            throw new WifiAwareManagerSnippetException("Please call publish or subscribe method");
+            throw new WifiAwareManagerSnippetException(
+                    "GetPeerHandler failed. Please call publish or subscribe method, error "
+                            + "peerId: " + peerId + ", mPeerHandles: " + mPeerHandles);
         }
         return handle;
     }
@@ -433,18 +572,22 @@ public class WifiAwareManagerSnippet implements Snippet {
             throws WifiAwareManagerSnippetException {
         DiscoverySession session = mDiscoverySessions.get(discoverySessionId);
         if (session == null) {
-            throw new WifiAwareManagerSnippetException("Please call publish or subscribe method");
+            throw new WifiAwareManagerSnippetException(
+                    "GetDiscoverySession failed. Please call publish or subscribe method, "
+                            + "error discoverySessionId: " + discoverySessionId
+                            + ", mDiscoverySessions: " + mDiscoverySessions);
         }
         return session;
+
     }
 
     /**
      * Sends a message to a peer using Wi-Fi Aware.
      *
      * <p>This method sends a specified message to a peer device identified by a peer handle
-     * in an ongoing Wi-Fi Aware discovery session. The message is sent asynchronously,
-     * and the method waits for the send status to confirm whether the message was
-     * successfully sent or if any errors occurred.</p>
+     * in an ongoing Wi-Fi Aware discovery session. The message is sent asynchronously, and the
+     * method waits for the send status to confirm whether the message was successfully sent or if
+     * any errors occurred.</p>
      *
      * <p>Before sending the message, this method checks if there is an active discovery
      * session. If there is no active session, it throws a
@@ -456,31 +599,30 @@ public class WifiAwareManagerSnippet implements Snippet {
      * @param messageId          an integer representing the message ID, which is used to track the
      *                           message.
      * @param message            a {@link String} containing the message to be sent.
-     *
-     * @throws WifiAwareManagerSnippetException if there is no active discovery session or
-     *                                          if sending the message fails.
+     * @throws WifiAwareManagerSnippetException if there is no active discovery session or if
+     *                                          sending the message fails.
      * @see android.net.wifi.aware.DiscoverySession#sendMessage
      * @see android.net.wifi.aware.PeerHandle
      * @see java.nio.charset.StandardCharsets#UTF_8
      */
     @Rpc(description = "Send a message to a peer using Wi-Fi Aware.")
-    public void wifiAwareSendMessage(String discoverySessionId, int peerId, int messageId,
-            String message) throws WifiAwareManagerSnippetException {
+    public void wifiAwareSendMessage(
+            String discoverySessionId, int peerId, int messageId, String message
+    ) throws WifiAwareManagerSnippetException {
         // 4. send message & wait for send status
         DiscoverySession session = getDiscoverySession(discoverySessionId);
         PeerHandle handle = getPeerHandler(peerId);
-        session.sendMessage(handle, messageId,
-                message.getBytes(StandardCharsets.UTF_8));
+        session.sendMessage(handle, messageId, message.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      * Closes the current Wi-Fi Aware discovery session if it is active.
      *
      * <p>This method checks if there is an active discovery session. If so,
-     * it closes the session and sets the session object to null. This ensures
-     * that resources are properly released and the session is cleanly terminated.</p>
+     * it closes the session and sets the session object to null. This ensures that resources are
+     * properly released and the session is cleanly terminated.</p>
      *
-     *  @param discoverySessionId The Id of the discovery session
+     * @param discoverySessionId The Id of the discovery session
      */
     @Rpc(description = "Close the current Wi-Fi Aware discovery session.")
     public void wifiAwareCloseDiscoverSession(String discoverySessionId) {
@@ -492,14 +634,11 @@ public class WifiAwareManagerSnippet implements Snippet {
 
     /**
      * Closes all Wi-Fi Aware session if it is active. And clear all cache sessions
-     *
      */
     @Rpc(description = "Close the current Wi-Fi Aware session.")
     public void wifiAwareCloseAllWifiAwareSession() {
-        synchronized (mLock) {
-            for (WifiAwareSession session : mAttachSessions.values()) {
-                session.close();
-            }
+        for (WifiAwareSession session : mAttachSessions.values()) {
+            session.close();
         }
         mAttachSessions.clear();
         mDiscoverySessions.clear();
@@ -511,28 +650,181 @@ public class WifiAwareManagerSnippet implements Snippet {
      *
      * @param discoverySessionId The Id of the discovery session,
      * @param peerId             The Id of the peer handle
+     * @param isAcceptAnyPeer    A boolean value indicating whether the network specifier should
      * @return a {@link String} containing the network specifier encoded as a Base64 string.
-     * @throws JSONException if there is an error parsing the JSON object.
-     * @throws WifiAwareManagerSnippetException if there is an error creating the network specifier.
+     * @throws JSONException                    if there is an error parsing the JSON object.
+     * @throws WifiAwareManagerSnippetException if there is an error creating the network
+     *                                          specifier.
      */
-    @Rpc(description = "Create a network specifier to be used when specifying a Aware network "
-            + "request")
-    public String wifiAwareCreateNetworkSpecifier(String discoverySessionId, int peerId)
-            throws JSONException, WifiAwareManagerSnippetException {
+    @Rpc(
+            description = "Create a network specifier to be used when specifying a Aware network "
+                    + "request"
+    )
+    public String wifiAwareCreateNetworkSpecifier(
+            String discoverySessionId, int peerId, boolean isAcceptAnyPeer,
+            @RpcOptional JSONObject jsonObject
+    ) throws JSONException, WifiAwareManagerSnippetException {
         DiscoverySession session = getDiscoverySession(discoverySessionId);
         PeerHandle handle = getPeerHandler(peerId);
-        WifiAwareNetworkSpecifier.Builder builder = new WifiAwareNetworkSpecifier.Builder(
-                session, handle);
-        WifiAwareNetworkSpecifier specifier = builder.build();
-        // Write the WifiAwareNetworkSpecifier to a Parcel
-        Parcel parcel = Parcel.obtain();
-        specifier.writeToParcel(parcel, 0);
-        // Convert the Parcel data to a byte array
-        byte[] bytes = parcel.marshall();
-        // Release the Parcel object
-        parcel.recycle();
-        // Encode the byte array to a Base64 string
-        return Base64.encodeToString(bytes, Base64.DEFAULT);
+        WifiAwareNetworkSpecifier.Builder builder;
+        if (isAcceptAnyPeer) {
+            builder = new WifiAwareNetworkSpecifier.Builder((PublishDiscoverySession) session);
+        } else {
+            builder = new WifiAwareNetworkSpecifier.Builder(session, handle);
+        }
+        WifiAwareNetworkSpecifier specifier =
+                WifiAwareJsonDeserializer.jsonToNetworkSpecifier(jsonObject, builder);
+        return SerializationUtil.parcelableToString(specifier);
+    }
+
+    @Override
+    public void shutdown() throws Exception {
+        wifiAwareCloseAllWifiAwareSession();
+    }
+
+    /**
+     * Returns the characteristics of the WiFi Aware interface.
+     *
+     * @return WiFi Aware characteristics
+     */
+    @Rpc(description = "Get the characteristics of the WiFi Aware interface.")
+    public Characteristics getCharacteristics() {
+        return mWifiAwareManager.getCharacteristics();
+    }
+
+    /**
+     * Creates a wifiAwareUpdatePublish discovery session. Requires NEARBY_WIFI_DEVICES (with
+     * neverForLocation) or ACCESS_FINE_LOCATION for Android TIRAMISU+. ACCESS_FINE_LOCATION is
+     * required for earlier versions.
+     *
+     * @param sessionId     The Id of the Aware attach session, should be the callbackId from
+     *                      {@link #wifiAwareAttach(String)}
+     * @param publishConfig Defines the publish configuration via WifiAwareJsonDeserializer.
+     */
+    @Rpc(description = "Create a wifiAwareUpdatePublish discovery session and handle callbacks.")
+    public void wifiAwareUpdatePublish(String sessionId, PublishConfig publishConfig)
+            throws JSONException, WifiAwareManagerSnippetException, IllegalArgumentException {
+        DiscoverySession session = getDiscoverySession(sessionId);
+        if (session == null) {
+            throw new IllegalStateException(
+                    "Calling wifiAwareUpdatePublish before session (session ID " + sessionId
+                            + ") is ready");
+        }
+        if (!(session instanceof PublishDiscoverySession)) {
+            throw new IllegalArgumentException(
+                    "Calling wifiAwareUpdatePublish with a subscribe session ID");
+        }
+        Log.v("Updating a  Aware publish session with config: " + publishConfig.toString());
+
+        ((PublishDiscoverySession) session).updatePublish(publishConfig);
+    }
+
+    /**
+     * Creates a wifiAwareUpdateSubscribe discovery session. For Android T and later, this method
+     * requires NEARBY_WIFI_DEVICES permission and user permission flag "neverForLocation". For
+     * earlier versions, this method requires NEARBY_WIFI_DEVICES and ACCESS_FINE_LOCATION
+     * permissions.
+     *
+     * @param sessionId       The Id of the Aware attach session, should be the callbackId from
+     *                        {@link #wifiAwareAttach(String)}
+     * @param subscribeConfig Defines the subscription configuration via WifiAwareJsonDeserializer.
+     */
+    @Rpc(description = "Create a wifiAwareUpdateSubscribe discovery session and handle callbacks.")
+    public void wifiAwareUpdateSubscribe(
+            String sessionId, SubscribeConfig subscribeConfig
+    ) throws JSONException, WifiAwareManagerSnippetException {
+        DiscoverySession session = getDiscoverySession(sessionId);
+        if (session == null) {
+            throw new IllegalStateException(
+                    "Calling wifiAwareUpdateSubscribe before session (session ID " + sessionId
+                            + ") is ready");
+        }
+        if (!(session instanceof SubscribeDiscoverySession)) {
+            throw new IllegalArgumentException(
+                    "Calling wifiAwareUpdateSubscribe with a publish session ID");
+        }
+        Log.v("Creating a wifiAwareUpdateSubscribe session with config: "
+                + subscribeConfig.toString());
+        ((SubscribeDiscoverySession) session).updateSubscribe(subscribeConfig);
+
+    }
+
+    /**
+     * Starts Wi-Fi RTT ranging with Wi-Fi Aware peers.
+     *
+     * @param callbackId        Assigned automatically by mobly for all async RPCs.
+     * @param requestJsonObject The ranging request in JSONObject type for calling {@link
+     *                          android.net.wifi.rtt.WifiRttManager#startRanging startRanging}.
+     */
+    @AsyncRpc(description = "Start Wi-Fi RTT ranging with Wi-Fi Aware peers.")
+    public void wifiAwareStartRanging(
+            String callbackId, JSONObject requestJsonObject
+    ) throws JSONException, WifiAwareManagerSnippetException {
+        checkWifiRttManager();
+        checkWifiRttAvailable();
+        RangingRequest request = WifiAwareJsonDeserializer.jsonToRangingRequest(
+                requestJsonObject, mPeerHandles);
+        Log.v("Starting Wi-Fi RTT ranging with config: " + request.toString());
+        RangingCallback rangingCb = new RangingCallback(eventCache, callbackId);
+        mWifiRttManager.startRanging(request, command -> mHandler.post(command), rangingCb);
+    }
+
+    /**
+     * Ranging result callback class.
+     */
+    private static class RangingCallback extends RangingResultCallback {
+        private static final String EVENT_NAME_RANGING_RESULT = "WifiRttRangingOnRangingResult";
+        private final EventCache mEventCache;
+        private final String mCallbackId;
+
+        RangingCallback(EventCache eventCache, String callbackId) {
+            this.mEventCache = eventCache;
+            this.mCallbackId = callbackId;
+        }
+
+        @Override
+        public void onRangingFailure(int code) {
+            SnippetEvent event = new SnippetEvent(mCallbackId, EVENT_NAME_RANGING_RESULT);
+            event.getData().putString("callbackName", "onRangingFailure");
+            event.getData().putInt("statusCode", code);
+            mEventCache.postEvent(event);
+        }
+
+        @Override
+        public void onRangingResults(List<RangingResult> results) {
+            SnippetEvent event = new SnippetEvent(mCallbackId, EVENT_NAME_RANGING_RESULT);
+            event.getData().putString("callbackName", "onRangingResults");
+
+            Bundle[] resultBundles = new Bundle[results.size()];
+            for (int i = 0; i < results.size(); i++) {
+                RangingResult result = results.get(i);
+                resultBundles[i] = new Bundle();
+                resultBundles[i].putInt("status", result.getStatus());
+                resultBundles[i].putInt("distanceMm", result.getDistanceMm());
+                resultBundles[i].putInt("rssi", result.getRssi());
+                PeerHandle peer = result.getPeerHandle();
+                if (peer != null) {
+                    resultBundles[i].putInt("peerId", peer.hashCode());
+                } else {
+                    resultBundles[i].putBundle("peerId", null);
+                }
+                MacAddress mac = result.getMacAddress();
+                resultBundles[i].putString("mac", mac != null ? mac.toString() : null);
+            }
+            event.getData().putParcelableArray("results", resultBundles);
+            mEventCache.postEvent(event);
+        }
+    }
+
+    /**
+     * Return whether this device supports setting a channel requirement in a data-path request.
+     */
+    @Rpc(
+            description = "Return whether this device supports setting a channel requirement in a "
+                + "data-path request."
+    )
+    public boolean wifiAwareIsSetChannelOnDataPathSupported() {
+        return mWifiAwareManager.isSetChannelOnDataPathSupported();
     }
 
 }

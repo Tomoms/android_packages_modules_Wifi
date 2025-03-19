@@ -18,15 +18,20 @@ package android.net.wifi.p2p;
 
 import static android.net.wifi.p2p.WifiP2pConfig.GROUP_CLIENT_IP_PROVISIONING_MODE_IPV4_DHCP;
 import static android.net.wifi.p2p.WifiP2pConfig.GROUP_CLIENT_IP_PROVISIONING_MODE_IPV6_LINK_LOCAL;
+import static android.net.wifi.p2p.WifiP2pConfig.P2P_VERSION_2;
+import static android.net.wifi.p2p.WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2;
+import static android.net.wifi.p2p.WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_R2_ONLY;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 import android.net.MacAddress;
 import android.net.wifi.OuiKeyedDataUtil;
+import android.net.wifi.util.Environment;
 import android.os.Parcel;
 
 import androidx.test.filters.SmallTest;
@@ -42,6 +47,8 @@ import org.junit.Test;
 public class WifiP2pConfigTest {
 
     private static final String DEVICE_ADDRESS = "aa:bb:cc:dd:ee:ff";
+    private static final String TEST_NETWORK_NAME = "DIRECT-xy-Android";
+    private static final String TEST_PASSPHRASE = "password";
     /**
      * Check network name setter
      */
@@ -108,12 +115,18 @@ public class WifiP2pConfigTest {
     @Test
     public void testBuilderInvalidPassphrase() throws Exception {
         WifiP2pConfig.Builder b = new WifiP2pConfig.Builder();
-
         // sunny case
         try {
-            b.setPassphrase("abcd1234");
+            b.setPassphrase(TEST_PASSPHRASE);
         } catch (IllegalArgumentException e) {
-            fail("Unexpected IllegalArgumentException");
+            throw new AssertionError("the test failed", e);
+        }
+
+        // sunny case - password length of less than 128bytes
+        try {
+            b.setPassphrase("abed");
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError("the test failed", e);
         }
 
         // null string.
@@ -122,11 +135,46 @@ public class WifiP2pConfigTest {
             fail("should throw IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             // expected exception.
+        } catch (NullPointerException e) {
+            // expected exception.
+        }
+
+        // empty string.
+        try {
+            b.setPassphrase("");
+            fail("should throw IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected exception.
+        }
+
+        // Password length of more than 128bytes .
+        try {
+            b.setPassphrase("j7YxZqK2gD5fT8rN9bW6hL0vQ3pO1mK4jU7iY9zX8cV5bN2hG1fS6dJ3kH0g"
+                    + "L9wQ8rP7oM6nN5lK4mJ3iO2uY1tX0zW9vU8hG7fS6eD5cR4baa7YxZqK2gD5fT8rN9"
+                    + "bW6hL0vQ2sweder");
+            fail("should throw IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected exception.
+        }
+
+        WifiP2pConfig.Builder c = new WifiP2pConfig.Builder();
+
+        // sunny case
+        try {
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase(TEST_PASSPHRASE)
+                    .build();
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError("the test failed", e);
         }
 
         // less than 8 characters.
         try {
-            b.setPassphrase("12abcde");
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase("12abide")
+                    .build();
             fail("should throw IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             // expected exception.
@@ -134,11 +182,83 @@ public class WifiP2pConfigTest {
 
         // more than 63 characters.
         try {
-            b.setPassphrase(
-                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+/");
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+                            + "RSTUVWXYZ1234567890+/")
+                    .build();
             fail("should throw IllegalArgumentException");
         } catch (IllegalArgumentException e) {
             // expected exception.
+        }
+    }
+
+    /**
+     * Check Pcc Mode passphrase setter
+     */
+    @Test
+    public void testPccModeBuilderSetterInvalidPassphrase() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+
+        WifiP2pConfig.Builder c = new WifiP2pConfig.Builder();
+
+        // sunny case
+        try {
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase(TEST_PASSPHRASE)
+                    .setPccModeConnectionType(PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2)
+                    .build();
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError("the test failed", e);
+        }
+
+        // more than 63 characters in PCC Mode is not allowed.
+        try {
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+                            + "RSTUVWXYZ1234567890+/")
+                    .setPccModeConnectionType(PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2)
+                    .build();
+            fail("should throw IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected exception.
+        }
+
+        // less than 8 characters in PCC Mode is not allowed.
+        try {
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase("12abcde")
+                    .setPccModeConnectionType(PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2)
+                    .build();
+            fail("should throw IllegalArgumentException");
+        } catch (IllegalArgumentException e) {
+            // expected exception.
+        }
+
+        // less than 8 characters is allowed in R2 only mode.
+        try {
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase("12")
+                    .setPccModeConnectionType(PCC_MODE_CONNECTION_TYPE_R2_ONLY)
+                    .build();
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError("the test failed", e);
+        }
+
+        // more than 8 characters is allowed in R2 only mode.
+        try {
+            c.setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                    .setNetworkName(TEST_NETWORK_NAME)
+                    .setPassphrase("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+                            + "RSTUVWXYZ1234567890+/")
+                    .setPccModeConnectionType(PCC_MODE_CONNECTION_TYPE_R2_ONLY)
+                    .build();
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError("the test failed", e);
         }
     }
 
@@ -299,5 +419,70 @@ public class WifiP2pConfigTest {
         config.deviceAddress = DEVICE_ADDRESS;
         config.invalidate();
         assertEquals("", config.deviceAddress);
+    }
+
+    /** Verify that a config with the PCC Mode connection type field can be built. */
+    @Test
+    public void testBuildConfigWithPccModeConnectionType() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        WifiP2pConfig c = new WifiP2pConfig.Builder()
+                .setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                .setPccModeConnectionType(PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2)
+                .build();
+        assertEquals(c.deviceAddress, DEVICE_ADDRESS);
+        assertEquals(PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2, c.getPccModeConnectionType());
+    }
+
+    /** Verify that a config with the group owner version field can be built. */
+    @Test
+    public void testBuildConfigWithGroupOwnerVersion() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        WifiP2pConfig c = new WifiP2pConfig.Builder()
+                .setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                .build();
+        c.setGroupOwnerVersion(P2P_VERSION_2);
+        assertEquals(c.deviceAddress, DEVICE_ADDRESS);
+        assertEquals(PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2, c.getGroupOwnerVersion());
+    }
+
+    /** Verify that a config pairing bootstrapping configuration can be built. */
+    @Test
+    public void testBuildConfigWithPairingBootstrappingConfig() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        WifiP2pPairingBootstrappingConfig expectedPairingBootstrappingConfig =
+                new WifiP2pPairingBootstrappingConfig(WifiP2pPairingBootstrappingConfig
+                .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE, "1234");
+        WifiP2pConfig c = new WifiP2pConfig.Builder()
+                .setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                .setPairingBootstrappingConfig(expectedPairingBootstrappingConfig)
+                .build();
+        assertEquals(c.deviceAddress, DEVICE_ADDRESS);
+        WifiP2pPairingBootstrappingConfig pairingBootstrappingConfig =
+                c.getPairingBootstrappingConfig();
+        assertNotNull(pairingBootstrappingConfig);
+        assertEquals(expectedPairingBootstrappingConfig, pairingBootstrappingConfig);
+    }
+
+    /**
+     * Verify that a config with the request to authorize a connection request from a peer device
+     * can be built.
+     */
+    @Test
+    public void testBuildConfigWithAuthorizeConnectionFromPeer() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        WifiP2pPairingBootstrappingConfig expectedPairingBootstrappingConfig =
+                new WifiP2pPairingBootstrappingConfig(WifiP2pPairingBootstrappingConfig
+                        .PAIRING_BOOTSTRAPPING_METHOD_OUT_OF_BAND, "1234");
+        WifiP2pConfig c = new WifiP2pConfig.Builder()
+                .setDeviceAddress(MacAddress.fromString(DEVICE_ADDRESS))
+                .setPairingBootstrappingConfig(expectedPairingBootstrappingConfig)
+                .setGroupOperatingFrequency(2437)
+                .setAuthorizeConnectionFromPeer(true)
+                .build();
+        WifiP2pPairingBootstrappingConfig pairingBootstrappingConfig =
+                c.getPairingBootstrappingConfig();
+        assertNotNull(pairingBootstrappingConfig);
+        assertEquals(expectedPairingBootstrappingConfig, pairingBootstrappingConfig);
+        assertTrue(c.isAuthorizeConnectionFromPeer());
     }
 }

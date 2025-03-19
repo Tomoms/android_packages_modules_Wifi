@@ -16,11 +16,13 @@
 
 package com.android.server.wifi;
 
+import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.WorkSource;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
+import java.util.BitSet;
 
 /**
  * This is used for creating a public {@link ClientModeManager} instance when wifi is off.
@@ -81,8 +83,8 @@ public class DefaultClientModeManager implements ClientModeManager, ClientModeDe
     }
 
     @Override
-    public long getSupportedFeatures() {
-        return 0L;
+    public @NonNull BitSet getSupportedFeatures() {
+        return new BitSet();
     }
 
     @Override

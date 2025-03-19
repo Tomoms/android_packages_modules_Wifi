@@ -19,6 +19,7 @@ package com.android.server.wifi.p2p;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.withSettings;
 
 import android.app.test.MockAnswerUtil.AnswerWithArguments;
 import android.hardware.wifi.V1_0.IWifiP2pIface;
+import android.net.wifi.WifiMigration;
 import android.net.wifi.nl80211.WifiNl80211Manager;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
@@ -40,6 +42,7 @@ import android.net.wifi.p2p.WifiP2pGroupList;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.net.wifi.p2p.nsd.WifiP2pDnsSdServiceInfo;
 import android.net.wifi.p2p.nsd.WifiP2pServiceInfo;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.WorkSource;
 
@@ -53,9 +56,11 @@ import com.android.server.wifi.WifiBaseTest;
 import com.android.server.wifi.WifiInjector;
 import com.android.server.wifi.WifiMetrics;
 import com.android.server.wifi.WifiNative;
+import com.android.server.wifi.WifiSettingsConfigStore;
 import com.android.server.wifi.WifiVendorHal;
 import com.android.server.wifi.hal.WifiHal;
 import com.android.wifi.flags.FeatureFlags;
+import com.android.wifi.flags.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -111,6 +116,7 @@ public class WifiP2pNativeTest extends WifiBaseTest {
     @Mock private WifiInjector mWifiInjector;
     @Mock private DeviceConfigFacade mDeviceConfigFacade;
     @Mock private FeatureFlags mFeatureFlags;
+    private @Mock WifiSettingsConfigStore mWifiSettingsConfigStore;
 
     private MockitoSession mSession;
     private WifiP2pNative mWifiP2pNative;
@@ -135,14 +141,46 @@ public class WifiP2pNativeTest extends WifiBaseTest {
         mSession = ExtendedMockito.mockitoSession()
                 .mockStatic(HalDeviceManager.class, withSettings().lenient())
                 .strictness(Strictness.LENIENT)
+                .mockStatic(Flags.class, withSettings().lenient())
+                .mockStatic(WifiMigration.class, withSettings().lenient())
                 .startMocking();
+        when(Flags.wifiDirectR2()).thenReturn(false);
         mWifiClientInterfaceNames.add("wlan0");
         mWifiClientInterfaceNames.add("wlan1");
         when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
         when(mDeviceConfigFacade.getFeatureFlags()).thenReturn(mFeatureFlags);
+        when(mWifiInjector.getSettingsConfigStore()).thenReturn(mWifiSettingsConfigStore);
+        when(mWifiSettingsConfigStore
+                .get(eq(WifiSettingsConfigStore.SUPPLICANT_HAL_AIDL_SERVICE_VERSION)))
+                .thenReturn(2);
+        if (Environment.isSdkAtLeastB()) {
+            when(mWifiSettingsConfigStore
+                    .get(eq(WifiSettingsConfigStore.WIFI_P2P_SUPPORTED_FEATURES)))
+                    .thenReturn(WifiP2pManager.FEATURE_WIFI_DIRECT_R2
+                            | WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION);
+        } else {
+            when(mWifiSettingsConfigStore
+                    .get(eq(WifiSettingsConfigStore.WIFI_P2P_SUPPORTED_FEATURES)))
+                    .thenReturn(0L);
+        }
         mWifiP2pNative = new WifiP2pNative(mWifiCondManager, mWifiNative, mWifiMetrics,
                 mWifiVendorHalMock, mSupplicantP2pIfaceHalMock, mHalDeviceManagerMock,
                 mPropertyServiceMock, mWifiInjector);
+        if (Environment.isSdkAtLeastB()) {
+            assertEquals(WifiP2pManager.FEATURE_SET_VENDOR_ELEMENTS
+                            | WifiP2pManager.FEATURE_FLEXIBLE_DISCOVERY
+                            | WifiP2pManager.FEATURE_GROUP_CLIENT_REMOVAL
+                            | WifiP2pManager.FEATURE_GROUP_OWNER_IPV6_LINK_LOCAL_ADDRESS_PROVIDED
+                            | WifiP2pManager.FEATURE_WIFI_DIRECT_R2
+                            | WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION,
+                    mWifiP2pNative.getSupportedFeatures());
+        } else {
+            assertEquals(WifiP2pManager.FEATURE_SET_VENDOR_ELEMENTS
+                            | WifiP2pManager.FEATURE_FLEXIBLE_DISCOVERY
+                            | WifiP2pManager.FEATURE_GROUP_CLIENT_REMOVAL
+                            | WifiP2pManager.FEATURE_GROUP_OWNER_IPV6_LINK_LOCAL_ADDRESS_PROVIDED,
+                    mWifiP2pNative.getSupportedFeatures());
+        }
 
         when(mWifiNative.getClientInterfaceNames()).thenReturn(mWifiClientInterfaceNames);
 
@@ -733,8 +771,9 @@ public class WifiP2pNativeTest extends WifiBaseTest {
      */
     @Test
     public void testJoinGroupWithConfig() {
+        when(Flags.wifiDirectR2()).thenReturn(true);
         when(mSupplicantP2pIfaceHalMock.groupAdd(
-                anyString(), anyString(), anyBoolean(),
+                anyString(), anyString(), anyInt(), anyBoolean(),
                 anyInt(), anyString(), anyBoolean())).thenReturn(true);
         WifiP2pConfig config = new WifiP2pConfig.Builder()
                 .setNetworkName(TEST_NETWORK_NAME)
@@ -748,13 +787,90 @@ public class WifiP2pNativeTest extends WifiBaseTest {
             verify(mWifiCondManager).abortScan(eq(intf));
         }
 
+        if (!Environment.isSdkAtLeastB()) {
+            verify(mSupplicantP2pIfaceHalMock).groupAdd(
+                    eq(TEST_NETWORK_NAME),
+                    eq(TEST_PASSPHRASE),
+                    eq(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY),
+                    eq(true),
+                    eq(TEST_GROUP_FREQ),
+                    eq(config.deviceAddress),
+                    eq(true));
+        } else {
+            verify(mSupplicantP2pIfaceHalMock).groupAdd(
+                    eq(TEST_NETWORK_NAME),
+                    eq(TEST_PASSPHRASE),
+                    eq(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2),
+                    eq(true),
+                    eq(TEST_GROUP_FREQ),
+                    eq(config.deviceAddress),
+                    eq(true));
+        }
+    }
+
+    /**
+     * Verifies joining p2p group with Pcc Mode config.
+     */
+    @Test
+    public void testJoinGroupWithPccModeConfig() {
+        assumeTrue(Environment.isSdkAtLeastB());
+        when(Flags.wifiDirectR2()).thenReturn(true);
+        when(mSupplicantP2pIfaceHalMock.groupAdd(
+                anyString(), anyString(), anyInt(), anyBoolean(),
+                anyInt(), anyString(), anyBoolean())).thenReturn(true);
+
+        /* Check if we are upgrading LEGACY to R1/R2 compatible mode */
+        WifiP2pConfig config = new WifiP2pConfig.Builder()
+                .setNetworkName(TEST_NETWORK_NAME)
+                .setPassphrase(TEST_PASSPHRASE)
+                .setPccModeConnectionType(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY)
+                .setGroupOperatingFrequency(TEST_GROUP_FREQ)
+                .build();
+        assertTrue(mWifiP2pNative.p2pGroupAdd(config, true));
+
         verify(mSupplicantP2pIfaceHalMock).groupAdd(
                 eq(TEST_NETWORK_NAME),
                 eq(TEST_PASSPHRASE),
-                eq(true),
+                eq(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2),
+                eq(false),
                 eq(TEST_GROUP_FREQ),
                 eq(config.deviceAddress),
                 eq(true));
+
+        /* Check the 6GHz configuration success case */
+        config = new WifiP2pConfig.Builder()
+                .setNetworkName(TEST_NETWORK_NAME)
+                .setPassphrase(TEST_PASSPHRASE)
+                .setPccModeConnectionType(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_R2_ONLY)
+                .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_6GHZ)
+                .build();
+        assertTrue(mWifiP2pNative.p2pGroupAdd(config, true));
+        verify(mSupplicantP2pIfaceHalMock).groupAdd(
+                eq(TEST_NETWORK_NAME),
+                eq(TEST_PASSPHRASE),
+                eq(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_R2_ONLY),
+                eq(false),
+                eq(6),
+                eq(config.deviceAddress),
+                eq(true));
+
+        /* Check the 6GHz request fails in legacy mode */
+        config = new WifiP2pConfig.Builder()
+                .setNetworkName(TEST_NETWORK_NAME)
+                .setPassphrase(TEST_PASSPHRASE)
+                .setPccModeConnectionType(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY)
+                .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_6GHZ)
+                .build();
+        assertFalse(mWifiP2pNative.p2pGroupAdd(config, true));
+
+        /* Check the 6GHz request fails in R1/R2 compatible mode */
+        config = new WifiP2pConfig.Builder()
+                .setNetworkName(TEST_NETWORK_NAME)
+                .setPassphrase(TEST_PASSPHRASE)
+                .setPccModeConnectionType(WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2)
+                .setGroupOperatingBand(WifiP2pConfig.GROUP_OWNER_BAND_6GHZ)
+                .build();
+        assertFalse(mWifiP2pNative.p2pGroupAdd(config, true));
     }
 
     /**
@@ -1082,5 +1198,29 @@ public class WifiP2pNativeTest extends WifiBaseTest {
         when(mSupplicantP2pIfaceHalMock.isInitializationStarted()).thenReturn(true);
         mWifiP2pNative.stopP2pSupplicantIfNecessary();
         verify(mSupplicantP2pIfaceHalMock).terminate();
+    }
+
+    /**
+     * Verifies that the supported features retrieved from wpa_supplicant is cached in the
+     * config store
+     */
+    @Test
+    public void testSupportedFeatures() throws Exception {
+        when(mSupplicantP2pIfaceHalMock.initialize()).thenReturn(true);
+        when(mSupplicantP2pIfaceHalMock.isInitializationComplete()).thenReturn(true);
+        when(mSupplicantP2pIfaceHalMock.setupIface(eq(TEST_IFACE))).thenReturn(true);
+        when(mSupplicantP2pIfaceHalMock.registerDeathHandler(any())).thenReturn(true);
+        when(mSupplicantP2pIfaceHalMock.getSupportedFeatures())
+                .thenReturn(WifiP2pManager.FEATURE_WIFI_DIRECT_R2
+                        | WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION);
+        assertEquals(TEST_IFACE, mWifiP2pNative.setupInterface(
+                mDestroyedListenerMock, mHandlerMock, mWorkSourceMock));
+        assertEquals(WifiP2pManager.FEATURE_WIFI_DIRECT_R2
+                        | WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION
+                        | WifiP2pManager.FEATURE_SET_VENDOR_ELEMENTS
+                        | WifiP2pManager.FEATURE_FLEXIBLE_DISCOVERY
+                        | WifiP2pManager.FEATURE_GROUP_CLIENT_REMOVAL
+                        | WifiP2pManager.FEATURE_GROUP_OWNER_IPV6_LINK_LOCAL_ADDRESS_PROVIDED,
+                mWifiP2pNative.getSupportedFeatures());
     }
 }

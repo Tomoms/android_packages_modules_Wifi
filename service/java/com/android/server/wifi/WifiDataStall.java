@@ -344,6 +344,22 @@ public class WifiDataStall {
     }
 
     /**
+     * Get the number of tx bytes transmitted on current interface since the interface is created
+     * @return the number of tx bytes transmitted
+     */
+    public long getTxTransmittedBytes() {
+        return mLastTxBytes;
+    }
+
+    /**
+     * Get the number of rx bytes transmitted on current interface since the interface is created
+     * @return the number of tx bytes transmitted
+     */
+    public long getRxTransmittedBytes() {
+        return mLastRxBytes;
+    }
+
+    /**
      * Update data stall detection, check throughput sufficiency and report wifi health stat
      * with the latest link layer stats
      * @param connectionCapabilities Connection capabilities.

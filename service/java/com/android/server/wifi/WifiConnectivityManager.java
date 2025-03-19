@@ -70,7 +70,6 @@ import com.android.server.wifi.hotspot2.PasspointManager;
 import com.android.server.wifi.proto.WifiStatsLog;
 import com.android.server.wifi.scanner.WifiScannerInternal;
 import com.android.server.wifi.util.WifiPermissionsUtil;
-import com.android.wifi.flags.FeatureFlags;
 import com.android.wifi.resources.R;
 
 import java.io.FileDescriptor;
@@ -185,7 +184,6 @@ public class WifiConnectivityManager {
     private final WifiChannelUtilization mWifiChannelUtilization;
     private final PowerManager mPowerManager;
     private final DeviceConfigFacade mDeviceConfigFacade;
-    private final FeatureFlags mFeatureFlags;
     private final ActiveModeWarden mActiveModeWarden;
     private final FrameworkFacade mFrameworkFacade;
     private final WifiPermissionsUtil mWifiPermissionsUtil;
@@ -206,6 +204,7 @@ public class WifiConnectivityManager {
     private int mInitialScanState = INITIAL_SCAN_STATE_COMPLETE;
     private boolean mAutoJoinEnabledExternal = true; // enabled by default
     private boolean mAutoJoinEnabledExternalSetByDeviceAdmin = false;
+    private int mAutojoinDisallowedSecurityTypes = 0; // restrict none by default
     private boolean mUntrustedConnectionAllowed = false;
     private Set<Integer> mRestrictedConnectionAllowedUids = new ArraySet<>();
     private boolean mOemPaidConnectionAllowed = false;
@@ -687,13 +686,11 @@ public class WifiConnectivityManager {
         List<WifiCandidates.Candidate> candidates = mNetworkSelector.getCandidatesFromScan(
                 scanDetails, bssidBlocklist, cmmStates, mUntrustedConnectionAllowed,
                 mOemPaidConnectionAllowed, mOemPrivateConnectionAllowed,
-                mRestrictedConnectionAllowedUids, skipSufficiencyCheck);
-
+                mRestrictedConnectionAllowedUids, skipSufficiencyCheck,
+                mAutojoinDisallowedSecurityTypes);
         // Filter candidates before caching to avoid reconnecting on failure
-        if (mFeatureFlags.delayedCarrierNetworkSelection()) {
-            candidates = filterDelayedCarrierSelectionCandidates(candidates, listenerName,
-                    isFullScan);
-        }
+        candidates = filterDelayedCarrierSelectionCandidates(candidates, listenerName,
+                isFullScan);
         mLatestCandidates = candidates;
         mLatestCandidatesTimestampMs = mClock.getElapsedSinceBootMillis();
 
@@ -1510,7 +1507,6 @@ public class WifiConnectivityManager {
         mPasspointManager = passpointManager;
         mMultiInternetManager = multiInternetManager;
         mDeviceConfigFacade = deviceConfigFacade;
-        mFeatureFlags = mDeviceConfigFacade.getFeatureFlags();
         mActiveModeWarden = activeModeWarden;
         mFrameworkFacade = frameworkFacade;
         mWifiGlobals = wifiGlobals;
@@ -3699,6 +3695,22 @@ public class WifiConnectivityManager {
      */
     public boolean getAutoJoinEnabledExternal() {
         return mAutoJoinEnabledExternal;
+    }
+
+    /**
+     * Set auto join restriction on select security types
+     */
+    public void setAutojoinDisallowedSecurityTypes(int restrictions) {
+        localLog("Set auto join restriction on select security types - restrictions: "
+                + restrictions);
+        mAutojoinDisallowedSecurityTypes = restrictions;
+    }
+
+    /**
+     * Return auto join restriction on select security types
+     */
+    public int getAutojoinDisallowedSecurityTypes() {
+        return mAutojoinDisallowedSecurityTypes;
     }
 
     /**

@@ -17,8 +17,6 @@ package com.android.server.wifi;
 
 import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA3_SUITE_B;
 
-import static com.android.server.wifi.util.GeneralUtil.getCapabilityIndex;
-
 import android.content.Context;
 import android.hardware.wifi.supplicant.V1_0.ISupplicantStaNetwork;
 import android.hardware.wifi.supplicant.V1_0.ISupplicantStaNetworkCallback;
@@ -994,8 +992,7 @@ public class SupplicantStaNetworkHalHidlImpl {
                         Log.d(TAG, "Ignore GCMP_256 cipher for the HAL older than 1.2.");
                         break;
                     }
-                    if (!mAdvanceKeyMgmtFeatures.get(
-                            getCapabilityIndex(WIFI_FEATURE_WPA3_SUITE_B))) {
+                    if (!mAdvanceKeyMgmtFeatures.get(WIFI_FEATURE_WPA3_SUITE_B)) {
                         Log.d(TAG, "Ignore unsupporting GCMP_256 cipher.");
                         break;
                     }
@@ -1072,8 +1069,7 @@ public class SupplicantStaNetworkHalHidlImpl {
                         Log.d(TAG, "Ignore GCMP_256 cipher for the HAL older than 1.2.");
                         break;
                     }
-                    if (!mAdvanceKeyMgmtFeatures.get(
-                            getCapabilityIndex(WIFI_FEATURE_WPA3_SUITE_B))) {
+                    if (!mAdvanceKeyMgmtFeatures.get(WIFI_FEATURE_WPA3_SUITE_B)) {
                         Log.d(TAG, "Ignore unsupporting GCMP_256 cipher.");
                         break;
                     }

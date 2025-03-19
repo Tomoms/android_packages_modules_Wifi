@@ -1053,6 +1053,13 @@ public class WifiDiagnostics {
             return;
         }
 
+        if (bugDetail.equals("Subsystem Restart") && !mContext.getResources().getBoolean(
+                R.bool.config_wifi_subsystem_restart_bugreport_enabled)) {
+            Log.d(TAG, "config_wifi_subsystem_restart_bugreport_enabled is disabled, skip "
+                    + bugTitle + "(" + bugDetail + ")");
+            return;
+        }
+
         if (!shouldTakeBugreport(bugTitle, bugDetail)) {
             return;
         }

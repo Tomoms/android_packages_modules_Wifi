@@ -51,6 +51,12 @@ java_defaults {
     sdk_version: "core_platform",
     libs: [
         "fake_device_config",
-        "aconfig_storage_reader_java",
+        "aconfig_storage_stub",
     ],
+}
+
+cc_aconfig_library {
+    name: "wifi_aconfig_flags_c_lib",
+    aconfig_declarations: "wifi_aconfig_flags",
+    vendor_available: true,
 }

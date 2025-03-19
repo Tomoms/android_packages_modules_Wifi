@@ -16,6 +16,9 @@
 
 package com.android.server.wifi.p2p;
 
+import static android.net.wifi.p2p.WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION;
+import static android.net.wifi.p2p.WifiP2pManager.FEATURE_WIFI_DIRECT_R2;
+
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.hardware.wifi.supplicant.DebugLevel;
@@ -26,7 +29,9 @@ import android.hardware.wifi.supplicant.ISupplicantP2pIfaceCallback;
 import android.hardware.wifi.supplicant.ISupplicantP2pNetwork;
 import android.hardware.wifi.supplicant.IfaceInfo;
 import android.hardware.wifi.supplicant.IfaceType;
+import android.hardware.wifi.supplicant.KeyMgmtMask;
 import android.hardware.wifi.supplicant.MiracastMode;
+import android.hardware.wifi.supplicant.P2pAddGroupConfigurationParams;
 import android.hardware.wifi.supplicant.P2pConnectInfo;
 import android.hardware.wifi.supplicant.P2pDiscoveryInfo;
 import android.hardware.wifi.supplicant.P2pExtListenInfo;
@@ -1221,6 +1226,7 @@ public class SupplicantP2pIfaceHalAidlImpl implements ISupplicantP2pIfaceHal {
      * @return true, if operation was successful.
      */
     public boolean groupAdd(String networkName, String passphrase,
+            @WifiP2pConfig.PccModeConnectionType int connectionType,
             boolean isPersistent, int freq, String peerAddress, boolean join) {
         synchronized (mLock) {
             String methodStr = "groupAdd";
@@ -1245,6 +1251,11 @@ public class SupplicantP2pIfaceHalAidlImpl implements ISupplicantP2pIfaceHal {
                 return false;
             }
 
+            if (getCachedServiceVersion() >= 4) {
+                return addGroupWithConfigurationParams(
+                        ssid, passphrase, connectionType, isPersistent, freq, macAddress, join);
+            }
+
             try {
                 mISupplicantP2pIface.addGroupWithConfig(
                         ssid, passphrase, isPersistent, freq, macAddress, join);
@@ -1256,6 +1267,46 @@ public class SupplicantP2pIfaceHalAidlImpl implements ISupplicantP2pIfaceHal {
             }
             return false;
         }
+    }
+
+    private boolean addGroupWithConfigurationParams(byte[] ssid, String passphrase,
+            @WifiP2pConfig.PccModeConnectionType int connectionType,
+            boolean isPersistent, int freq, byte[] macAddress, boolean join) {
+        String methodStr = "addGroupWithConfigurationParams";
+
+        // Expect that these parameters are already validated.
+        P2pAddGroupConfigurationParams groupConfigurationParams =
+                new P2pAddGroupConfigurationParams();
+        groupConfigurationParams.ssid = ssid;
+        groupConfigurationParams.passphrase = passphrase;
+        groupConfigurationParams.isPersistent = isPersistent;
+        groupConfigurationParams.frequencyMHzOrBand = freq;
+        groupConfigurationParams.goInterfaceAddress = macAddress;
+        groupConfigurationParams.joinExistingGroup = join;
+        groupConfigurationParams.keyMgmtMask = p2pConfigConnectionTypeToSupplicantKeyMgmtMask(
+                connectionType);
+        try {
+            mISupplicantP2pIface.addGroupWithConfigurationParams(groupConfigurationParams);
+            return true;
+        } catch (RemoteException e) {
+            handleRemoteException(e, methodStr);
+        } catch (ServiceSpecificException e) {
+            handleServiceSpecificException(e, methodStr);
+        }
+        return false;
+    }
+
+    private static int p2pConfigConnectionTypeToSupplicantKeyMgmtMask(
+            @WifiP2pConfig.PccModeConnectionType int connectionType) {
+        int keyMgmtMask = 0;
+        if (WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_R2_ONLY == connectionType) {
+            keyMgmtMask = KeyMgmtMask.SAE;
+        } else if (WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2 == connectionType) {
+            keyMgmtMask = KeyMgmtMask.WPA_PSK | KeyMgmtMask.SAE;
+        } else {
+            keyMgmtMask = KeyMgmtMask.WPA_PSK;
+        }
+        return keyMgmtMask;
     }
 
     /**
@@ -2602,14 +2653,34 @@ public class SupplicantP2pIfaceHalAidlImpl implements ISupplicantP2pIfaceHal {
      * @return  bitmask defined by WifiP2pManager.FEATURE_*
      */
     public long getSupportedFeatures() {
-        // First AIDL version supports these three features.
-        long result = WifiP2pManager.FEATURE_SET_VENDOR_ELEMENTS
-                | WifiP2pManager.FEATURE_FLEXIBLE_DISCOVERY
-                | WifiP2pManager.FEATURE_GROUP_CLIENT_REMOVAL;
-        if (getCachedServiceVersion() >= 2) {
-            result |= WifiP2pManager.FEATURE_GROUP_OWNER_IPV6_LINK_LOCAL_ADDRESS_PROVIDED;
+        synchronized (mLock) {
+            String methodStr = "getSupportedFeatures";
+            long features = 0;
+            if (!checkP2pIfaceAndLogFailure(methodStr)) {
+                return 0;
+            }
+            if (getCachedServiceVersion() < 4) {
+                return 0;
+            }
+
+            try {
+                long p2pHalfeatures = mISupplicantP2pIface.getFeatureSet();
+                if ((p2pHalfeatures & mISupplicantP2pIface.P2P_FEATURE_V2) != 0) {
+                    features |= FEATURE_WIFI_DIRECT_R2;
+                    Log.i(TAG, "WIFI_DIRECT_R2 supported ");
+                }
+                if ((p2pHalfeatures & mISupplicantP2pIface.P2P_FEATURE_PCC_MODE_WPA3_COMPATIBILITY)
+                        != 0) {
+                    features |= FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION;
+                    Log.i(TAG, "PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION supported ");
+                }
+            } catch (RemoteException e) {
+                handleRemoteException(e, methodStr);
+            } catch (ServiceSpecificException e) {
+                handleServiceSpecificException(e, methodStr);
+            }
+            return features;
         }
-        return result;
     }
 
     /**

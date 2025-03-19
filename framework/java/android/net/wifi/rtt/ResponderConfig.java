@@ -264,6 +264,7 @@ public final class ResponderConfig implements Parcelable {
 
     private long mNtbMinMeasurementTime = DEFAULT_NTB_MIN_TIME_BETWEEN_MEASUREMENTS_MICROS;
     private long mNtbMaxMeasurementTime = DEFAULT_NTB_MAX_TIME_BETWEEN_MEASUREMENTS_MICROS;
+    private final SecureRangingConfig mSecureRangingConfig;
 
     /**
      * Constructs Responder configuration from the builder
@@ -287,6 +288,7 @@ public final class ResponderConfig implements Parcelable {
         this.preamble = builder.mPreamble;
         this.mNtbMinMeasurementTime = builder.mNtbMinMeasurementTime;
         this.mNtbMaxMeasurementTime = builder.mNtbMaxMeasurementTime;
+        this.mSecureRangingConfig = builder.mSecureRangingConfig;
     }
 
     /**
@@ -332,6 +334,7 @@ public final class ResponderConfig implements Parcelable {
         this.supports80211azNtb = false;
         this.mNtbMinMeasurementTime = DEFAULT_NTB_MIN_TIME_BETWEEN_MEASUREMENTS_MICROS;
         this.mNtbMaxMeasurementTime = DEFAULT_NTB_MAX_TIME_BETWEEN_MEASUREMENTS_MICROS;
+        this.mSecureRangingConfig = null;
     }
 
     /**
@@ -372,6 +375,7 @@ public final class ResponderConfig implements Parcelable {
         this.supports80211azNtb = false;
         this.mNtbMinMeasurementTime = DEFAULT_NTB_MIN_TIME_BETWEEN_MEASUREMENTS_MICROS;
         this.mNtbMaxMeasurementTime = DEFAULT_NTB_MAX_TIME_BETWEEN_MEASUREMENTS_MICROS;
+        this.mSecureRangingConfig = null;
     }
 
     /**
@@ -416,6 +420,7 @@ public final class ResponderConfig implements Parcelable {
         this.supports80211azNtb = false;
         this.mNtbMinMeasurementTime = DEFAULT_NTB_MIN_TIME_BETWEEN_MEASUREMENTS_MICROS;
         this.mNtbMaxMeasurementTime = DEFAULT_NTB_MAX_TIME_BETWEEN_MEASUREMENTS_MICROS;
+        this.mSecureRangingConfig = null;
     }
 
     /**
@@ -475,7 +480,7 @@ public final class ResponderConfig implements Parcelable {
             }
         }
 
-        return new ResponderConfig.Builder()
+        Builder builder = new Builder()
                 .setMacAddress(macAddress)
                 .setResponderType(responderType)
                 .set80211mcSupported(supports80211mc)
@@ -484,9 +489,32 @@ public final class ResponderConfig implements Parcelable {
                 .setFrequencyMhz(frequency)
                 .setCenterFreq0Mhz(centerFreq0)
                 .setCenterFreq1Mhz(centerFreq1)
-                .setPreamble(preamble)
+                .setPreamble(preamble);
+
+        if (isSecureRangingResponder(scanResult)) {
+            builder.setSecureRangingConfig(getSecureRangingConfig(scanResult));
+        }
+
+        return builder.build();
+    }
+
+    private static boolean isSecureRangingResponder(ScanResult scanResult) {
+        return ((scanResult.capabilities != null) && (scanResult.capabilities.contains("PASN")));
+    }
+
+    private static SecureRangingConfig getSecureRangingConfig(ScanResult scanResult) {
+        PasnConfig.Builder pasnConfigBuilder = new PasnConfig.Builder(
+                PasnConfig.getBaseAkmsFromCapabilities(scanResult.capabilities),
+                PasnConfig.getCiphersFromCapabilities(scanResult.capabilities));
+        if (scanResult.getWifiSsid() != null) {
+            pasnConfigBuilder.setWifiSsid(scanResult.getWifiSsid());
+        }
+        return new SecureRangingConfig.Builder(pasnConfigBuilder.build())
+                .setSecureHeLtfEnabled(scanResult.isSecureHeLtfSupported())
+                .setRangingFrameProtectionEnabled(true)
                 .build();
     }
+
 
     /**
      * Creates a Responder configuration from a MAC address corresponding to a Wi-Fi Aware
@@ -690,6 +718,15 @@ public final class ResponderConfig implements Parcelable {
     }
 
     /**
+     * Get secure ranging configuration.
+     * @return Secure ranging configuration. Returns null for non-secure ranging configuration.
+     */
+    @Nullable
+    @FlaggedApi(Flags.FLAG_SECURE_RANGING)
+    public SecureRangingConfig getSecureRangingConfig() {
+        return mSecureRangingConfig;
+    }
+    /**
      * Builder class used to construct {@link ResponderConfig} objects.
      */
     public static final class Builder {
@@ -705,6 +742,8 @@ public final class ResponderConfig implements Parcelable {
         private @PreambleType int mPreamble = PREAMBLE_LEGACY;
         private long mNtbMinMeasurementTime = DEFAULT_NTB_MIN_TIME_BETWEEN_MEASUREMENTS_MICROS;
         private long mNtbMaxMeasurementTime = DEFAULT_NTB_MAX_TIME_BETWEEN_MEASUREMENTS_MICROS;
+        private SecureRangingConfig mSecureRangingConfig = null;
+
 
         /**
          * Sets the Responder MAC Address.
@@ -909,6 +948,34 @@ public final class ResponderConfig implements Parcelable {
         }
 
         /**
+         * Set secure ranging configuration. See {@link SecureRangingConfig} for more details.
+         * <p>
+         * Note: Secure ranging will get enabled only if the device and responder support. For
+         * device support see {@link WifiRttManager#getRttCharacteristics()}. Following capabilities
+         * needs to be enabled,
+         * <ul>
+         * <li>{@link WifiRttManager#CHARACTERISTICS_KEY_BOOLEAN_NTB_INITIATOR}
+         * <li>{@link WifiRttManager#CHARACTERISTICS_KEY_BOOLEAN_SECURE_HE_LTF_SUPPORTED} and/or
+         * <li>{@link WifiRttManager#CHARACTERISTICS_KEY_BOOLEAN_RANGING_FRAME_PROTECTION_SUPPORTED}
+         * </ul>
+         * For the responder support (from scan result),
+         * <ul>
+         * <li> {@link ScanResult#capabilities} string contains PASN and optionally a base AKM
+         * <li> {@link ScanResult#isSecureHeLtfSupported()}
+         * <li> {@link ScanResult#isRangingFrameProtectionRequired()}
+         * </ul>
+         * @param secureRangingConfig Secure ranging configuration
+         * @return the builder to facilitate chaining {@code builder.setXXX(..).setXXX(..)}.
+         */
+        @NonNull
+        @FlaggedApi(Flags.FLAG_SECURE_RANGING)
+        public Builder setSecureRangingConfig(@NonNull SecureRangingConfig secureRangingConfig) {
+            Objects.requireNonNull(secureRangingConfig, "secureRangingConfig cannot be null");
+            mSecureRangingConfig = secureRangingConfig;
+            return this;
+        }
+
+        /**
          * Build {@link ResponderConfig} given the current configurations made on the builder.
          * @return an instance of {@link ResponderConfig}
          */
@@ -1029,7 +1096,7 @@ public final class ResponderConfig implements Parcelable {
 
     @Override
     public String toString() {
-        return new StringBuffer("ResponderConfig: macAddress=").append(macAddress)
+        StringBuffer sb = new StringBuffer("ResponderConfig: macAddress=").append(macAddress)
                 .append(", peerHandle=").append(peerHandle == null ? "<null>" : peerHandle.peerId)
                 .append(", responderType=").append(responderType)
                 .append(", supports80211mc=").append(supports80211mc)
@@ -1039,9 +1106,15 @@ public final class ResponderConfig implements Parcelable {
                 .append(", centerFreq1=").append(centerFreq1)
                 .append(", preamble=").append(preamble)
                 .append(", supports80211azNtb=").append(supports80211azNtb)
-                .append(", mNtbMinMeasurementTime ").append(mNtbMinMeasurementTime)
-                .append(", mNtbMaxMeasurementTime ").append(mNtbMaxMeasurementTime)
-                .toString();
+                .append(", mNtbMinMeasurementTime=").append(mNtbMinMeasurementTime)
+                .append(", mNtbMaxMeasurementTime=").append(mNtbMaxMeasurementTime);
+
+        if (mSecureRangingConfig != null) {
+            sb.append(", mSecureRangingConfig=").append(mSecureRangingConfig);
+        }
+
+        return sb.toString();
+
     }
 
     /**
@@ -1052,7 +1125,7 @@ public final class ResponderConfig implements Parcelable {
      *
      * @hide
      */
-    static int translateFromScanResultToLocalChannelWidth(
+    public static int translateFromScanResultToLocalChannelWidth(
             @WifiAnnotations.ChannelWidth int scanResultChannelWidth) {
         switch (scanResultChannelWidth) {
             case ScanResult.CHANNEL_WIDTH_20MHZ:
@@ -1081,7 +1154,8 @@ public final class ResponderConfig implements Parcelable {
      *
      * @hide
      */
-    static int translateFromLocalToScanResultChannelWidth(@ChannelWidth int localChannelWidth) {
+    public static int translateFromLocalToScanResultChannelWidth(
+            @ChannelWidth int localChannelWidth) {
         switch (localChannelWidth) {
             case CHANNEL_WIDTH_20MHZ:
                 return ScanResult.CHANNEL_WIDTH_20MHZ;
@@ -1109,7 +1183,7 @@ public final class ResponderConfig implements Parcelable {
      *
      * @hide
      */
-    static int translateFromScanResultToLocalPreamble(
+    public static int translateFromScanResultToLocalPreamble(
             @WifiAnnotations.PreambleType int scanResultPreamble) {
         switch (scanResultPreamble) {
             case ScanResult.PREAMBLE_LEGACY:
@@ -1136,7 +1210,7 @@ public final class ResponderConfig implements Parcelable {
      *
      * @hide
      */
-    static int translateFromLocalToScanResultPreamble(@PreambleType int localPreamble) {
+    public static int translateFromLocalToScanResultPreamble(@PreambleType int localPreamble) {
         switch (localPreamble) {
             case PREAMBLE_LEGACY:
                 return ScanResult.PREAMBLE_LEGACY;

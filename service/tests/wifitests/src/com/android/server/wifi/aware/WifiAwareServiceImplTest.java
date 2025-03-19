@@ -43,6 +43,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.wifi.OuiKeyedData;
+import android.net.wifi.ScanResult;
 import android.net.wifi.WifiScanner;
 import android.net.wifi.aware.Characteristics;
 import android.net.wifi.aware.ConfigRequest;
@@ -1064,7 +1065,7 @@ public class WifiAwareServiceImplTest extends WifiBaseTest {
         // constructed configs.
         PublishConfig publishConfig = new PublishConfig(serviceName.getBytes(), ssi, matchFilter,
                 PublishConfig.PUBLISH_TYPE_UNSOLICITED, 0, true, false, false,
-                WifiScanner.WIFI_BAND_24_GHZ, null, null, false, Collections.emptyList());
+                WifiScanner.WIFI_BAND_24_GHZ, null, null, false, Collections.emptyList(), false);
         int clientId = doConnect();
         IWifiAwareDiscoverySessionCallback mockCallback = mock(
                 IWifiAwareDiscoverySessionCallback.class);
@@ -1081,7 +1082,9 @@ public class WifiAwareServiceImplTest extends WifiBaseTest {
         // constructed configs.
         SubscribeConfig subscribeConfig = new SubscribeConfig(serviceName.getBytes(), ssi,
                 matchFilter, SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE, 0, true, false, 0, false, 0,
-                false, WifiScanner.WIFI_BAND_24_GHZ, null, false, Collections.emptyList());
+                false, WifiScanner.WIFI_BAND_24_GHZ, null, false, Collections.emptyList(),
+                SubscribeConfig.PERIODIC_RANGING_INTERVAL_512TU, false, 2, 2437, 0, 0,
+                ScanResult.PREAMBLE_HT, 0);
         int clientId = doConnect();
         IWifiAwareDiscoverySessionCallback mockCallback = mock(
                 IWifiAwareDiscoverySessionCallback.class);

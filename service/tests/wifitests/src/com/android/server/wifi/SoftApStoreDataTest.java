@@ -18,6 +18,7 @@ package com.android.server.wifi;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
@@ -38,6 +39,7 @@ import android.net.wifi.SoftApInfo;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiMigration;
 import android.net.wifi.WifiSsid;
+import android.net.wifi.util.Environment;
 import android.util.SparseIntArray;
 import android.util.Xml;
 
@@ -50,6 +52,7 @@ import com.android.server.wifi.util.EncryptedData;
 import com.android.server.wifi.util.InformationElementUtil;
 import com.android.server.wifi.util.SettingsMigrationDataHolder;
 import com.android.server.wifi.util.WifiConfigStoreEncryptionUtil;
+import com.android.server.wifi.util.XmlUtil;
 import com.android.wifi.flags.Flags;
 
 import org.junit.After;
@@ -113,6 +116,8 @@ public class SoftApStoreDataTest extends WifiBaseTest {
     private static final boolean TEST_80211AX_ENABLED = false;
     private static final boolean TEST_80211BE_ENABLED = false;
     private static final boolean TEST_USER_CONFIGURATION = false;
+    // Use non default value true as test data
+    private static final boolean TEST_CLIENT_ISOLATION = true;
     private static final String TEST_TWO_VENDOR_ELEMENTS_HEX = "DD04AABBCCDDDD0401020304";
     private static final int TEST_MAX_CHANNEL_WIDTH = SoftApInfo.CHANNEL_WIDTH_40MHZ;
     private MockitoSession mSession;
@@ -279,7 +284,7 @@ public class SoftApStoreDataTest extends WifiBaseTest {
                     + "<boolean name=\"UserConfiguration\" value=\""
                     + TEST_USER_CONFIGURATION + "\" />\n";
 
-    private static final String TEST_CONFIG_STRING_WITH_ALL_CONFIG_LAST_VERSION =
+    private static final String TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_T =
             TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_S
                     + "<long name=\"BridgedModeOpportunisticShutdownTimeoutMillis\" value=\""
                     + TEST_BRIDTED_MODE_SHUTDOWN_TIMEOUT_MILLIS + "\" />\n"
@@ -289,6 +294,11 @@ public class SoftApStoreDataTest extends WifiBaseTest {
                     + "</VendorElements>\n"
                     + "<boolean name=\"80211beEnabled\" value=\""
                     + TEST_80211BE_ENABLED + "\" />\n";
+
+    private static final String TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_B =
+            TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_T
+                    + "<boolean name=\"ClientIsolation\" value=\""
+                    + TEST_CLIENT_ISOLATION + "\" />\n";
 
     @Mock private Context mContext;
     @Mock SoftApStoreData.DataSource mDataSource;
@@ -327,6 +337,8 @@ public class SoftApStoreDataTest extends WifiBaseTest {
             }
         }).when(mWifiConfigStoreEncryptionUtil).decrypt(any());
         when(Flags.softapConfigStoreMaxChannelWidth()).thenReturn(false);
+        // Default flag is enabled.
+        when(Flags.apIsolate()).thenReturn(true);
     }
 
     /**
@@ -434,10 +446,15 @@ public class SoftApStoreDataTest extends WifiBaseTest {
                             TEST_TWO_VENDOR_ELEMENTS_HEX)));
             softApConfigBuilder.setIeee80211beEnabled(TEST_80211BE_ENABLED);
         }
+        if (Environment.isSdkAtLeastB()) {
+            softApConfigBuilder.setClientIsolationEnabled(TEST_CLIENT_ISOLATION);
+        }
         when(mDataSource.toSerialize()).thenReturn(softApConfigBuilder.build());
         byte[] actualData = serializeData();
-        if (SdkLevel.isAtLeastT()) {
-            assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_LAST_VERSION, new String(actualData));
+        if (Environment.isSdkAtLeastB()) {
+            assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_B, new String(actualData));
+        } else if (SdkLevel.isAtLeastT()) {
+            assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_T, new String(actualData));
         } else if (SdkLevel.isAtLeastS()) {
             assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_S, new String(actualData));
         } else {
@@ -453,7 +470,6 @@ public class SoftApStoreDataTest extends WifiBaseTest {
      */
     @Test
     public void serializeSoftApNonUtf8() throws Exception {
-
         SoftApConfiguration.Builder softApConfigBuilder = new SoftApConfiguration.Builder();
         softApConfigBuilder.setSsid(TEST_SSID);
         softApConfigBuilder.setBssid(MacAddress.fromString(TEST_BSSID));
@@ -485,10 +501,15 @@ public class SoftApStoreDataTest extends WifiBaseTest {
                             TEST_TWO_VENDOR_ELEMENTS_HEX)));
             softApConfigBuilder.setIeee80211beEnabled(TEST_80211BE_ENABLED);
         }
+        if (Environment.isSdkAtLeastB()) {
+            softApConfigBuilder.setClientIsolationEnabled(TEST_CLIENT_ISOLATION);
+        }
         when(mDataSource.toSerialize()).thenReturn(softApConfigBuilder.build());
         byte[] actualData = serializeData();
-        if (SdkLevel.isAtLeastT()) {
-            assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_LAST_VERSION, new String(actualData));
+        if (Environment.isSdkAtLeastB()) {
+            assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_B, new String(actualData));
+        } else if (SdkLevel.isAtLeastT()) {
+            assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_T, new String(actualData));
         } else if (SdkLevel.isAtLeastS()) {
             assertEquals(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_S, new String(actualData));
         } else {
@@ -504,8 +525,10 @@ public class SoftApStoreDataTest extends WifiBaseTest {
      */
     @Test
     public void deserializeSoftAp() throws Exception {
-        if (SdkLevel.isAtLeastT()) {
-            deserializeData(TEST_CONFIG_STRING_WITH_ALL_CONFIG_LAST_VERSION.getBytes());
+        if (Environment.isSdkAtLeastB()) {
+            deserializeData(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_B.getBytes());
+        } else if (SdkLevel.isAtLeastT()) {
+            deserializeData(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_T.getBytes());
         } else if (SdkLevel.isAtLeastS()) {
             deserializeData(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_S.getBytes());
         } else {
@@ -545,6 +568,9 @@ public class SoftApStoreDataTest extends WifiBaseTest {
         }
         if (SdkLevel.isAtLeastT()) {
             assertEquals(softApConfig.isIeee80211beEnabled(), TEST_80211BE_ENABLED);
+        }
+        if (Environment.isSdkAtLeastB()) {
+            assertEquals(TEST_CLIENT_ISOLATION, softApConfig.isClientIsolationEnabled());
         }
     }
 
@@ -928,5 +954,32 @@ public class SoftApStoreDataTest extends WifiBaseTest {
                 softApConfigDeserialized.getPassphrase());
         assertEquals(softApConfig.getSecurityType(),
                 softApConfigDeserialized.getSecurityType());
+    }
+
+    /**
+     * Verify that the store data is serialized/deserialized when clientIsolation is disabled.
+     *
+     * @throws Exception when test fails it throws exception
+     */
+    @Test
+    public void testSerializeDeserializeSoftApWhenClientIsolationFalgDisabled() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        when(Flags.apIsolate()).thenReturn(false);
+        SoftApConfiguration testSoftApConfig =
+                new SoftApConfiguration.Builder().setSsid(TEST_SSID)
+                .setClientIsolationEnabled(TEST_CLIENT_ISOLATION).build();
+        when(mDataSource.toSerialize()).thenReturn(testSoftApConfig);
+        byte[] actualData = serializeData();
+        String serializeDataString = new String(actualData);
+        assertFalse(serializeDataString.contains(
+                XmlUtil.SoftApConfigurationXmlUtil.XML_TAG_CLIENT_ISOLATION));
+        deserializeData(TEST_CONFIG_STRING_WITH_ALL_CONFIG_IN_B.getBytes());
+        ArgumentCaptor<SoftApConfiguration> softapConfigCaptor =
+                ArgumentCaptor.forClass(SoftApConfiguration.class);
+        verify(mDataSource).fromDeserialized(softapConfigCaptor.capture());
+        SoftApConfiguration softApConfig = softapConfigCaptor.getValue();
+        assertNotNull(softApConfig);
+        // Keep default value false which does NOT equals test data (true)
+        assertNotEquals(TEST_CLIENT_ISOLATION, softApConfig.isClientIsolationEnabled());
     }
 }

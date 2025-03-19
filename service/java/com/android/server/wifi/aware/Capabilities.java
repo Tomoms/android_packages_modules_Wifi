@@ -50,6 +50,9 @@ public class Capabilities {
     public boolean isSuspensionSupported;
     public boolean is6gSupported;
     public boolean isHeSupported;
+    public boolean isPeriodicRangingSupported;
+    public int maxSupportedRangingPktBandWidth;
+    public int maxSupportedRxChains;
 
     /**
      * Converts the internal capabilities to a parcelable & potentially app-facing
@@ -75,6 +78,10 @@ public class Capabilities {
         bundle.putBoolean(Characteristics.KEY_SUPPORT_NAN_PAIRING, isNanPairingSupported);
         bundle.putBoolean(Characteristics.KEY_SUPPORT_SUSPENSION,
                 deviceConfigFacade.isAwareSuspensionEnabled() && isSuspensionSupported);
+        bundle.putBoolean(Characteristics.KEY_SUPPORT_PERIODIC_RANGING, isPeriodicRangingSupported);
+        bundle.putInt(Characteristics.KEY_MAX_SUPPORTED_RANGING_PKT_BANDWIDTH,
+                maxSupportedRangingPktBandWidth);
+        bundle.putInt(Characteristics.KEY_MAX_SUPPORTED_RX_CHAINS, maxSupportedRxChains);
         return new Characteristics(bundle);
     }
 
@@ -97,6 +104,9 @@ public class Capabilities {
         j.put("isSetClusterIdSupported", isSetClusterIdSupported);
         j.put("isNanPairingSupported", isNanPairingSupported);
         j.put("isSuspensionSupported", isSuspensionSupported);
+        j.put("isPeriodicRangingSupported", isPeriodicRangingSupported);
+        j.put("maxSupportedRangingPktBandWidth", maxSupportedRangingPktBandWidth);
+        j.put("maxSupportedRxChains", maxSupportedRxChains);
         return j;
     }
 
@@ -142,6 +152,12 @@ public class Capabilities {
                 + is6gSupported
                 + ", isHeSupported="
                 + isHeSupported
+                + ", isPeriodicRangingSupported="
+                + isPeriodicRangingSupported
+                + ", maxSupportedRangingPktBandWidth="
+                + maxSupportedRangingPktBandWidth
+                + ",maxSupportedRxChains="
+                + maxSupportedRxChains
                 + "]";
     }
 }

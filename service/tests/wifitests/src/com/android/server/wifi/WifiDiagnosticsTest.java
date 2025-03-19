@@ -979,6 +979,58 @@ public class WifiDiagnosticsTest extends WifiBaseTest {
         verify(mBugreportManager, never()).requestBugreport(any(), any(), any());
     }
 
+    @Test
+    public void takeBugReportDoesNothingWhenSSRConfigOverlayDisabled() {
+        when(mBuildProperties.isUserBuild()).thenReturn(false);
+        mResources.setBoolean(R.bool.config_wifi_diagnostics_bugreport_enabled, true);
+        mResources.setBoolean(R.bool.config_wifi_subsystem_restart_bugreport_enabled, false);
+        mWifiDiagnostics = new WifiDiagnostics(
+                mContext, mWifiInjector, mWifiNative, mBuildProperties, mLastMileLogger, mClock,
+                mTestLooper.getLooper());
+
+        mWifiDiagnostics.takeBugReport("", "Subsystem Restart");
+        verify(mPackageManager, never()).queryIntentActivities(any(), anyInt());
+    }
+
+    @Test
+    public void takeBugReportWhenSSRConfigOverlayEnabled() {
+        when(mBuildProperties.isUserBuild()).thenReturn(false);
+        mResources.setBoolean(R.bool.config_wifi_diagnostics_bugreport_enabled, true);
+        mResources.setBoolean(R.bool.config_wifi_subsystem_restart_bugreport_enabled, true);
+        mWifiDiagnostics = new WifiDiagnostics(
+                mContext, mWifiInjector, mWifiNative, mBuildProperties, mLastMileLogger, mClock,
+                mTestLooper.getLooper());
+
+        mWifiDiagnostics.takeBugReport("", "Subsystem Restart");
+        verify(mPackageManager, times(1)).queryIntentActivities(any(), anyInt());
+    }
+
+    @Test
+    public void takeBugReportWhenSSRConfigOverlayDisabledWhenNonSRREvent() {
+        when(mBuildProperties.isUserBuild()).thenReturn(false);
+        mResources.setBoolean(R.bool.config_wifi_diagnostics_bugreport_enabled, true);
+        mResources.setBoolean(R.bool.config_wifi_subsystem_restart_bugreport_enabled, false);
+        mWifiDiagnostics = new WifiDiagnostics(
+                mContext, mWifiInjector, mWifiNative, mBuildProperties, mLastMileLogger, mClock,
+                mTestLooper.getLooper());
+
+        mWifiDiagnostics.takeBugReport("", "Last Resort Watchdog");
+        verify(mPackageManager, times(1)).queryIntentActivities(any(), anyInt());
+    }
+
+    @Test
+    public void takeBugReportWhenSSRConfigOverlayEnabledWhenNonSRREvent() {
+        when(mBuildProperties.isUserBuild()).thenReturn(false);
+        mResources.setBoolean(R.bool.config_wifi_diagnostics_bugreport_enabled, true);
+        mResources.setBoolean(R.bool.config_wifi_subsystem_restart_bugreport_enabled, true);
+        mWifiDiagnostics = new WifiDiagnostics(
+                mContext, mWifiInjector, mWifiNative, mBuildProperties, mLastMileLogger, mClock,
+                mTestLooper.getLooper());
+
+        mWifiDiagnostics.takeBugReport("", "Last Resort Watchdog");
+        verify(mPackageManager, times(1)).queryIntentActivities(any(), anyInt());
+    }
+
     /** Verifies that we flush HAL ringbuffer when capture bugreport. */
     @Test
     public void triggerBugReportFlushRingBufferDataCapture() {

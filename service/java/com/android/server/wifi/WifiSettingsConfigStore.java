@@ -136,6 +136,12 @@ public class WifiSettingsConfigStore {
             new Key<>("wifi_default_country_code", WifiCountryCode.getOemDefaultCountryCode());
 
     /**
+     * Store the supported P2P features.
+     */
+    public static final Key<Long> WIFI_P2P_SUPPORTED_FEATURES =
+            new Key<>("wifi_p2p_supported_features", 0L);
+
+    /**
      * Store the supported features retrieved from WiFi HAL and Supplicant HAL. Note that this
      * value is deprecated and is replaced by {@link #WIFI_NATIVE_EXTENDED_SUPPORTED_FEATURES}
      */

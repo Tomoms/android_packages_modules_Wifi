@@ -853,4 +853,11 @@ interface ISupplicantStaIfaceHal {
      * @param ifaceName Name of the interface.
      */
     default void disableMscs(String ifaceName) {}
+
+    /**
+     * Returns true if this device supports RSN Overriding, false otherwise.
+     */
+    default boolean isRsnOverridingSupported(@NonNull String ifaceName) {
+        return false;
+    }
 }

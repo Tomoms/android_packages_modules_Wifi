@@ -40,7 +40,7 @@ public class WifiP2pUpnpServiceRequestTest {
 
         // failure case due to null target string
         try {
-            request = WifiP2pUpnpServiceRequest.newInstance(null);
+            request = WifiP2pUpnpServiceRequest.newInstance((String) null);
             fail("should throw IllegalArgumentException");
         } catch (IllegalArgumentException ex) {
             // expected exception.

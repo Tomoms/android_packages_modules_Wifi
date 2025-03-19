@@ -29,9 +29,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import android.app.test.MockAnswerUtil.AnswerWithArguments;
 import android.hardware.wifi.common.OuiKeyedData;
+import android.hardware.wifi.supplicant.KeyMgmtMask;
 import android.hardware.wifi.supplicant.P2pClientEapolIpAddressInfo;
 import android.hardware.wifi.supplicant.P2pDeviceFoundEventParams;
 import android.hardware.wifi.supplicant.P2pGoNegotiationReqEventParams;
@@ -46,26 +49,32 @@ import android.hardware.wifi.supplicant.WpsConfigMethods;
 import android.hardware.wifi.supplicant.WpsDevPasswordId;
 import android.net.MacAddress;
 import android.net.wifi.ScanResult;
+import android.net.wifi.WifiMigration;
 import android.net.wifi.WpsInfo;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pProvDiscEvent;
 import android.net.wifi.p2p.nsd.WifiP2pServiceResponse;
+import android.net.wifi.util.Environment;
 import android.os.PersistableBundle;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.WifiBaseTest;
 import com.android.server.wifi.p2p.WifiP2pServiceImpl.P2pStatus;
 import com.android.server.wifi.util.HalAidlUtil;
 import com.android.server.wifi.util.NativeUtil;
+import com.android.wifi.flags.Flags;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -81,6 +90,7 @@ public class SupplicantP2pIfaceCallbackAidlImplTest extends WifiBaseTest {
     private String mGroupIface = "test_p2p-p2p0-3";
     private WifiP2pMonitor mMonitor;
     private SupplicantP2pIfaceCallbackAidlImpl mDut;
+    private MockitoSession mSession;
 
     private byte[] mDeviceAddressInvalid1 = { 0x00 };
     private byte[] mDeviceAddressInvalid2 = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 };
@@ -113,6 +123,18 @@ public class SupplicantP2pIfaceCallbackAidlImplTest extends WifiBaseTest {
         MockitoAnnotations.initMocks(this);
         mMonitor = mock(WifiP2pMonitor.class);
         initializeDut(DEFAULT_SERVICE_VERSION);
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(Flags.class, withSettings().lenient())
+                .mockStatic(WifiMigration.class, withSettings().lenient())
+                .startMocking();
+        when(Flags.wifiDirectR2()).thenReturn(false);
+    }
+
+    @After
+    public void tearDown() {
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     private void initializeDut(int serviceVersion) {
@@ -670,6 +692,30 @@ public class SupplicantP2pIfaceCallbackAidlImplTest extends WifiBaseTest {
 
         verify(mMonitor, times(2)).broadcastP2pGroupStarted(
                 anyString(), any(WifiP2pGroup.class));
+    }
+
+    /**
+     * Verify onGroupStartedWithParams call when the parameters
+     * include Authentication Key Management.
+     */
+    @Test
+    public void testOnGroupStartedWithKeyMgmtMask() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        initializeDut(4 /* serviceVersion */);
+        when(Flags.wifiDirectR2()).thenReturn(true);
+        P2pGroupStartedEventParams params = new P2pGroupStartedEventParams();
+        params.groupInterfaceName = "group name";
+        params.ssid = new byte[] {0x30, 0x31, 0x32, 0x33};
+        params.goDeviceAddress = mDeviceAddress1Bytes;
+        params.keyMgmtMask = KeyMgmtMask.SAE | KeyMgmtMask.WPA_PSK;
+
+        ArgumentCaptor<WifiP2pGroup> p2pGroupCaptor =
+                ArgumentCaptor.forClass(WifiP2pGroup.class);
+        mDut.onGroupStartedWithParams(params);
+        verify(mMonitor).broadcastP2pGroupStarted(eq(mIface), p2pGroupCaptor.capture());
+
+        assertEquals(WifiP2pGroup.SECURITY_TYPE_WPA3_COMPATIBILITY,
+                p2pGroupCaptor.getValue().getSecurityType());
     }
 
     /**

@@ -21,6 +21,7 @@ import android.net.wifi.OuiKeyedData;
 import android.net.wifi.aware.AwarePairingConfig;
 import android.net.wifi.aware.IdentityChangedListener;
 import android.net.wifi.aware.WifiAwareChannelInfo;
+import android.net.wifi.rtt.RangingResult;
 import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
@@ -158,6 +159,11 @@ public class WifiAwareNativeCallback implements WifiNanIface.Callback,
     @Override
     public void notifyCapabilitiesResponse(short id, Capabilities capabilities) {
         mWifiAwareStateManager.onCapabilitiesUpdateResponse(id, capabilities);
+    }
+
+    @Override
+    public void notifyRangingResults(ArrayList<RangingResult> rangingResults, byte sessionId) {
+        mWifiAwareStateManager.onRangingResults(rangingResults, sessionId);
     }
 
     @Override

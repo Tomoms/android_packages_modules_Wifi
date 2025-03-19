@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.google.snippet.wifi">
+  <uses-sdk android:minSdkVersion="31"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+  <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
+  <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"/>
+  <uses-permission android:name="android.permission.LOCAL_MAC_ADDRESS"/>
+  <uses-permission android:name="android.permission.NETWORK_SETTINGS"/>
+  <uses-permission android:name="android.permission.NETWORK_STACK"/>
+  <uses-permission android:name="android.permission.READ_WIFI_CREDENTIAL"/>
+  <uses-permission android:name="android.permission.OVERRIDE_WIFI_CONFIG"/>
+  <application>
+    <meta-data
+        android:name="mobly-snippets"
+        tools:replace="android:value"
+        android:value="com.google.snippet.wifi.aware.WifiAwareManagerSnippet,
+                       com.google.snippet.wifi.aware.ConnectivityManagerSnippet,
+                       com.google.snippet.wifi.direct.WifiP2pManagerSnippet,
+                       com.google.android.mobly.snippet.bundled.WifiManagerSnippet"/>
+    <meta-data
+        android:name="mobly-object-converter"
+        android:value="com.google.snippet.wifi.aware.WifiAwareSnippetConverter"/>
+  </application>
+  <instrumentation
+      android:name="com.google.android.mobly.snippet.SnippetRunner"
+      android:targetPackage="com.google.snippet.wifi"/>
+</manifest>

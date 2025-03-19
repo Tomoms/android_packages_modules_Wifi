@@ -568,13 +568,14 @@ public class SupplicantP2pIfaceHal {
      * @return true, if operation was successful.
      */
     public boolean groupAdd(String networkName, String passphrase,
+            @WifiP2pConfig.PccModeConnectionType int connectionType,
             boolean isPersistent, int freq, String peerAddress, boolean join) {
         synchronized (mLock) {
             String methodStr = "groupAdd";
             if (mP2pIfaceHal == null) {
                 return handleNullHal(methodStr);
             }
-            return mP2pIfaceHal.groupAdd(networkName, passphrase,
+            return mP2pIfaceHal.groupAdd(networkName, passphrase, connectionType,
                     isPersistent, freq, peerAddress, join);
         }
     }

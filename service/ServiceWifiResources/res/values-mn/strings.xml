@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Хэнд:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Шаардлагатай ПИН-г бичнэ үү:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"ПИН:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Төхөөрөмжийн холболт"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Төхөөрөмжийн холболт"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> руу урилга илгээсэн."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Холбогдохын тулд энэ ПИН-г <xliff:g id="DEVICE_NAME">%1$s</xliff:g> дээр оруулна уу."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"OK"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Төхөөрөмжийн холболт"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Төхөөрөмжийн холболт"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Төхөөрөмжийн холболт"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> таны төхөөрөмжид холбогдохыг хүсэж байна."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Холбогдохын тулд <xliff:g id="DEVICE_NAME">%1$s</xliff:g> дээр харуулсан ПИН-г оруулна уу."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> дараах ПИН-ээр таны төхөөрөмжтэй холбогдохыг хүсэж байна."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} таны төхөөрөмжид холбогдохыг хүсэж байна. {countdown} секундийн дотор зөвшөөрнө үү.}other{{device} таны төхөөрөмжид холбогдохыг хүсэж байна. {countdown} секундийн дотор зөвшөөрнө үү.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Холбогдохын тулд {countdown} секундийн дотор {device} дээр харуулсан ПИН-г оруулна уу.}other{Холбогдохын тулд {countdown} секундийн дотор {device} дээр харуулсан ПИН-г оруулна уу.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} дараах ПИН-ээр таны төхөөрөмжтэй холбогдохыг хүсэж байна. {countdown} секундийн дотор зөвшөөрнө үү.}other{{device} дараах ПИН-ээр таны төхөөрөмжтэй холбогдохыг хүсэж байна. {countdown} секундийн дотор зөвшөөрнө үү.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Холбогдох"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Цуцлах"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"ПИН"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"ПИН"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Таны төхөөрөмж <xliff:g id="DEVICE_NAME">%1$s</xliff:g>-д холбогдсон үедээ Wi-Fi-с түр сална"</string>
     <string name="dlg_ok" msgid="254496739491689405">"OK"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g>-д холбогдож чадсангүй"</string>

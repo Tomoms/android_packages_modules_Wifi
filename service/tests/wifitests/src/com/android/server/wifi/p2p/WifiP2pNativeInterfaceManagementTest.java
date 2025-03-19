@@ -30,6 +30,8 @@ import android.hardware.wifi.V1_0.IWifiP2pIface;
 import android.hardware.wifi.V1_0.WifiStatus;
 import android.hardware.wifi.V1_0.WifiStatusCode;
 import android.net.wifi.nl80211.WifiNl80211Manager;
+import android.net.wifi.p2p.WifiP2pManager;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.WorkSource;
 
@@ -44,6 +46,7 @@ import com.android.server.wifi.WifiBaseTest;
 import com.android.server.wifi.WifiInjector;
 import com.android.server.wifi.WifiMetrics;
 import com.android.server.wifi.WifiNative;
+import com.android.server.wifi.WifiSettingsConfigStore;
 import com.android.server.wifi.WifiVendorHal;
 import com.android.server.wifi.hal.WifiHal;
 import com.android.wifi.flags.FeatureFlags;
@@ -78,6 +81,7 @@ public class WifiP2pNativeInterfaceManagementTest extends WifiBaseTest {
     @Mock private WifiInjector mWifiInjector;
     @Mock private DeviceConfigFacade mDeviceConfigFacade;
     @Mock private FeatureFlags mFeatureFlags;
+    private @Mock WifiSettingsConfigStore mWifiSettingsConfigStore;
 
     private WifiP2pNative mWifiP2pNative;
     private WifiStatus mWifiStatusSuccess;
@@ -108,6 +112,20 @@ public class WifiP2pNativeInterfaceManagementTest extends WifiBaseTest {
                 .thenReturn(TEST_P2P_IFACE_NAME);
         when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
         when(mDeviceConfigFacade.getFeatureFlags()).thenReturn(mFeatureFlags);
+        when(mWifiInjector.getSettingsConfigStore()).thenReturn(mWifiSettingsConfigStore);
+        when(mWifiSettingsConfigStore
+                .get(eq(WifiSettingsConfigStore.SUPPLICANT_HAL_AIDL_SERVICE_VERSION)))
+                .thenReturn(2);
+        if (Environment.isSdkAtLeastB()) {
+            when(mWifiSettingsConfigStore
+                    .get(eq(WifiSettingsConfigStore.WIFI_P2P_SUPPORTED_FEATURES)))
+                    .thenReturn(WifiP2pManager.FEATURE_WIFI_DIRECT_R2
+                            | WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION);
+        } else {
+            when(mWifiSettingsConfigStore
+                    .get(eq(WifiSettingsConfigStore.WIFI_P2P_SUPPORTED_FEATURES)))
+                    .thenReturn(0L);
+        }
         mWifiP2pNative = new WifiP2pNative(mWifiNl80211Manager, mWifiNative, mWifiMetrics,
                 mWifiVendorHal, mSupplicantP2pIfaceHal, mHalDeviceManager, mPropertyService,
                 mWifiInjector);

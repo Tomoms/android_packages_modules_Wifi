@@ -50,6 +50,7 @@ import android.hardware.wifi.supplicant.ISupplicantP2pIface;
 import android.hardware.wifi.supplicant.ISupplicantP2pIfaceCallback;
 import android.hardware.wifi.supplicant.ISupplicantP2pNetwork;
 import android.hardware.wifi.supplicant.IfaceInfo;
+import android.hardware.wifi.supplicant.KeyMgmtMask;
 import android.hardware.wifi.supplicant.MacAddress;
 import android.hardware.wifi.supplicant.MiracastMode;
 import android.hardware.wifi.supplicant.P2pConnectInfo;
@@ -68,6 +69,7 @@ import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pGroupList;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.net.wifi.p2p.nsd.WifiP2pServiceInfo;
+import android.net.wifi.util.Environment;
 import android.os.IBinder;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
@@ -1304,7 +1306,8 @@ public class SupplicantP2pIfaceHalAidlImplTest extends WifiBaseTest {
                 eq(mPeerMacAddressBytes),
                 anyBoolean());
         // Default value when service is not initialized.
-        assertFalse(mDut.groupAdd(mNetworkName, mPassphrase, mIsPersistent,
+        assertFalse(mDut.groupAdd(mNetworkName, mPassphrase,
+                WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY, mIsPersistent,
                 mGroupOwnerBand, mPeerMacAddress, true));
         verify(mISupplicantP2pIfaceMock, never()).addGroupWithConfig(
                 any(byte[].class), anyString(),
@@ -1312,7 +1315,8 @@ public class SupplicantP2pIfaceHalAidlImplTest extends WifiBaseTest {
                 any(byte[].class), anyBoolean());
 
         executeAndValidateInitializationSequence(false, false);
-        assertTrue(mDut.groupAdd(mNetworkName, mPassphrase, mIsPersistent,
+        assertTrue(mDut.groupAdd(mNetworkName, mPassphrase,
+                WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY, mIsPersistent,
                 mGroupOwnerBand, mPeerMacAddress, true));
         verify(mISupplicantP2pIfaceMock).addGroupWithConfig(
                 eq(NativeUtil.byteArrayFromArrayList(
@@ -1322,6 +1326,35 @@ public class SupplicantP2pIfaceHalAidlImplTest extends WifiBaseTest {
                 eq(mGroupOwnerBand),
                 eq(mPeerMacAddressBytes),
                 eq(true));
+    }
+
+    /**
+     * Sunny day scenario for groupAdd() with config
+     */
+    @Test
+    public void testGroupAddWithConfigurationParamsSuccess() throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        setCachedServiceVersion(4);
+        ArgumentCaptor<android.hardware.wifi.supplicant.P2pAddGroupConfigurationParams>
+                addGroupParamsCaptor = ArgumentCaptor.forClass(android.hardware.wifi.supplicant
+                .P2pAddGroupConfigurationParams.class);
+
+        executeAndValidateInitializationSequence(false, false);
+        assertTrue(mDut.groupAdd(mNetworkName, mPassphrase,
+                WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2, mIsPersistent,
+                mGroupOwnerBand, mPeerMacAddress, true));
+        verify(mISupplicantP2pIfaceMock).addGroupWithConfigurationParams(
+                addGroupParamsCaptor.capture());
+        android.hardware.wifi.supplicant.P2pAddGroupConfigurationParams params =
+                addGroupParamsCaptor.getValue();
+        assertArrayEquals(NativeUtil.byteArrayFromArrayList(
+                NativeUtil.decodeSsid("\"" + mNetworkName + "\"")), params.ssid);
+        assertEquals(mGroupOwnerBand, params.frequencyMHzOrBand);
+        assertEquals(mPassphrase, params.passphrase);
+        assertArrayEquals(mPeerMacAddressBytes, params.goInterfaceAddress);
+        assertEquals(mIsPersistent, params.isPersistent);
+        assertEquals(true, params.joinExistingGroup);
+        assertEquals(KeyMgmtMask.WPA_PSK | KeyMgmtMask.SAE, params.keyMgmtMask);
     }
 
     /**
@@ -1339,7 +1372,8 @@ public class SupplicantP2pIfaceHalAidlImplTest extends WifiBaseTest {
                         eq(mGroupOwnerBand),
                         eq(mPeerMacAddressBytes),
                         anyBoolean());
-        assertFalse(mDut.groupAdd(mNetworkName, mPassphrase, mIsPersistent,
+        assertFalse(mDut.groupAdd(mNetworkName, mPassphrase,
+                WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY, mIsPersistent,
                 mGroupOwnerBand, mPeerMacAddress, true));
         verify(mISupplicantP2pIfaceMock).addGroupWithConfig(
                 eq(NativeUtil.byteArrayFromArrayList(
@@ -1369,7 +1403,8 @@ public class SupplicantP2pIfaceHalAidlImplTest extends WifiBaseTest {
                         eq(mGroupOwnerBand),
                         eq(mPeerMacAddressBytes),
                         anyBoolean());
-        assertFalse(mDut.groupAdd(mNetworkName, mPassphrase, mIsPersistent,
+        assertFalse(mDut.groupAdd(mNetworkName, mPassphrase,
+                WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY, mIsPersistent,
                 mGroupOwnerBand, mPeerMacAddress, true));
         verify(mISupplicantP2pIfaceMock).addGroupWithConfig(
                 eq(NativeUtil.byteArrayFromArrayList(
@@ -2688,24 +2723,22 @@ public class SupplicantP2pIfaceHalAidlImplTest extends WifiBaseTest {
      * Test that getSupportedFeatures returns the expected feature sets.
      */
     @Test
-    public void testGetSupportedFeatures() {
+    public void testGetSupportedFeatures() throws Exception {
         WifiSettingsConfigStore mockConfigStore = mock(WifiSettingsConfigStore.class);
         when(mWifiInjector.getSettingsConfigStore()).thenReturn(mockConfigStore);
-
-        // If the service version cannot be retrieved, expect the default feature set.
         when(mockConfigStore.get(any())).thenReturn(-1);
-        long defaultFeatureSet = mDut.getSupportedFeatures();
-        verify(mockConfigStore).get(any());
+        when(mISupplicantP2pIfaceMock.getFeatureSet())
+                .thenReturn(mISupplicantP2pIfaceMock.P2P_FEATURE_V2);
+        executeAndValidateInitializationSequence(false, false);
 
-        // Full feature set can be retrieved once we have the service version.
-        when(mockConfigStore.get(any())).thenReturn(2);
-        long fullFeatureSet = mDut.getSupportedFeatures();
-        assertNotEquals(defaultFeatureSet, fullFeatureSet);
+        // getSupportedFeatures() HAL API is supported only on version 4 or later.
+        assertEquals(0, mDut.getSupportedFeatures());
         verify(mockConfigStore, times(2)).get(any());
 
-        // Service version should be cached on subsequent calls.
-        assertEquals(fullFeatureSet, mDut.getSupportedFeatures());
-        verifyNoMoreInteractions(mockConfigStore);
+        // Feature set can be retrieved only on service version set to at least version 4.
+        when(mockConfigStore.get(any())).thenReturn(4);
+        assertNotEquals(mISupplicantP2pIfaceMock.P2P_FEATURE_V2, mDut.getSupportedFeatures());
+        verify(mockConfigStore, times(3)).get(any());
     }
 
     /**

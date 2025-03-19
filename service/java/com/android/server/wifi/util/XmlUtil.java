@@ -20,6 +20,7 @@ import static com.android.wifi.flags.Flags.softapConfigStoreMaxChannelWidth;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.app.compat.CompatChanges;
 import android.net.InetAddresses;
 import android.net.IpConfiguration;
@@ -41,6 +42,7 @@ import android.net.wifi.WifiEnterpriseConfig;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiMigration;
 import android.net.wifi.WifiSsid;
+import android.net.wifi.util.Environment;
 import android.os.ParcelUuid;
 import android.os.PersistableBundle;
 import android.text.TextUtils;
@@ -49,6 +51,7 @@ import android.util.Pair;
 import android.util.SparseIntArray;
 
 import com.android.modules.utils.build.SdkLevel;
+import com.android.wifi.flags.Flags;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -1975,6 +1978,7 @@ public class XmlUtil {
         public static final String XML_TAG_PERSISTENT_RANDOMIZED_MAC_ADDRESS =
                 "PersistentRandomizedMacAddress";
         public static final String XML_TAG_MAX_CHANNEL_WIDTH = "MaxChannelWidth";
+        public static final String XML_TAG_CLIENT_ISOLATION = "ClientIsolation";
 
 
         /**
@@ -2129,6 +2133,7 @@ public class XmlUtil {
          * @param out          XmlSerializer instance pointing to the XML stream.
          * @param softApConfig configuration of the Soft AP.
          */
+        @SuppressLint("NewApi")
         public static void writeSoftApConfigurationToXml(@NonNull XmlSerializer out,
                 @NonNull SoftApConfiguration softApConfig,
                 WifiConfigStoreEncryptionUtil encryptionUtil)
@@ -2206,6 +2211,10 @@ public class XmlUtil {
             if (SdkLevel.isAtLeastV()) {
                 writeVendorDataListToXml(out, softApConfig.getVendorData());
             }
+            if (Flags.apIsolate() && Environment.isSdkAtLeastB()) {
+                XmlUtil.writeNextValue(out, XML_TAG_CLIENT_ISOLATION,
+                        softApConfig.isClientIsolationEnabled());
+            }
         } // End of writeSoftApConfigurationToXml
 
         /**
@@ -2215,6 +2224,7 @@ public class XmlUtil {
          * @param outerTagDepth depth of the outer tag in the XML document.
          * @param settingsMigrationDataHolder the class instance of SettingsMigrationDataHolder
          */
+        @SuppressLint("NewApi")
         @Nullable
         public static SoftApConfiguration parseFromXml(XmlPullParser in, int outerTagDepth,
                 SettingsMigrationDataHolder settingsMigrationDataHolder,
@@ -2359,6 +2369,11 @@ public class XmlUtil {
                                 if (SdkLevel.isAtLeastT()
                                         && softapConfigStoreMaxChannelWidth()) {
                                     softApConfigBuilder.setMaxChannelBandwidth((int) value);
+                                }
+                                break;
+                            case XML_TAG_CLIENT_ISOLATION:
+                                if (Flags.apIsolate() && Environment.isSdkAtLeastB()) {
+                                    softApConfigBuilder.setClientIsolationEnabled((boolean) value);
                                 }
                                 break;
                             default:

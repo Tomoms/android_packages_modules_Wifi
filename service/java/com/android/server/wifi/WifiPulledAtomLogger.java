@@ -26,6 +26,7 @@ import android.net.wifi.WifiNetworkSuggestion;
 import android.net.wifi.WifiSsid;
 import android.os.Handler;
 import android.os.Process;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.StatsEvent;
 
@@ -149,6 +150,10 @@ public class WifiPulledAtomLogger {
         data.add(WifiStatsLog.buildStatsEvent(atomTag,
                 WifiStatsLog.WIFI_SETTING_INFO__SETTING_NAME__LOCATION_MODE,
                 mWifiInjector.getWifiPermissionsUtil().isLocationModeEnabled()));
+        data.add(WifiStatsLog.buildStatsEvent(atomTag,
+                WifiStatsLog.WIFI_SETTING_INFO__SETTING_NAME__EXTERNAL_SCORER_DRY_RUN,
+                !TextUtils.isEmpty(
+                        mWifiInjector.getDeviceConfigFacade().getDryRunScorerPkgName())));
         return StatsManager.PULL_SUCCESS;
     }
 

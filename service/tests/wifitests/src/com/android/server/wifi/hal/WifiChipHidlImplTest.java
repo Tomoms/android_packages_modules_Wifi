@@ -16,7 +16,7 @@
 
 package com.android.server.wifi.hal;
 
-import static com.android.server.wifi.util.GeneralUtil.longToBitset;
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -156,11 +156,8 @@ public class WifiChipHidlImplTest extends WifiBaseTest {
                         | android.hardware.wifi.V1_1.IWifiChip.ChipCapabilityMask.D2D_RTT
                         | android.hardware.wifi.V1_1.IWifiChip.ChipCapabilityMask.D2AP_RTT
         );
-        BitSet expected = longToBitset(
-                WifiManager.WIFI_FEATURE_TX_POWER_LIMIT
-                        | WifiManager.WIFI_FEATURE_D2D_RTT
-                        | WifiManager.WIFI_FEATURE_D2AP_RTT
-        );
+        BitSet expected = createCapabilityBitset(WifiManager.WIFI_FEATURE_TX_POWER_LIMIT,
+                WifiManager.WIFI_FEATURE_D2D_RTT, WifiManager.WIFI_FEATURE_D2AP_RTT);
         assertTrue(expected.equals(mDut.wifiFeatureMaskFromChipCapabilities(caps)));
     }
 
@@ -173,10 +170,8 @@ public class WifiChipHidlImplTest extends WifiBaseTest {
                 android.hardware.wifi.V1_3.IWifiChip.ChipCapabilityMask.SET_LATENCY_MODE
                         | android.hardware.wifi.V1_1.IWifiChip.ChipCapabilityMask.D2D_RTT
         );
-        BitSet expected = longToBitset(
-                WifiManager.WIFI_FEATURE_LOW_LATENCY
-                        | WifiManager.WIFI_FEATURE_D2D_RTT
-        );
+        BitSet expected = createCapabilityBitset(
+                WifiManager.WIFI_FEATURE_LOW_LATENCY, WifiManager.WIFI_FEATURE_D2D_RTT);
         assertTrue(expected.equals(mDut.wifiFeatureMaskFromChipCapabilities_1_3(caps)));
     }
 

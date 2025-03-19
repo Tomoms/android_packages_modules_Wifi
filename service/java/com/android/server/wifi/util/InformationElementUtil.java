@@ -1870,6 +1870,8 @@ public class InformationElementUtil {
         private static final int RSN_AKM_PSK = 0x02ac0f00;
         private static final int RSN_AKM_FT_EAP = 0x03ac0f00;
         private static final int RSN_AKM_FT_PSK = 0x04ac0f00;
+        private static final int RSN_AKM_FT_PSK_SHA384 = 0x13ac0f00;
+        private static final int RSN_AKM_EAP_FT_SHA384 = 0x0dac0f00;
         private static final int RSN_AKM_EAP_SHA256 = 0x05ac0f00;
         private static final int RSN_AKM_PSK_SHA256 = 0x06ac0f00;
         private static final int RSN_AKM_SAE = 0x08ac0f00;
@@ -1882,6 +1884,7 @@ public class InformationElementUtil {
         private static final int RSN_AKM_SAE_EXT_KEY = 0x18ac0f00;
         private static final int RSN_AKM_FT_SAE_EXT_KEY = 0x19ac0f00;
         private static final int RSN_AKM_DPP = 0x029a6f50;
+        private static final int RSN_AKM_PASN = 0x15ac0f00;
 
         private static final int WPA_CIPHER_NONE = 0x00f25000;
         private static final int WPA_CIPHER_TKIP = 0x02f25000;
@@ -2023,6 +2026,15 @@ public class InformationElementUtil {
                             break;
                         case RSN_AKM_DPP:
                             rsnKeyManagement.add(ScanResult.KEY_MGMT_DPP);
+                            break;
+                        case RSN_AKM_FT_PSK_SHA384:
+                            rsnKeyManagement.add(ScanResult.KEY_MGMT_FT_PSK_SHA384);
+                            break;
+                        case RSN_AKM_EAP_FT_SHA384:
+                            rsnKeyManagement.add(ScanResult.KEY_MGMT_EAP_FT_SHA384);
+                            break;
+                        case RSN_AKM_PASN:
+                            rsnKeyManagement.add(ScanResult.KEY_MGMT_PASN);
                             break;
                         default: {
                             int akmScheme =
@@ -2380,6 +2392,12 @@ public class InformationElementUtil {
                     return ScanResult.KEY_MGMT_FILS_SHA384;
                 case RSN_AKM_DPP:
                     return ScanResult.KEY_MGMT_DPP;
+                case RSN_AKM_FT_PSK_SHA384:
+                    return ScanResult.KEY_MGMT_FT_PSK_SHA384;
+                case RSN_AKM_EAP_FT_SHA384:
+                    return ScanResult.KEY_MGMT_EAP_FT_SHA384;
+                case RSN_AKM_PASN:
+                    return ScanResult.KEY_MGMT_PASN;
                 default:
                     return ScanResult.KEY_MGMT_UNKNOWN;
             }
@@ -2455,6 +2473,12 @@ public class InformationElementUtil {
                     return "EAP-FILS-SHA384";
                 case ScanResult.KEY_MGMT_DPP:
                     return "DPP";
+                case ScanResult.KEY_MGMT_FT_PSK_SHA384:
+                    return "FT/PSK-SHA384";
+                case ScanResult.KEY_MGMT_EAP_FT_SHA384:
+                    return "EAP-FT-SHA384";
+                case ScanResult.KEY_MGMT_PASN:
+                    return "PASN";
                 default:
                     return "?";
             }
@@ -2851,6 +2875,51 @@ public class InformationElementUtil {
          */
         public String getCountryCode() {
             return mCountryCode;
+        }
+    }
+
+    /*
+     * RSNXE (Robust Security Network Extended) Field
+     *
+     * RSNXE is a field within Wi-Fi beacon frames that provides extra information about the
+     * access point's security capabilities, going beyond the basics of RSN (Robust Security
+     * Network).
+     */
+    public static class Rsnxe {
+        private static final int SECURE_HE_LTF_SUPPORT_BIT = 8;
+        private static final int URNM_MFPR_BIT = 15;
+        private boolean mIsSecureHeLtfSupported;
+        private boolean mIsRangingFrameProtectionRequired;
+
+        /**
+         * Parse RSN extension element
+         * @param ie Information element
+         */
+        public void from(InformationElement ie) {
+            if (ie == null || ie.id != InformationElement.EID_RSN_EXTENSION) return;
+            BitSet rsnxBitset = BitSet.valueOf(
+                    ByteBuffer.wrap(ie.bytes).order(ByteOrder.LITTLE_ENDIAN));
+            mIsSecureHeLtfSupported = rsnxBitset.get(SECURE_HE_LTF_SUPPORT_BIT);
+            mIsRangingFrameProtectionRequired = rsnxBitset.get(URNM_MFPR_BIT);
+        }
+
+        /**
+         * The secure HE-LTF is a security enhancement for ranging measurements where the HE-LTF
+         * sequence is randomized using cryptographic keys derived from the security association.
+         *
+         * @return Whether the secure HE-LTF is supported or not.
+         */
+        public boolean isSecureHeLtfSupported() {
+            return mIsSecureHeLtfSupported;
+        }
+
+        /**
+         * A security policy that specifies whether ranging frames are required to be protected
+         * without association.
+         * @return Whether ranging frames are required to be protected or not.
+         */
+        public boolean isRangingFrameProtectionRequired() {
+            return mIsRangingFrameProtectionRequired;
         }
     }
 }

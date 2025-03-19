@@ -1955,6 +1955,20 @@ public class SupplicantStaIfaceHal {
     }
 
     /**
+     * Returns true if this device supports RSN Overriding, false otherwise.
+     */
+    public boolean isRsnOverridingSupported(@NonNull String ifaceName) {
+        synchronized (mLock) {
+            String methodStr = "isRsnOverridingSupported";
+            if (mStaIfaceHal == null) {
+                handleNullHal(methodStr);
+                return false;
+            }
+            return mStaIfaceHal.isRsnOverridingSupported(ifaceName);
+        }
+    }
+
+    /**
      * Returns connection capabilities of the current network
      *
      * @param ifaceName Name of the interface.

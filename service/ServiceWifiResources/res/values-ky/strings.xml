@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Алуучу:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Талап кылынган PIN\'ди териңиз:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Түзмөктү туташтыруу"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Түзмөктү туташтыруу"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Чакыруу <xliff:g id="DEVICE_NAME">%1$s</xliff:g> түзмөгүнө жөнөтүлдү."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Туташтыруу үчүн ушул PIN кодду <xliff:g id="DEVICE_NAME">%1$s</xliff:g> түзмөгүнө киргизиңиз."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"Жарайт"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Түзмөктү туташтыруу"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Түзмөктү туташтыруу"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Түзмөктү туташтыруу"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> түзмөгүңүзгө туташканы жатат."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Туташтыруу үчүн <xliff:g id="DEVICE_NAME">%1$s</xliff:g> түзмөгүндө көрсөтүлгөн PIN кодду киргизиңиз."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> түзмөгүңүзгө төмөнкү PIN код менен туташканы жатат."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} түзмөгүңүзгө туташканы жатат. {countdown} секундда кабыл алыңыз.}other{{device} түзмөгүңүзгө туташканы жатат. {countdown} секундда кабыл алыңыз.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Туташтыруу үчүн {device} түзмөгүндө көрсөтүлгөн PIN кодду {countdown} секунддун ичинде киргизиңиз.}other{Туташтыруу үчүн {device} түзмөгүндө көрсөтүлгөн PIN кодду {countdown} секунддун ичинде киргизиңиз.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} түзмөгүңүзгө төмөнкү PIN код менен туташканы жатат. {countdown} секундда кабыл алыңыз.}other{{device} түзмөгүңүзгө төмөнкү PIN код менен туташканы жатат. {countdown} секундда кабыл алыңыз.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Туташтыруу"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Жокко чыгаруу"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN код"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN код"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Түзмөгүңүз <xliff:g id="DEVICE_NAME">%1$s</xliff:g> түзмөгүнө туташып турганда убактылуу Wi-Fi\'дан ажыратылат"</string>
     <string name="dlg_ok" msgid="254496739491689405">"Жарайт"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g> менен туташпай жатат"</string>

@@ -16,16 +16,16 @@
 
 package android.net.wifi.aware;
 
-import android.net.wifi.aware.AwarePairingConfig;
 import android.net.wifi.OuiKeyedData;
+import android.net.wifi.aware.AwarePairingConfig;
+import android.net.wifi.rtt.RangingResult;
 
 /**
  * Callback interface that WifiAwareManager implements
  *
  * {@hide}
  */
-oneway interface IWifiAwareDiscoverySessionCallback
-{
+oneway interface IWifiAwareDiscoverySessionCallback {
     void onSessionStarted(int discoverySessionId);
     void onSessionConfigSuccess();
     void onSessionConfigFail(int reason);
@@ -50,4 +50,5 @@ oneway interface IWifiAwareDiscoverySessionCallback
     void onPairingSetupConfirmed(int peerId, boolean accept, String alias);
     void onPairingVerificationConfirmed(int peerId, boolean accept, String alias);
     void onBootstrappingVerificationConfirmed(int peerId, boolean accept, int method);
+    void onRangingResultsReceived(in List<RangingResult> rangingResults);
 }

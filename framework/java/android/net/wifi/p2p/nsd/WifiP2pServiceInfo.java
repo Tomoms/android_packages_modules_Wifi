@@ -16,13 +16,21 @@
 
 package android.net.wifi.p2p.nsd;
 
+import android.annotation.FlaggedApi;
+import android.annotation.NonNull;
+import android.annotation.Nullable;
+import android.annotation.RequiresApi;
 import android.compat.annotation.UnsupportedAppUsage;
+import android.net.wifi.util.Environment;
 import android.os.Build;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.android.wifi.flags.Flags;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A class for storing service information that is advertised
@@ -89,6 +97,13 @@ public class WifiP2pServiceInfo implements Parcelable {
     private List<String> mQueryList;
 
     /**
+     * This field is used only when the service advertisement is using un-synchronized service
+     * discovery (USD) protocol. Refer Wi-Fi Alliance Wi-Fi Direct R2 specification section 3.7 -
+     * "Unsynchronized Service Discovery (USD)" for the details.
+     */
+    private WifiP2pUsdBasedServiceConfig mUsdServiceConfig;
+
+    /**
      * This is only used in subclass.
      *
      * @param queryList query string for wpa_supplicant
@@ -102,6 +117,38 @@ public class WifiP2pServiceInfo implements Parcelable {
         mQueryList = queryList;
     }
 
+    /**
+     * This constructor is only used in Parcelable.
+     *
+     * @param queryList query string for wpa_supplicant
+     * @param usdConfig See {@link WifiP2pUsdBasedServiceConfig}
+     *
+     */
+    private WifiP2pServiceInfo(List<String> queryList,
+            @NonNull WifiP2pUsdBasedServiceConfig usdConfig) {
+        mQueryList = queryList;
+        mUsdServiceConfig = usdConfig;
+    }
+
+    /**
+     * Constructor for creating a service information for advertising the service using
+     * un-synchronized service discovery (USD) protocol. Refer Wi-Fi Alliance Wi-Fi Direct R2
+     * specification section 3.7 - "Unsynchronized Service Discovery (USD)" for the details.
+     *
+     * @param usdConfig See {@link WifiP2pUsdBasedServiceConfig}
+     *
+     * @return service info containing USD based service configuration.
+     */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    @FlaggedApi(Flags.FLAG_WIFI_DIRECT_R2)
+    public WifiP2pServiceInfo(@NonNull WifiP2pUsdBasedServiceConfig usdConfig) {
+        if (!Environment.isSdkAtLeastB()) {
+            throw new UnsupportedOperationException();
+        }
+        Objects.requireNonNull(usdConfig, "usd based service config cannot be null");
+        mUsdServiceConfig = usdConfig;
+    }
+
    /**
     * Return the list of the query string for wpa_supplicant.
     *
@@ -111,6 +158,25 @@ public class WifiP2pServiceInfo implements Parcelable {
    public List<String> getSupplicantQueryList() {
        return mQueryList;
    }
+
+    /**
+     * Get the service information configured to advertise using un-synchronized service discovery
+     * (USD) protocol.
+     * See {@link #WifiP2pServiceInfo(WifiP2pUsdBasedServiceConfig)}
+     *
+     * @return A valid or not null {@link WifiP2pUsdBasedServiceConfig} if the service information
+     * is configured to advertise using un-synchronized service discovery (USD) protocol.
+     * Otherwise, it is null.
+     */
+    @RequiresApi(Build.VERSION_CODES.BAKLAVA)
+    @FlaggedApi(Flags.FLAG_WIFI_DIRECT_R2)
+    @Nullable
+    public WifiP2pUsdBasedServiceConfig getWifiP2pUsdBasedServiceConfig() {
+        if (!Environment.isSdkAtLeastB()) {
+            throw new UnsupportedOperationException();
+        }
+        return mUsdServiceConfig;
+    }
 
    /**
     * Converts byte array to hex string.
@@ -141,23 +207,25 @@ public class WifiP2pServiceInfo implements Parcelable {
 
    @Override
    public boolean equals(Object o) {
-       if (o == this) {
-           return true;
-       }
-       if (!(o instanceof WifiP2pServiceInfo)) {
-           return false;
-       }
+        if (o == this) {
+            return true;
+        }
+        if (!(o instanceof WifiP2pServiceInfo)) {
+            return false;
+        }
 
-       WifiP2pServiceInfo servInfo = (WifiP2pServiceInfo)o;
-       return  mQueryList.equals(servInfo.mQueryList);
+        WifiP2pServiceInfo servInfo = (WifiP2pServiceInfo) o;
+        return Objects.equals(mQueryList, servInfo.mQueryList)
+                && Objects.equals(mUsdServiceConfig, servInfo.mUsdServiceConfig);
    }
 
-   @Override
-   public int hashCode() {
-       int result = 17;
-       result = 31 * result + (mQueryList == null ? 0 : mQueryList.hashCode());
-       return result;
-   }
+    @Override
+    public int hashCode() {
+        int result = 17;
+        result = 31 * result + (mQueryList == null ? 0 : mQueryList.hashCode());
+        result = 31 * result + (mUsdServiceConfig == null ? 0 : mUsdServiceConfig.hashCode());
+        return result;
+    }
 
     /** Implement the Parcelable interface {@hide} */
     public int describeContents() {
@@ -167,21 +235,27 @@ public class WifiP2pServiceInfo implements Parcelable {
     /** Implement the Parcelable interface {@hide} */
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeStringList(mQueryList);
+        if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
+            dest.writeParcelable(mUsdServiceConfig, flags);
+        }
     }
 
     /** Implement the Parcelable interface {@hide} */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     public static final @android.annotation.NonNull Creator<WifiP2pServiceInfo> CREATOR =
-        new Creator<WifiP2pServiceInfo>() {
-            public WifiP2pServiceInfo createFromParcel(Parcel in) {
-
-                List<String> data = new ArrayList<String>();
-                in.readStringList(data);
-                return new WifiP2pServiceInfo(data);
-            }
-
-            public WifiP2pServiceInfo[] newArray(int size) {
-                return new WifiP2pServiceInfo[size];
-            }
-        };
+            new Creator<WifiP2pServiceInfo>() {
+                public WifiP2pServiceInfo createFromParcel(Parcel in) {
+                    List<String> data = new ArrayList<String>();
+                    in.readStringList(data);
+                    WifiP2pUsdBasedServiceConfig config = null;
+                    if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
+                        config = in.readParcelable(
+                                WifiP2pUsdBasedServiceConfig.class.getClassLoader());
+                    }
+                    return new WifiP2pServiceInfo(data, config);
+                }
+                public WifiP2pServiceInfo[] newArray(int size) {
+                    return new WifiP2pServiceInfo[size];
+                }
+            };
 }

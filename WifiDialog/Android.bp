@@ -38,9 +38,10 @@ android_app {
     optimize: {
         shrink_resources: true,
     },
+    updatable: true,
 }
 
 android_app_certificate {
     name: "com.android.wifi.dialog.certificate",
-    certificate: "certs/com.android.wifi.dialog"
+    certificate: "certs/com.android.wifi.dialog",
 }

@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Hartzaileak:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Idatzi beharrezko PINa:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PINa:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Gailuen konexioa"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Gailuen konexioa"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Gonbidapena bidali da <xliff:g id="DEVICE_NAME">%1$s</xliff:g> gailura."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Konektatzeko, idatzi PIN hau <xliff:g id="DEVICE_NAME">%1$s</xliff:g> gailuan."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"Ados"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Gailuen konexioa"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Gailuen konexioa"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Gailuen konexioa"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> gailuak zure gailura konektatu nahi du."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Konektatzeko, idatzi <xliff:g id="DEVICE_NAME">%1$s</xliff:g> gailuan agertzen den PINa."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> gailuak zure gailura konektatu nahi du PIN honekin."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} gailuak zure gailura konektatu nahi du. {countdown} segundo duzu onartzeko.}other{{device} gailuak zure gailura konektatu nahi du. {countdown} segundo dituzu onartzeko.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Konektatzeko, idatzi {device} gailuan agertzen den PINa {countdown} segundo igaro aurretik.}other{Konektatzeko, idatzi {device} gailuan agertzen den PINa {countdown} segundo igaro aurretik.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} gailuak zure gailura konektatu nahi du PIN honekin. {countdown} segundo duzu onartzeko.}other{{device} gailuak zure gailura konektatu nahi du PIN honekin. {countdown} segundo dituzu onartzeko.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Konektatu"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Utzi"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PINa"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PINa"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Gailua wifi-saretik deskonektatuko da aldi batez <xliff:g id="DEVICE_NAME">%1$s</xliff:g> gailura konektatuta dagoen bitartean"</string>
     <string name="dlg_ok" msgid="254496739491689405">"Ados"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Ezin da konektatu <xliff:g id="SSID">%1$s</xliff:g> sarera"</string>

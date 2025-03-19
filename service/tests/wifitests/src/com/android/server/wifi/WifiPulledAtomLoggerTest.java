@@ -184,12 +184,13 @@ public class WifiPulledAtomLoggerTest extends WifiBaseTest {
         when(mWifiInjector.getWakeupController()).thenReturn(mock(WakeupController.class));
         when(mWifiInjector.getOpenNetworkNotifier()).thenReturn(mock(OpenNetworkNotifier.class));
         when(mWifiInjector.getWifiPermissionsUtil()).thenReturn(mock(WifiPermissionsUtil.class));
+        when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mock(DeviceConfigFacade.class));
 
-        // Verify that all 8 settings were retrieved.
+        // Verify that all settings were retrieved.
         List<StatsEvent> data = new ArrayList<>();
         assertEquals(StatsManager.PULL_SUCCESS, mPullAtomCallbackArgumentCaptor.getValue()
                 .onPullAtom(WifiStatsLog.WIFI_SETTING_INFO, data));
-        assertEquals(8, data.size());
+        assertEquals(9, data.size());
     }
 
     @Test

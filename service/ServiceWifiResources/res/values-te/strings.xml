@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"వీరికి:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"అవసరమైన పిన్‌ను టైప్ చేయండి:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"పిన్‌:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"పరికర కనెక్షన్"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"పరికర కనెక్షన్"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>‌కు ఆహ్వానం పంపబడింది."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"కనెక్ట్ చేయడానికి ఈ PINను <xliff:g id="DEVICE_NAME">%1$s</xliff:g>‌లో ఎంటర్ చేయండి."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"సరే"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"పరికర కనెక్షన్"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"పరికర కనెక్షన్"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"పరికర కనెక్షన్"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> మీ పరికరానికి కనెక్ట్ చేయాలనుకుంటున్నారు."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"కనెక్ట్ చేయడానికి <xliff:g id="DEVICE_NAME">%1$s</xliff:g>‌లో కనిపించే PINను ఎంటర్ చేయండి."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>, కింద ఉన్న PINను ఉపయోగించి మీ పరికరానికి కనెక్ట్ చేయాలనుకుంటున్నారు."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} మీ పరికరానికి కనెక్ట్ చేయాలనుకుంటున్నారు. {countdown} సెకనులో ఆమోదించండి.}other{{device} మీ పరికరానికి కనెక్ట్ చేయాలనుకుంటున్నారు. {countdown} సెకన్లలో ఆమోదించండి.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{కనెక్ట్ చేయడానికి {countdown}‌లో {device}‌లో కనిపించే PINను ఎంటర్ చేయండి.}other{కనెక్ట్ చేయడానికి {countdown}‌లో {device}‌లో కనిపించే PINను ఎంటర్ చేయండి.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device}, కింద ఉన్న PINను ఉపయోగించి మీ పరికరంతో కనెక్ట్ చేయాలనుకుంటున్నారు. {countdown} సెకనులో ఆమోదించండి.}other{{device}, కింద ఉన్న PINను ఉపయోగించి మీ పరికరంతో కనెక్ట్ చేయాలనుకుంటున్నారు. {countdown} సెకన్లలో ఆమోదించండి.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"కనెక్ట్ చేయండి"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"రద్దు చేయండి"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"మీ పరికరం <xliff:g id="DEVICE_NAME">%1$s</xliff:g>‌కి కనెక్ట్ అయి ఉన్నప్పుడు తాత్కాలికంగా Wi-Fi నుండి డిస్‌కనెక్ట్ అవుతుంది"</string>
     <string name="dlg_ok" msgid="254496739491689405">"సరే"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g>కు కనెక్ట్ చేయడం సాధ్యపడదు"</string>

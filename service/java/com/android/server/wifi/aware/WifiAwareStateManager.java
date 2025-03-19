@@ -89,6 +89,7 @@ import android.net.wifi.aware.WifiAwareChannelInfo;
 import android.net.wifi.aware.WifiAwareDataPathSecurityConfig;
 import android.net.wifi.aware.WifiAwareManager;
 import android.net.wifi.aware.WifiAwareNetworkSpecifier;
+import android.net.wifi.rtt.RangingResult;
 import android.net.wifi.util.HexEncoding;
 import android.os.Bundle;
 import android.os.Handler;
@@ -281,6 +282,7 @@ public class WifiAwareStateManager implements WifiAwareShellCommand.DelegatedShe
     private static final int NOTIFICATION_TYPE_ON_BOOTSTRAPPING_REQUEST = 316;
     private static final int NOTIFICATION_TYPE_ON_BOOTSTRAPPING_CONFIRM = 317;
     private static final int NOTIFICATION_TYPE_ON_SUSPENSION_MODE_CHANGED = 318;
+    private static final int NOTIFICATION_TYPE_RANGING_RESULTS = 319;
 
     private static final SparseArray<String> sSmToString = MessageUtils.findMessageNames(
             new Class[]{WifiAwareStateManager.class},
@@ -717,41 +719,39 @@ public class WifiAwareStateManager implements WifiAwareShellCommand.DelegatedShe
                         }
                         if (action.equals(Intent.ACTION_SCREEN_ON)
                                 || action.equals(Intent.ACTION_SCREEN_OFF)) {
-                            reconfigure();
+                            mHandler.post(() -> reconfigure());
                         }
 
                         if (action.equals(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)) {
-                            reconfigure();
+                            mHandler.post(() -> reconfigure());
                         }
                     }
                 },
-                intentFilter,
-                null,
-                mHandler);
+                intentFilter);
 
         intentFilter = new IntentFilter();
         intentFilter.addAction(LocationManager.MODE_CHANGED_ACTION);
-        mContext.registerReceiver(
+        mContext.registerReceiverForAllUsers(
                 new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
                         if (mVerboseLoggingEnabled) {
                             Log.v(TAG, "onReceive: MODE_CHANGED_ACTION: intent=" + intent);
                         }
-                        if (mWifiPermissionsUtil.isLocationModeEnabled()) {
-                            enableUsage();
-                        } else {
-                            if (SdkLevel.isAtLeastT()) {
-                                handleLocationModeDisabled();
+                        mHandler.post(() -> {
+                            if (mWifiPermissionsUtil.isLocationModeEnabled()) {
+                                enableUsage();
                             } else {
-                                disableUsage(false);
+                                if (SdkLevel.isAtLeastT()) {
+                                    handleLocationModeDisabled();
+                                } else {
+                                    disableUsage(false);
+                                }
                             }
-                        }
+                        });
                     }
                 },
-                intentFilter,
-                null,
-                mHandler);
+                intentFilter, null, null);
 
         intentFilter = new IntentFilter();
         intentFilter.addAction(WifiManager.WIFI_STATE_CHANGED_ACTION);
@@ -767,18 +767,18 @@ public class WifiAwareStateManager implements WifiAwareShellCommand.DelegatedShe
                                         WifiManager.EXTRA_WIFI_STATE,
                                         WifiManager.WIFI_STATE_UNKNOWN)
                                         == WifiManager.WIFI_STATE_ENABLED;
-                        if (isEnabled) {
-                            enableUsage();
-                        } else {
-                            if (!isD2dAllowedWhenStaDisabled()) {
-                                disableUsage(false);
+                        mHandler.post(() -> {
+                            if (isEnabled) {
+                                enableUsage();
+                            } else {
+                                if (!isD2dAllowedWhenStaDisabled()) {
+                                    disableUsage(false);
+                                }
                             }
-                        }
+                        });
                     }
                 },
-                intentFilter,
-                null,
-                mHandler);
+                intentFilter);
         mSettingsConfigStore.registerChangeListener(D2D_ALLOWED_WHEN_INFRA_STA_DISABLED,
                 (key, value) -> {
                     // Check setting & wifi enabled status only when feature is supported.
@@ -1717,6 +1717,18 @@ public class WifiAwareStateManager implements WifiAwareShellCommand.DelegatedShe
         msg.arg1 = RESPONSE_TYPE_ON_CAPABILITIES_UPDATED;
         msg.arg2 = transactionId;
         msg.obj = capabilities;
+        mSm.sendMessage(msg);
+    }
+
+    /**
+     * Place a callback request on the state machine queue: update vendor
+     * capabilities of the Aware stack.
+     */
+    public void onRangingResults(List<RangingResult> rangingResults, int sessionId) {
+        Message msg = mSm.obtainMessage(MESSAGE_TYPE_NOTIFICATION);
+        msg.arg1 = NOTIFICATION_TYPE_RANGING_RESULTS;
+        msg.obj = rangingResults;
+        msg.getData().putInt(MESSAGE_BUNDLE_KEY_SESSION_ID, sessionId);
         mSm.sendMessage(msg);
     }
 
@@ -2820,6 +2832,11 @@ public class WifiAwareStateManager implements WifiAwareShellCommand.DelegatedShe
                     Bundle data = msg.getData();
                     boolean isSuspended = data.getBoolean(MESSAGE_BUNDLE_KEY_SUSPENSION_MODE);
                     onSuspensionModeChangedLocal(isSuspended);
+                    break;
+                }
+                case NOTIFICATION_TYPE_RANGING_RESULTS: {
+                    int sessionId = msg.getData().getInt(MESSAGE_BUNDLE_KEY_SESSION_ID);
+                    onRangingResultsReceivedLocal((List<RangingResult>) msg.obj, sessionId);
                     break;
                 }
                 default:
@@ -5173,6 +5190,21 @@ public class WifiAwareStateManager implements WifiAwareShellCommand.DelegatedShe
         }
 
         mAwareMetrics.recordEnableAware();
+    }
+
+    private void onRangingResultsReceivedLocal(List<RangingResult> rangingResults,
+             int pubSubId) {
+        if (mVdbg) {
+            Log.v(TAG,
+                    "onRangingResultsReceivedNotification: pubSubId=" + pubSubId);
+        }
+        Pair<WifiAwareClientState, WifiAwareDiscoverySessionState> data =
+                getClientSessionForPubSubId(pubSubId);
+        if (data == null) {
+            Log.e(TAG, "onRangingResultsReceivedLocal: no session found for pubSubId=" + pubSubId);
+            return;
+        }
+        data.second.onRangingResultsReceived(rangingResults);
     }
 
     private void onClusterChangeLocal(int clusterEventType, byte[] clusterId) {

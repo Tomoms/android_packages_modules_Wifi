@@ -794,8 +794,9 @@ public class WifiInfo implements TransportInfo, Parcelable {
      * @return the SSID.
      */
     public String getSSID() {
-        if (mWifiSsid != null) {
-            String ssidString = mWifiSsid.toString();
+        WifiSsid ssid = mWifiSsid;
+        if (ssid != null) {
+            String ssidString = ssid.toString();
             if (!TextUtils.isEmpty(ssidString)) {
                 return ssidString;
             }

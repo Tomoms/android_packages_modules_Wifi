@@ -89,8 +89,9 @@ public class WifiBlocklistMonitor {
     public static final int REASON_NONLOCAL_DISCONNECT_CONNECTING = 12;
     // Connection attempt aborted by the watchdog because the AP didn't respond.
     public static final int REASON_FAILURE_NO_RESPONSE = 13;
+    public static final int REASON_APP_DISALLOW = 14;
     // Constant being used to keep track of how many failure reasons there are.
-    public static final int NUMBER_REASON_CODES = 14;
+    public static final int NUMBER_REASON_CODES = 15;
     public static final int INVALID_REASON = -1;
 
     @IntDef(prefix = { "REASON_" }, value = {
@@ -107,7 +108,8 @@ public class WifiBlocklistMonitor {
             REASON_FRAMEWORK_DISCONNECT_FAST_RECONNECT,
             REASON_FRAMEWORK_DISCONNECT_CONNECTED_SCORE,
             REASON_NONLOCAL_DISCONNECT_CONNECTING,
-            REASON_FAILURE_NO_RESPONSE
+            REASON_FAILURE_NO_RESPONSE,
+            REASON_APP_DISALLOW
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface FailureReason {}
@@ -186,6 +188,8 @@ public class WifiBlocklistMonitor {
                 "REASON_NONLOCAL_DISCONNECT_CONNECTING", true, false));
         result.put(REASON_FAILURE_NO_RESPONSE, new BssidDisableReason(
                 "REASON_FAILURE_NO_RESPONSE", true, true));
+        result.put(REASON_APP_DISALLOW, new BssidDisableReason(
+                "REASON_APP_DISALLOW", false, false));
         return result;
     }
 

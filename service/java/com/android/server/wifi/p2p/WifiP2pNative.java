@@ -17,9 +17,11 @@
 package com.android.server.wifi.p2p;
 
 import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_P2P;
+import static com.android.server.wifi.WifiSettingsConfigStore.WIFI_P2P_SUPPORTED_FEATURES;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.net.wifi.CoexUnsafeChannel;
 import android.net.wifi.ScanResult;
 import android.net.wifi.nl80211.WifiNl80211Manager;
@@ -30,6 +32,7 @@ import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pGroupList;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.net.wifi.p2p.nsd.WifiP2pServiceInfo;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.WorkSource;
 import android.text.TextUtils;
@@ -41,8 +44,10 @@ import com.android.server.wifi.PropertyService;
 import com.android.server.wifi.WifiInjector;
 import com.android.server.wifi.WifiMetrics;
 import com.android.server.wifi.WifiNative;
+import com.android.server.wifi.WifiSettingsConfigStore;
 import com.android.server.wifi.WifiVendorHal;
 import com.android.wifi.flags.FeatureFlags;
+import com.android.wifi.flags.Flags;
 
 import java.util.HashSet;
 import java.util.List;
@@ -68,6 +73,8 @@ public class WifiP2pNative {
     private WifiNative.Iface mP2pIface;
     private String mP2pIfaceName;
     private InterfaceDestroyedListenerInternal mInterfaceDestroyedListener;
+    private int mServiceVersion = -1;
+    private long mCachedFeatureSet = 0;
 
     /**
      * Death handler for the supplicant daemon.
@@ -270,6 +277,11 @@ public class WifiP2pNative {
                     mWifiMetrics.incrementNumSetupP2pInterfaceFailureDueToSupplicant();
                     return null;
                 }
+                long featureSet = mSupplicantP2pIfaceHal.getSupportedFeatures();
+                mWifiInjector.getSettingsConfigStore()
+                        .put(WIFI_P2P_SUPPORTED_FEATURES, featureSet);
+                mCachedFeatureSet = featureSet | getDriverIndependentFeatures();
+                Log.i(TAG, "P2P Supported features: " + mCachedFeatureSet);
                 Log.i(TAG, "P2P interface setup completed");
                 return mP2pIfaceName;
             } else {
@@ -329,7 +341,34 @@ public class WifiP2pNative {
      * @return bitmask defined by WifiP2pManager.FEATURE_*
      */
     public long getSupportedFeatures() {
-        return mSupplicantP2pIfaceHal.getSupportedFeatures();
+        if (mCachedFeatureSet == 0) {
+            mCachedFeatureSet = getDriverIndependentFeatures()
+                    | mWifiInjector.getSettingsConfigStore().get(
+                    WifiSettingsConfigStore.WIFI_P2P_SUPPORTED_FEATURES);
+        }
+        return mCachedFeatureSet;
+    }
+
+    private long getDriverIndependentFeatures() {
+        long features = 0;
+        // First AIDL version supports these three features.
+        if (getCachedServiceVersion() >= 1) {
+            features = WifiP2pManager.FEATURE_SET_VENDOR_ELEMENTS
+                    | WifiP2pManager.FEATURE_FLEXIBLE_DISCOVERY
+                    | WifiP2pManager.FEATURE_GROUP_CLIENT_REMOVAL;
+            if (mServiceVersion >= 2) {
+                features |= WifiP2pManager.FEATURE_GROUP_OWNER_IPV6_LINK_LOCAL_ADDRESS_PROVIDED;
+            }
+        }
+        return features;
+    }
+
+    private int getCachedServiceVersion() {
+        if (mServiceVersion == -1) {
+            mServiceVersion = mWifiInjector.getSettingsConfigStore().get(
+                    WifiSettingsConfigStore.SUPPLICANT_HAL_AIDL_SERVICE_VERSION);
+        }
+        return mServiceVersion;
     }
 
     /**
@@ -684,8 +723,13 @@ public class WifiP2pNative {
      *
      * @return true, if operation was successful.
      */
+    @SuppressLint("NewApi")
     public boolean p2pGroupAdd(WifiP2pConfig config, boolean join) {
         int freq = 0;
+        int connectionType = Environment.isSdkAtLeastB() && Flags.wifiDirectR2()
+                ? config.getPccModeConnectionType()
+                : WifiP2pConfig.PCC_MODE_DEFAULT_CONNECTION_TYPE_LEGACY_ONLY;
+
         switch (config.groupOwnerBand) {
             case WifiP2pConfig.GROUP_OWNER_BAND_2GHZ:
                 freq = 2;
@@ -693,16 +737,68 @@ public class WifiP2pNative {
             case WifiP2pConfig.GROUP_OWNER_BAND_5GHZ:
                 freq = 5;
                 break;
+            case WifiP2pConfig.GROUP_OWNER_BAND_6GHZ:
+                freq = 6;
+                break;
             // treat it as frequency.
             default:
                 freq = config.groupOwnerBand;
         }
+        if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
+            /* Check if the device supports Wi-Fi Direct R2 */
+            if ((WifiP2pConfig.GROUP_OWNER_BAND_6GHZ == config.groupOwnerBand
+                    || WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_R2_ONLY == connectionType)
+                    && !isWiFiDirectR2Supported()) {
+                Log.e(TAG, "Failed to add the group - Wi-Fi Direct R2 not supported");
+                return false;
+            }
+
+            /* Check if the device supports Wi-Fi Direct R1/R2 Compatibility Mode */
+            if (WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2 == connectionType
+                    && !isPccModeAllowLegacyAndR2ConnectionSupported()) {
+                Log.e(TAG, "Failed to add the group - R1/R2 compatibility not supported");
+                return false;
+            }
+
+            /* Check if this is a valid configuration for 6GHz band */
+            if (WifiP2pConfig.GROUP_OWNER_BAND_6GHZ == config.groupOwnerBand
+                    && WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_R2_ONLY != connectionType) {
+                Log.e(TAG, "Failed to add the group in 6GHz band - ConnectionType: "
+                        + connectionType);
+                return false;
+            }
+
+            /* Check if we can upgrade LEGACY to R2 */
+            if (WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_ONLY == connectionType
+                    && isPccModeAllowLegacyAndR2ConnectionSupported()) {
+                Log.e(TAG, "Upgrade Legacy connection to R1/R2 compatibility");
+                connectionType = WifiP2pConfig.PCC_MODE_CONNECTION_TYPE_LEGACY_OR_R2;
+            }
+        }
+
+
         abortWifiRunningScanIfNeeded(join);
         return mSupplicantP2pIfaceHal.groupAdd(
                 config.networkName,
                 config.passphrase,
+                connectionType,
                 (config.netId == WifiP2pGroup.NETWORK_ID_PERSISTENT),
                 freq, config.deviceAddress, join);
+    }
+
+    /**
+     * @return true if this device supports Wi-Fi Direct R2
+     */
+    private boolean isWiFiDirectR2Supported() {
+        return (mCachedFeatureSet & WifiP2pManager.FEATURE_WIFI_DIRECT_R2) != 0;
+    }
+
+    /**
+     * @return true if this device supports R1/R2 Compatibility Mode.
+     */
+    private boolean isPccModeAllowLegacyAndR2ConnectionSupported() {
+        return (mCachedFeatureSet
+                & WifiP2pManager.FEATURE_PCC_MODE_ALLOW_LEGACY_AND_R2_CONNECTION) != 0;
     }
 
     private void abortWifiRunningScanIfNeeded(boolean isJoin) {

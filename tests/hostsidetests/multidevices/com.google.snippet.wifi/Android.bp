@@ -1,0 +1,24 @@
+package {
+    default_team: "trendy_team_fwk_wifi_hal",
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+// The snippet target that includes all Wi-Fi mobly snippets.
+android_test {
+    name: "wifi_mobly_snippet",
+    sdk_version: "system_current",
+    srcs: [
+        "aware/*.java",
+        "direct/*.java",
+    ],
+    manifest: "AndroidManifest.xml",
+    static_libs: [
+        "androidx.test.runner",
+        "compatibility-device-util-axt",
+        "guava",
+        "mobly-snippet-lib",
+        "mobly-bundled-snippets-lib",
+    ],
+    min_sdk_version: "31",
+    target_sdk_version: "35",
+}

@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"수신:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"필수 PIN 입력:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"기기 연결"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"기기 연결"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>에 초대를 보냈습니다."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"연결하려면 <xliff:g id="DEVICE_NAME">%1$s</xliff:g>에 이 PIN을 입력하세요."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"확인"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"기기 연결"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"기기 연결"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"기기 연결"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>에서 내 기기에 연결하려고 합니다."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"연결하려면 <xliff:g id="DEVICE_NAME">%1$s</xliff:g>에 표시된 PIN을 입력하세요."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>에서 다음 PIN을 사용하여 내 기기에 연결하려고 합니다."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device}에서 내 기기에 연결하려고 합니다. {countdown}초 이내에 수락하세요.}other{{device}에서 내 기기에 연결하려고 합니다. {countdown}초 이내에 수락하세요.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{연결하려면 {countdown}초 이내에 {device}에 표시된 PIN을 입력하세요.}other{연결하려면 {countdown}초 이내에 {device}에 표시된 PIN을 입력하세요.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device}에서 다음 PIN을 사용하여 내 기기에 연결하려고 합니다. {countdown}초 이내에 수락하세요.}other{{device}에서 다음 PIN을 사용하여 내 기기에 연결하려고 합니다. {countdown}초 이내에 수락하세요.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"연결"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"취소"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g>에 연결되어 있는 동안 기기의 Wi-Fi 연결이 일시적으로 해제됩니다"</string>
     <string name="dlg_ok" msgid="254496739491689405">"확인"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"<xliff:g id="SSID">%1$s</xliff:g>에 연결할 수 없습니다."</string>

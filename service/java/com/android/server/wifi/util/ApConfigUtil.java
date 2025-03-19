@@ -36,6 +36,8 @@ import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_STA;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.content.Context;
+import android.content.res.Resources;
 import android.net.wifi.CoexUnsafeChannel;
 import android.net.wifi.ScanResult;
 import android.net.wifi.SoftApCapability;
@@ -55,12 +57,16 @@ import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
 
+import androidx.annotation.Keep;
+
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.SoftApManager;
+import com.android.server.wifi.WifiInjector;
 import com.android.server.wifi.WifiNative;
 import com.android.server.wifi.WifiSettingsConfigStore;
 import com.android.server.wifi.coex.CoexManager;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import java.util.ArrayList;
@@ -464,16 +470,20 @@ public class ApConfigUtil {
      *
      * @param band to get channels for
      * @param wifiNative reference used to get regulatory restrictions.
-     * @param resources used to get OEM restrictions
+     * @param resources used to get OEM restrictions.
      * @param inFrequencyMHz true to convert channel to frequency.
      * @return A list of frequencies that are allowed, null on error.
+     * TODO(b/380087289): Resources will be removed in the future together with the @keep annotation
      */
+    @Keep
     public static List<Integer> getAvailableChannelFreqsForBand(
-            @BandType int band, WifiNative wifiNative, WifiResourceCache resources,
+            @BandType int band, WifiNative wifiNative, Resources resources,
             boolean inFrequencyMHz) {
         if (!isBandValid(band) || isMultiband(band)) {
             return null;
         }
+        WifiResourceCache resourceCache = WifiInjector.getInstance().getContext()
+                .getResourceCache();
 
         int scannerBand = apConfig2wifiScannerBand(band);
         List<Integer> regulatoryList = null;
@@ -488,7 +498,7 @@ public class ApConfigUtil {
                 // HAL is not started, return null
                 return null;
             }
-            regulatoryList = getHalAvailableChannelsForBand(scannerBand, wifiNative, resources,
+            regulatoryList = getHalAvailableChannelsForBand(scannerBand, wifiNative, resourceCache,
                     inFrequencyMHz);
             if (regulatoryList == null) {
                 // HAL API not supported by HAL, fallback to wificond
@@ -496,10 +506,10 @@ public class ApConfigUtil {
             }
         }
         if (useWifiCond) {
-            regulatoryList = getWifiCondAvailableChannelsForBand(scannerBand, wifiNative, resources,
-                    inFrequencyMHz);
+            regulatoryList = getWifiCondAvailableChannelsForBand(scannerBand, wifiNative,
+                    resourceCache, inFrequencyMHz);
         }
-        List<Integer> configuredList = getConfiguredChannelList(resources, band);
+        List<Integer> configuredList = getConfiguredChannelList(resourceCache, band);
         if (configuredList == null || configuredList.isEmpty() || regulatoryList == null) {
             return regulatoryList;
         }
@@ -894,29 +904,73 @@ public class ApConfigUtil {
      *                IEEE80211BE & single link MLO in bridged mode from the resource file.
      * @param config The current {@link SoftApConfiguration}.
      * @param isBridgedMode true if bridged mode is enabled, false otherwise.
+     * @param currentExistingMLD number of existing 11BE SoftApManager.
+     * @param isMLDApSupportMLO true if the chip reports the support multiple links
+     *                                    on a single MLD AP.
      *
      * @return true if IEEE80211BE is allowed for the given configuration, false otherwise.
      */
     public static boolean is11beAllowedForThisConfiguration(DeviceWiphyCapabilities capabilities,
             @NonNull WifiContext context,
             SoftApConfiguration config,
-            boolean isBridgedMode) {
+            boolean isBridgedMode, int currentExistingMLD,
+            boolean isMLDApSupportMLO) {
         if (!ApConfigUtil.isIeee80211beSupported(context)) {
             return false;
         }
-        if (capabilities == null || !capabilities.isWifiStandardSupported(
-                ScanResult.WIFI_STANDARD_11BE)) {
-            return false;
+        if (!isMLDApSupportMLO) {
+            // For non-MLO case, check capabilities
+            if (capabilities == null || !capabilities.isWifiStandardSupported(
+                    ScanResult.WIFI_STANDARD_11BE)) {
+                return false;
+            }
         }
-        if (isBridgedMode
-                && !context.getResourceCache().getBoolean(
-                        R.bool.config_wifiSoftApSingleLinkMloInBridgedModeSupported)) {
-            return false;
+        if (Flags.mloSap()) {
+            if (!hasAvailableMLD(context, isBridgedMode,
+                    currentExistingMLD, isMLDApSupportMLO)) {
+                Log.i(TAG, "No available MLD, hence downgrading from 11be. currentExistingMLD = "
+                        + currentExistingMLD + ", isMLDApSupportMLO = " + isMLDApSupportMLO);
+                return false;
+            }
+        } else {
+            if (isBridgedMode
+                    && !context.getResourceCache().getBoolean(
+                            R.bool.config_wifiSoftApSingleLinkMloInBridgedModeSupported)) {
+                return false;
+            }
         }
         if (is11beDisabledForSecurityType(config.getSecurityType())) {
             return false;
         }
         return true;
+    }
+
+    private static boolean hasAvailableMLD(@NonNull WifiContext context,
+            boolean isBridgedMode, int currentExistingMLD,
+            boolean isMLDApSupportMLO) {
+        int numberOfMLDStillAllowed =
+                maximumNumberOfMLDForMLOAp(context) - currentExistingMLD;
+        if (numberOfMLDStillAllowed < 1) {
+            return false;
+        }
+        if (isBridgedMode && !isMLDApSupportMLO && numberOfMLDStillAllowed < 2) {
+            // For non multilink MLO bridged mode, it requires two 11be instances.
+            return false;
+        }
+        return true;
+    }
+
+    private static int maximumNumberOfMLDForMLOAp(@NonNull WifiContext context) {
+        int numberOfMLDSupported = context.getResourceCache()
+                .getInteger(R.integer.config_wifiSoftApMaxNumberMLDSupported);
+        if (numberOfMLDSupported != 0) {
+            return numberOfMLDSupported;
+        }
+        if (context.getResourceCache().getBoolean(
+                        R.bool.config_wifiSoftApSingleLinkMloInBridgedModeSupported)) {
+            return 2;
+        }
+        return 1;
     }
 
     /**
@@ -1044,7 +1098,14 @@ public class ApConfigUtil {
      * @return SoftApCapability which updated the feature support or not from resource.
      */
     @NonNull
-    public static SoftApCapability updateCapabilityFromResource(@NonNull WifiContext context) {
+    @Keep
+    public static SoftApCapability updateCapabilityFromResource(@NonNull Context contextIn) {
+        WifiContext context;
+        if (contextIn instanceof WifiContext) {
+            context = (WifiContext) contextIn;
+        } else {
+            context = new WifiContext(contextIn);
+        }
         long features = 0;
         if (isAcsSupported(context)) {
             Log.d(TAG, "Update Softap capability, add acs feature support");
@@ -1246,7 +1307,14 @@ public class ApConfigUtil {
      * @param context the caller context used to get value from resource file.
      * @return true if supported, false otherwise.
      */
-    public static boolean isWpa3SaeSupported(@NonNull WifiContext context) {
+    @Keep
+    public static boolean isWpa3SaeSupported(@NonNull Context contextIn) {
+        WifiContext context;
+        if (contextIn instanceof WifiContext) {
+            context = (WifiContext) contextIn;
+        } else {
+            context = new WifiContext(contextIn);
+        }
         return context.getResourceCache().getBoolean(
                 R.bool.config_wifi_softap_sae_supported);
     }
@@ -1280,9 +1348,15 @@ public class ApConfigUtil {
      * @param band the band soft AP to operate on.
      * @return true if supported, false otherwise.
      */
-    public static boolean isSoftApBandSupported(@NonNull WifiContext context,
+    @Keep
+    public static boolean isSoftApBandSupported(@NonNull Context contextIn,
             @BandType int band) {
-
+        WifiContext context;
+        if (contextIn instanceof WifiContext) {
+            context = (WifiContext) contextIn;
+        } else {
+            context = new WifiContext(contextIn);
+        }
         switch (band) {
             case SoftApConfiguration.BAND_2GHZ:
                 return context.getResourceCache().getBoolean(R.bool.config_wifi24ghzSupport)
@@ -1681,7 +1755,7 @@ public class ApConfigUtil {
         for (int band : SoftApConfiguration.BAND_TYPES) {
             if (isSoftApBandSupported(context, band)) {
                 supportedChannelList = getAvailableChannelFreqsForBand(
-                        band, wifiNative, context.getResourceCache(), false);
+                        band, wifiNative, null, false);
                 if (supportedChannelList != null) {
                     newSoftApCapability.setSupportedChannelList(
                             band,

@@ -1370,6 +1370,7 @@ public class SupplicantP2pIfaceHalHidlImpl implements ISupplicantP2pIfaceHal {
      * @return true, if operation was successful.
      */
     public boolean groupAdd(String networkName, String passphrase,
+            @WifiP2pConfig.PccModeConnectionType int connectionType,
             boolean isPersistent, int freq, String peerAddress, boolean join) {
         synchronized (mLock) {
             android.hardware.wifi.supplicant.V1_2.ISupplicantP2pIface ifaceV12 =

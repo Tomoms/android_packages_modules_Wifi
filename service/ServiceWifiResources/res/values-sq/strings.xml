@@ -60,6 +60,24 @@
     <string name="wifi_p2p_to_message" msgid="3809923305696994787">"Për:"</string>
     <string name="wifi_p2p_enter_pin_message" msgid="5200220251738047620">"Shkruaj PIN-in e kërkuar:"</string>
     <string name="wifi_p2p_show_pin_message" msgid="1000091690967930798">"PIN-i:"</string>
+    <string name="wifi_p2p_dialog2_sent_title" msgid="2336103322429678328">"Lidhja e pajisjes"</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Lidhja e pajisjes"</string>
+    <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"Ftesa u dërgua te <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Fut këtë kod PIN në <xliff:g id="DEVICE_NAME">%1$s</xliff:g> për ta lidhur."</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"Në rregull"</string>
+    <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Lidhja e pajisjes"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Lidhja e pajisjes"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Lidhja e pajisjes"</string>
+    <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> dëshiron të lidhet me pajisjen tënde."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Fut kodin PIN që shfaqet në <xliff:g id="DEVICE_NAME">%1$s</xliff:g> për ta lidhur."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> dëshiron të lidhet me pajisjen tënde me kodin e mëposhtëm PIN."</string>
+    <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} dëshiron të lidhet me pajisjen tënde. Prano pas {countdown} sekonde.}other{{device} dëshiron të lidhet me pajisjen tënde. Prano pas {countdown} sekondash.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Fut kodin PIN që shfaqet në {device} brenda {countdown} sekonde për ta lidhur.}other{Fut kodin PIN që shfaqet në {device} brenda {countdown} sekondash për ta lidhur.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} dëshiron të lidhet me pajisjen tënde me kodin e mëposhtëm PIN. Prano pas {countdown} sekonde.}other{{device} dëshiron të lidhet me pajisjen tënde me kodin e mëposhtëm PIN. Prano pas {countdown} sekondash.}}"</string>
+    <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Lidh"</string>
+    <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Anulo"</string>
+    <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"Kodi PIN"</string>
+    <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"Kodi PIN"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"Pajisja jote do të shkëputet përkohësisht nga Wi-Fi ndërkohë që është e lidhur me <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"Në rregull"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"Nuk mund të lidhet me <xliff:g id="SSID">%1$s</xliff:g>"</string>

@@ -232,27 +232,11 @@ public class WifiDialogManager {
         @AnyThread
         public void launchDialog() {
             if (mInternalHandle != null) {
-                mWifiThreadRunner.post(() -> mInternalHandle.launchDialog(0),
+                mWifiThreadRunner.post(() -> mInternalHandle.launchDialog(),
                         TAG + "#launchDialog");
             } else if (mLegacyHandle != null) {
-                mWifiThreadRunner.post(() -> mLegacyHandle.launchDialog(0),
+                mWifiThreadRunner.post(() -> mLegacyHandle.launchDialog(),
                         TAG + "#launchDialog");
-            }
-        }
-
-        /**
-         * Launches the dialog with a timeout before it is auto-cancelled.
-         * @param timeoutMs timeout in milliseconds before the dialog is auto-cancelled. A value <=0
-         *                  indicates no timeout.
-         */
-        @AnyThread
-        public void launchDialog(long timeoutMs) {
-            if (mInternalHandle != null) {
-                mWifiThreadRunner.post(() -> mInternalHandle.launchDialog(timeoutMs),
-                        TAG + "#launchDialogTimeout");
-            } else if (mLegacyHandle != null) {
-                mWifiThreadRunner.post(() -> mLegacyHandle.launchDialog(timeoutMs),
-                        TAG + "#launchDialogTimeout");
             }
         }
 
@@ -291,9 +275,9 @@ public class WifiDialogManager {
         }
 
         /**
-         * @see {@link DialogHandle#launchDialog(long)}
+         * @see DialogHandle#launchDialog()
          */
-        void launchDialog(long timeoutMs) {
+        void launchDialog() {
             if (mIntent == null) {
                 Log.e(TAG, "Cannot launch dialog with null Intent!");
                 return;
@@ -303,7 +287,6 @@ public class WifiDialogManager {
                 return;
             }
             registerDialog();
-            mIntent.putExtra(WifiManager.EXTRA_DIALOG_TIMEOUT_MS, timeoutMs);
             mIntent.putExtra(WifiManager.EXTRA_DIALOG_ID, mDialogId);
             boolean launched = false;
             // Collapse the QuickSettings since we can't show WifiDialog dialogs over it.
@@ -474,10 +457,8 @@ public class WifiDialogManager {
         final String mNeutralButtonText;
         @Nullable final SimpleDialogCallback mCallback;
         @Nullable final WifiThreadRunner mCallbackThreadRunner;
-        private Runnable mTimeoutRunnable;
         private AlertDialog mAlertDialog;
         int mWindowType = WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG;
-        long mTimeoutMs = 0;
 
         LegacySimpleDialogHandle(
                 final String title,
@@ -525,18 +506,12 @@ public class WifiDialogManager {
             mCallbackThreadRunner = callbackThreadRunner;
         }
 
-        void launchDialog(long timeoutMs) {
+        void launchDialog() {
             if (mAlertDialog != null && mAlertDialog.isShowing()) {
                 // Dialog is already launched. Dismiss and create a new one.
                 mAlertDialog.setOnDismissListener(null);
                 mAlertDialog.dismiss();
             }
-            if (mTimeoutRunnable != null) {
-                // Reset the timeout runnable if one has already been created.
-                mWifiThreadRunner.removeCallbacks(mTimeoutRunnable);
-                mTimeoutRunnable = null;
-            }
-            mTimeoutMs = timeoutMs;
             mAlertDialog = mFrameworkFacade.makeAlertDialogBuilder(
                     new ContextThemeWrapper(mContext, R.style.wifi_dialog))
                     .setTitle(mTitle)
@@ -579,10 +554,6 @@ public class WifiDialogManager {
                     })
                     .setOnDismissListener((dialogDismiss) -> {
                         mWifiThreadRunner.post(() -> {
-                            if (mTimeoutRunnable != null) {
-                                mWifiThreadRunner.removeCallbacks(mTimeoutRunnable);
-                                mTimeoutRunnable = null;
-                            }
                             mAlertDialog = null;
                             mActiveLegacySimpleDialogs.remove(this);
                         }, mTitle + "#onDismiss");
@@ -609,11 +580,6 @@ public class WifiDialogManager {
             if (messageView != null) {
                 messageView.setMovementMethod(LinkMovementMethod.getInstance());
             }
-            if (mTimeoutMs > 0) {
-                mTimeoutRunnable = mAlertDialog::cancel;
-                mWifiThreadRunner.postDelayed(mTimeoutRunnable, mTimeoutMs,
-                        TAG + "#cancelDialog");
-            }
             mActiveLegacySimpleDialogs.add(this);
         }
 
@@ -632,7 +598,7 @@ public class WifiDialogManager {
         void changeWindowType(int windowType) {
             mWindowType = windowType;
             if (mActiveLegacySimpleDialogs.contains(this)) {
-                launchDialog(mTimeoutMs);
+                launchDialog();
             }
         }
     }
@@ -657,7 +623,7 @@ public class WifiDialogManager {
         void onNeutralButtonClicked();
 
         /**
-         * The dialog was cancelled (back button or home button or timeout).
+         * The dialog was cancelled (back button or home button).
          */
         void onCancelled();
     }
@@ -897,6 +863,7 @@ public class WifiDialogManager {
                 final @Nullable String deviceName,
                 final boolean isPinRequested,
                 @Nullable String displayPin,
+                int timeoutMs,
                 int displayId,
                 @Nullable P2pInvitationReceivedDialogCallback callback,
                 @Nullable WifiThreadRunner callbackThreadRunner) {
@@ -904,7 +871,8 @@ public class WifiDialogManager {
             if (intent != null) {
                 intent.putExtra(WifiManager.EXTRA_P2P_DEVICE_NAME, deviceName)
                         .putExtra(WifiManager.EXTRA_P2P_PIN_REQUESTED, isPinRequested)
-                        .putExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN, displayPin);
+                        .putExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN, displayPin)
+                        .putExtra(WifiManager.EXTRA_DIALOG_TIMEOUT_MS, timeoutMs);
                 setIntent(intent);
             }
             setDisplayId(displayId);
@@ -952,13 +920,14 @@ public class WifiDialogManager {
      * @param deviceName           Name of the device sending the invitation.
      * @param isPinRequested       True if a PIN was requested and a PIN input UI should be shown.
      * @param displayPin           Display PIN, or {@code null} if no PIN should be displayed
+     * @param timeoutMs            Timeout for the dialog in milliseconds. 0 indicates no timeout.
      * @param displayId            The ID of the Display on which to place the dialog
      *                             (Display.DEFAULT_DISPLAY
      *                             refers to the default display)
      * @param callback             Callback to receive the dialog response.
      * @param callbackThreadRunner WifiThreadRunner to run the callback on.
      * @return DialogHandle        Handle for the dialog, or {@code null} if no dialog could
-     *                             be created.
+     * be created.
      */
     @AnyThread
     @NonNull
@@ -966,6 +935,7 @@ public class WifiDialogManager {
             @Nullable String deviceName,
             boolean isPinRequested,
             @Nullable String displayPin,
+            int timeoutMs,
             int displayId,
             @Nullable P2pInvitationReceivedDialogCallback callback,
             @Nullable WifiThreadRunner callbackThreadRunner) {
@@ -974,6 +944,7 @@ public class WifiDialogManager {
                         deviceName,
                         isPinRequested,
                         displayPin,
+                        timeoutMs,
                         displayId,
                         callback,
                         callbackThreadRunner)

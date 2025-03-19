@@ -20,9 +20,11 @@ import static android.content.Intent.ACTION_SCREEN_OFF;
 import static android.content.Intent.ACTION_SCREEN_ON;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -31,11 +33,15 @@ import static org.mockito.Mockito.when;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.PowerManager;
 import android.os.test.TestLooper;
+import android.security.advancedprotection.AdvancedProtectionManager;
 
 import androidx.test.filters.SmallTest;
+
+import com.android.wifi.flags.FeatureFlags;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -50,6 +56,9 @@ public class WifiDeviceStateChangeManagerTest extends WifiBaseTest {
     @Mock Context mContext;
     @Mock WifiDeviceStateChangeManager.StateChangeCallback mStateChangeCallback;
     @Mock PowerManager mPowerManager;
+    @Mock WifiInjector mWifiInjector;
+    @Mock DeviceConfigFacade mDeviceConfigFacade;
+    @Mock FeatureFlags mFeatureFlags;
 
     @Captor ArgumentCaptor<BroadcastReceiver> mBroadcastReceiverCaptor;
     private TestLooper mLooper;
@@ -60,10 +69,13 @@ public class WifiDeviceStateChangeManagerTest extends WifiBaseTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
         when(mContext.getSystemService(PowerManager.class)).thenReturn(mPowerManager);
+        when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
+        when(mDeviceConfigFacade.getFeatureFlags()).thenReturn(mFeatureFlags);
         when(mPowerManager.isInteractive()).thenReturn(true);
         mLooper = new TestLooper();
         mHandler = new Handler(mLooper.getLooper());
-        mWifiDeviceStateChangeManager = new WifiDeviceStateChangeManager(mContext, mHandler);
+        mWifiDeviceStateChangeManager = new WifiDeviceStateChangeManager(mContext, mHandler,
+                mWifiInjector);
 
     }
 
@@ -72,6 +84,7 @@ public class WifiDeviceStateChangeManagerTest extends WifiBaseTest {
         mWifiDeviceStateChangeManager.registerStateChangeCallback(mStateChangeCallback);
         // Should be no callback event before the boot completed
         verify(mStateChangeCallback, never()).onScreenStateChanged(anyBoolean());
+        verify(mStateChangeCallback, never()).onAdvancedProtectionModeStateChanged(anyBoolean());
         mWifiDeviceStateChangeManager.handleBootCompleted();
         verify(mContext, atLeastOnce())
                 .registerReceiver(mBroadcastReceiverCaptor.capture(), any());
@@ -95,6 +108,8 @@ public class WifiDeviceStateChangeManagerTest extends WifiBaseTest {
         mWifiDeviceStateChangeManager.registerStateChangeCallback(mStateChangeCallback);
         // Register after boot completed should immediately get a callback
         verify(mStateChangeCallback).onScreenStateChanged(true);
+        // No Advance protection manager, should false.
+        verify(mStateChangeCallback).onAdvancedProtectionModeStateChanged(false);
     }
 
     private void setScreenState(boolean screenOn) {
@@ -103,5 +118,39 @@ public class WifiDeviceStateChangeManagerTest extends WifiBaseTest {
         Intent intent = new Intent(screenOn ? ACTION_SCREEN_ON : ACTION_SCREEN_OFF);
         broadcastReceiver.onReceive(mContext, intent);
         mLooper.dispatchAll();
+    }
+
+    @Test
+    public void testCallbackWhenAdvancedProtectionModeSupported() {
+        assumeTrue(Environment.isSdkAtLeastB());
+        assumeTrue(android.security.Flags.aapmApi());
+        ArgumentCaptor<AdvancedProtectionManager.Callback> apmCallbackCaptor =
+                ArgumentCaptor.forClass(AdvancedProtectionManager.Callback.class);
+        when(mFeatureFlags.wepDisabledInApm()).thenReturn(true);
+        AdvancedProtectionManager mockAdvancedProtectionManager =
+                mock(AdvancedProtectionManager.class);
+        when(mContext.getSystemService(AdvancedProtectionManager.class))
+                .thenReturn(mockAdvancedProtectionManager);
+        when(mockAdvancedProtectionManager.isAdvancedProtectionEnabled()).thenReturn(false);
+        mWifiDeviceStateChangeManager.registerStateChangeCallback(mStateChangeCallback);
+        // Should be no callback event before the boot completed
+        verify(mStateChangeCallback, never()).onAdvancedProtectionModeStateChanged(anyBoolean());
+
+        mWifiDeviceStateChangeManager.handleBootCompleted();
+        verify(mockAdvancedProtectionManager).registerAdvancedProtectionCallback(any(),
+                apmCallbackCaptor.capture());
+        verify(mStateChangeCallback).onAdvancedProtectionModeStateChanged(false);
+
+        reset(mStateChangeCallback);
+        apmCallbackCaptor.getValue().onAdvancedProtectionChanged(true);
+        verify(mStateChangeCallback).onAdvancedProtectionModeStateChanged(true);
+
+        apmCallbackCaptor.getValue().onAdvancedProtectionChanged(false);
+        verify(mStateChangeCallback).onAdvancedProtectionModeStateChanged(false);
+
+        reset(mStateChangeCallback);
+        mWifiDeviceStateChangeManager.unregisterStateChangeCallback(mStateChangeCallback);
+        apmCallbackCaptor.getValue().onAdvancedProtectionChanged(true);
+        verify(mStateChangeCallback, never()).onAdvancedProtectionModeStateChanged(anyBoolean());
     }
 }

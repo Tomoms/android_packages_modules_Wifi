@@ -18,8 +18,6 @@ package com.android.server.wifi.hal;
 
 import static android.net.wifi.WifiUsabilityStatsEntry.LINK_STATE_UNKNOWN;
 
-import static com.android.server.wifi.util.GeneralUtil.getCapabilityIndex;
-
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
@@ -896,52 +894,52 @@ public class WifiStaIfaceHidlImpl implements IWifiStaIface {
         BitSet features = new BitSet();
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.HOTSPOT)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_PASSPOINT));
+            features.set(WifiManager.WIFI_FEATURE_PASSPOINT);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.BACKGROUND_SCAN)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_SCANNER));
+            features.set(WifiManager.WIFI_FEATURE_SCANNER);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.PNO)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_PNO));
+            features.set(WifiManager.WIFI_FEATURE_PNO);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.TDLS)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_TDLS));
+            features.set(WifiManager.WIFI_FEATURE_TDLS);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.TDLS_OFFCHANNEL)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_TDLS_OFFCHANNEL));
+            features.set(WifiManager.WIFI_FEATURE_TDLS_OFFCHANNEL);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.LINK_LAYER_STATS)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_LINK_LAYER_STATS));
+            features.set(WifiManager.WIFI_FEATURE_LINK_LAYER_STATS);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.RSSI_MONITOR)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_RSSI_MONITOR));
+            features.set(WifiManager.WIFI_FEATURE_RSSI_MONITOR);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.KEEP_ALIVE)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_MKEEP_ALIVE));
+            features.set(WifiManager.WIFI_FEATURE_MKEEP_ALIVE);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.ND_OFFLOAD)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_CONFIG_NDO));
+            features.set(WifiManager.WIFI_FEATURE_CONFIG_NDO);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.CONTROL_ROAMING)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_CONTROL_ROAMING));
+            features.set(WifiManager.WIFI_FEATURE_CONTROL_ROAMING);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask
                         .PROBE_IE_WHITELIST)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_IE_WHITELIST));
+            features.set(WifiManager.WIFI_FEATURE_IE_WHITELIST);
         }
         if (hasCapability(caps,
                 android.hardware.wifi.V1_0.IWifiStaIface.StaIfaceCapabilityMask.SCAN_RAND)) {
-            features.set(getCapabilityIndex(WifiManager.WIFI_FEATURE_SCAN_RAND));
+            features.set(WifiManager.WIFI_FEATURE_SCAN_RAND);
         }
         return features;
     }

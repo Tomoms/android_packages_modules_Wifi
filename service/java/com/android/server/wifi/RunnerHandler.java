@@ -52,6 +52,7 @@ public class RunnerHandler extends Handler {
 
     // TODO: b/246623192 Add Wifi metric for Runner state overruns.
     private final LocalLog mLocalLog;
+    private boolean mVerboseLoggingEnabled = false;
 
     /**
      * The Runner handler Constructor
@@ -71,6 +72,11 @@ public class RunnerHandler extends Handler {
         mIgnoredClasses.add(HandlerThread.class.getName());
         mIgnoredClasses.add(Looper.class.getName());
         mIgnoredMethods.add("handleMessage");
+    }
+
+    /** Enable/disable verbose logging. */
+    public void enableVerboseLogging(boolean verboseEnabled) {
+        mVerboseLoggingEnabled = verboseEnabled;
     }
 
     private String getSignature(StackTraceElement[] elements, Runnable callback) {
@@ -114,7 +120,8 @@ public class RunnerHandler extends Handler {
     public void dispatchMessage(@NonNull Message msg) {
         final Bundle bundle = msg.getData();
         final String signature = bundle.getString(KEY_SIGNATURE);
-        if (signature != null) {
+        boolean traceEvent = mVerboseLoggingEnabled;
+        if (signature != null && traceEvent) {
             Trace.traceBegin(Trace.TRACE_TAG_NETWORK, signature);
         }
         // The message sent to front of the queue has when=0, get from the bundle in that case.
@@ -122,10 +129,10 @@ public class RunnerHandler extends Handler {
         final long start = SystemClock.uptimeMillis();
         final long scheduleLatency = start - when;
         super.dispatchMessage(msg);
-        if (signature != null) {
+        final long runTime = SystemClock.uptimeMillis() - start;
+        if (signature != null && traceEvent) {
             Trace.traceEnd(Trace.TRACE_TAG_NETWORK);
         }
-        final long runTime = SystemClock.uptimeMillis() - start;
         final String signatureToLog = signature != null ? signature : "unknown";
         if (runTime > mRunningTimeThresholdInMilliseconds) {
             mLocalLog.log(signatureToLog + " was running for " + runTime);

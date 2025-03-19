@@ -100,6 +100,7 @@
     <string name="wifi_p2p_invitation_sent_title">Invitation sent</string>
     <string name="wifi_p2p_invitation_to_connect_title">Invitation to connect</string>
 
+    <!-- Start of strings for legacy P2P Dialog -->
     <!-- The message of the P2P Invitation Received dialog indicating the seconds left to accept before auto rejection [CHAR_LIMIT=NONE] [ICU SYNTAX] -->
     <string name="wifi_p2p_invitation_seconds_remaining">
         {0, plural,
@@ -111,6 +112,47 @@
     <string name="wifi_p2p_to_message">To: </string>
     <string name="wifi_p2p_enter_pin_message">Type the required PIN: </string>
     <string name="wifi_p2p_show_pin_message">PIN: </string>
+    <!-- End of strings for legacy P2P Dialog -->
+
+    <!-- Start of strings for P2P Dialog 2 -->
+    <string name="wifi_p2p_dialog2_sent_title">Device connection</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_pin">Device connection</string>
+    <string name="wifi_p2p_dialog2_sent_message">Invitation sent to <xliff:g id="device_name">%1$s</xliff:g>.</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_pin">Enter this PIN on <xliff:g id="device_name">%1$s</xliff:g> to connect.</string>
+    <string name="wifi_p2p_dialog2_sent_positive_button">OK</string>
+
+    <string name="wifi_p2p_dialog2_received_title">Device connection</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_pin">Device connection</string>
+    <string name="wifi_p2p_dialog2_received_title_display_pin">Device connection</string>
+    <string name="wifi_p2p_dialog2_received_message"><xliff:g id="device_name">%1$s</xliff:g> wants to connect to your device.</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin">Enter the PIN shown on <xliff:g id="device_name">%1$s</xliff:g> to connect.</string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin"><xliff:g id="device_name">%1$s</xliff:g> wants to connect to your device with the following PIN.</string>
+
+    <string name="wifi_p2p_dialog2_received_message_countdown">
+        {countdown, plural,
+            =1 {{device} wants to connect to your device. Accept in {countdown} second.}
+            other {{device} wants to connect to your device. Accept in {countdown} seconds.}
+        }
+    </string>
+    <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown">
+        {countdown, plural,
+            =1 {Enter the PIN shown on {device} within {countdown} second to connect.}
+            other {Enter the PIN shown on {device} within {countdown} seconds to connect.}
+        }
+    </string>
+    <string name="wifi_p2p_dialog2_received_message_display_pin_countdown">
+        {countdown, plural,
+            =1 {{device} wants to connect to your device with the following PIN. Accept in {countdown} second.}
+            other {{device} wants to connect to your device with the following PIN. Accept in {countdown} seconds.}
+        }
+    </string>
+
+    <string name="wifi_p2p_dialog2_received_positive_button">Connect</string>
+    <string name="wifi_p2p_dialog2_received_negative_button">Cancel</string>
+
+    <string name="wifi_p2p_dialog2_enter_pin_label">PIN</string>
+    <string name="wifi_p2p_dialog2_display_pin_label">PIN</string>
+    <!-- End of strings for P2P Dialog 2 -->
 
     <string name="wifi_p2p_frequency_conflict_message">Your device will temporarily disconnect from Wi-Fi while it\'s connected to <xliff:g id="device_name">%1$s</xliff:g></string>
     <!-- Dialog ok button-->

@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyList;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -42,6 +43,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.util.Collections;
 
 /**
  * Unit tests for HostapdHal
@@ -181,21 +184,25 @@ public class HostapdHalTest extends WifiBaseTest {
 
     /**
      * Check that HostapdHal.addAccessPoint() returns the implementation's result
-     * and that the implementation receives the expected arguments
+     * and that the implementation receives the expected arguments.
+     *
+     * SuppressWarnings DirectInvocationOnMock for "mSoftApHalCallback.onFailure()"
+     * since it is a lambda callback implementation. Not a really function call.
      */
+    @SuppressWarnings("DirectInvocationOnMock")
     @Test
     public void testAddAccessPoint() {
         initializeWithAidlImp(true);
         when(mIHostapdAidlMock.addAccessPoint(anyString(), any(SoftApConfiguration.class),
-                anyBoolean(), any(Runnable.class)))
+                anyBoolean(), anyBoolean(), anyList(), any(Runnable.class)))
                 .thenReturn(true);
         boolean isMetered = true;
         Builder configurationBuilder = new SoftApConfiguration.Builder();
         SoftApConfiguration config = configurationBuilder.build();
         assertTrue(mHostapdHal.addAccessPoint(IFACE_NAME, config,
-                isMetered, () -> mSoftApHalCallback.onFailure()));
+                isMetered, false, Collections.emptyList(), () -> mSoftApHalCallback.onFailure()));
         verify(mIHostapdAidlMock).addAccessPoint(eq(IFACE_NAME), eq(config),
-                eq(isMetered), any(Runnable.class));
+                eq(isMetered), eq(false), eq(Collections.emptyList()), any(Runnable.class));
     }
 
     /**

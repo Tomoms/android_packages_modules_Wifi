@@ -86,6 +86,10 @@ rule android.util.BackupUtils* com.android.wifi.x.@0
 rule android.util.LocalLog* com.android.wifi.x.@0
 rule android.util.Rational* com.android.wifi.x.@0
 
+# Statically included ranging flags.
+rule com.android.ranging.flags.Flags com.android.wifi.x.@0
+rule com.android.ranging.flags.*Flags* com.android.wifi.x.@0
+
 # Repackage generated flag classes.
 # Need to specify the rule on classes to avoid transform the literals
 rule com.android.wifi.flags.*FeatureFlags* com.android.wifi.x.@0
@@ -95,6 +99,10 @@ rule com.android.wifi.flags.Flags com.android.wifi.x.@0
 rule android.net.wifi.flags.*FeatureFlags* com.android.wifi.x.@0
 rule android.net.wifi.flags.FeatureFlags* com.android.wifi.x.@0
 rule android.net.wifi.flags.Flags com.android.wifi.x.@0
+
+rule android.security.*FeatureFlags* com.android.wifi.x.@0
+rule android.security.FeatureFlags* com.android.wifi.x.@0
+rule android.security.Flags com.android.wifi.x.@0
 
 # Use our statically linked bouncy castle library
 rule org.bouncycastle.** com.android.wifi.x.@0

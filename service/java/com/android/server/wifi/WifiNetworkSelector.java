@@ -467,7 +467,8 @@ public class WifiNetworkSelector {
 
     @SuppressLint("NewApi")
     private List<ScanDetail> filterScanResults(List<ScanDetail> scanDetails,
-            Set<String> bssidBlocklist, List<ClientModeManagerState> cmmStates) {
+            Set<String> bssidBlocklist, List<ClientModeManagerState> cmmStates,
+            int autojoinRestrictionSecurityTypes) {
         List<ScanDetail> validScanDetails = new ArrayList<>();
         StringBuffer noValidSsid = new StringBuffer();
         StringBuffer blockedBssid = new StringBuffer();
@@ -475,6 +476,7 @@ public class WifiNetworkSelector {
         StringBuffer mboAssociationDisallowedBssid = new StringBuffer();
         StringBuffer adminRestrictedSsid = new StringBuffer();
         StringJoiner deprecatedSecurityTypeSsid = new StringJoiner(" / ");
+        StringJoiner autojoinRestrictionSecurityTypesBssid = new StringJoiner(" / ");
         List<String> currentBssids = cmmStates.stream()
                 .map(cmmState -> cmmState.wifiInfo.getBSSID())
                 .collect(Collectors.toList());
@@ -611,6 +613,22 @@ public class WifiNetworkSelector {
                 }
             }
 
+            // Skip network with security type that is restricted to auto join
+            if (autojoinRestrictionSecurityTypes != 0/*restrict none*/) {
+                @WifiAnnotations.SecurityType int[] securityTypes = scanResult.getSecurityTypes();
+                boolean securityTypeRestricted = true;
+                for (int type : securityTypes) {
+                    if (((0x1 << type) & autojoinRestrictionSecurityTypes) == 0) {
+                        securityTypeRestricted = false;
+                        break;
+                    }
+                }
+                if (securityTypeRestricted) {
+                    autojoinRestrictionSecurityTypesBssid.add(scanId);
+                    continue;
+                }
+            }
+
             validScanDetails.add(scanDetail);
         }
         mWifiMetrics.incrementNetworkSelectionFilteredBssidCount(numBssidFiltered);
@@ -663,6 +681,11 @@ public class WifiNetworkSelector {
                     + deprecatedSecurityTypeSsid);
         }
 
+        if (autojoinRestrictionSecurityTypesBssid.length() != 0) {
+            localLog("Networks filtered out due to auto join restriction on the security type: "
+                    + autojoinRestrictionSecurityTypesBssid);
+        }
+
         return validScanDetails;
     }
 
@@ -685,7 +708,7 @@ public class WifiNetworkSelector {
         mIsEnhancedOpenSupportedInitialized = true;
         ClientModeManager primaryManager =
                 mWifiInjector.getActiveModeWarden().getPrimaryClientModeManager();
-        mIsEnhancedOpenSupported = (primaryManager.getSupportedFeatures() & WIFI_FEATURE_OWE) != 0;
+        mIsEnhancedOpenSupported = primaryManager.getSupportedFeatures().get(WIFI_FEATURE_OWE);
         return mIsEnhancedOpenSupported;
     }
 
@@ -1075,7 +1098,8 @@ public class WifiNetworkSelector {
             @NonNull List<ScanDetail> scanDetails, @NonNull Set<String> bssidBlocklist,
             @NonNull List<ClientModeManagerState> cmmStates, boolean untrustedNetworkAllowed,
             boolean oemPaidNetworkAllowed, boolean oemPrivateNetworkAllowed,
-            Set<Integer> restrictedNetworkAllowedUids, boolean skipSufficiencyCheck) {
+            Set<Integer> restrictedNetworkAllowedUids, boolean skipSufficiencyCheck,
+            int autojoinRestrictionSecurityTypes) {
         mFilteredNetworks.clear();
         mConnectableNetworks.clear();
         if (scanDetails.size() == 0) {
@@ -1092,7 +1116,8 @@ public class WifiNetworkSelector {
         }
 
         // Filter out unwanted networks.
-        mFilteredNetworks = filterScanResults(scanDetails, bssidBlocklist, cmmStates);
+        mFilteredNetworks = filterScanResults(scanDetails, bssidBlocklist, cmmStates,
+                autojoinRestrictionSecurityTypes);
         if (mFilteredNetworks.size() == 0) {
             return null;
         }

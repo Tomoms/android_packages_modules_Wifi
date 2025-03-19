@@ -21,10 +21,14 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.wifi.aware.IWifiAwareManager;
 import android.net.wifi.aware.WifiAwareManager;
+import android.net.wifi.flags.Flags;
 import android.net.wifi.p2p.IWifiP2pManager;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.net.wifi.rtt.IWifiRttManager;
 import android.net.wifi.rtt.WifiRttManager;
+import android.net.wifi.usd.IUsdManager;
+import android.net.wifi.usd.UsdManager;
+import android.net.wifi.util.Environment;
 import android.os.HandlerThread;
 import android.os.Looper;
 
@@ -145,5 +149,19 @@ public class WifiFrameworkInitializer {
                     return new RttManager(context, wifiRttManager);
                 }
         );
+        if (Flags.usd() && Environment.isSdkAtLeastB()) {
+            SystemServiceRegistry.registerContextAwareService(
+                    Context.WIFI_USD_SERVICE,
+                    UsdManager.class,
+                    (context, serviceBinder) -> {
+                        if (!context.getPackageManager().hasSystemFeature(
+                                PackageManager.FEATURE_WIFI)) {
+                            return null;
+                        }
+                        IUsdManager service = IUsdManager.Stub.asInterface(serviceBinder);
+                        return new UsdManager(context, service);
+                    }
+            );
+        }
     }
 }
