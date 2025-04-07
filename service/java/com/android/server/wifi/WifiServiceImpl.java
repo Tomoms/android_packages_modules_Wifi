@@ -1680,7 +1680,7 @@ public class WifiServiceImpl extends IWifiManager.Stub {
         }
         mWifiMetrics.incrementNumWifiToggles(isPrivileged, enable);
         mWifiMetrics.reportWifiStateChanged(enable, mWifiInjector.getWakeupController().isUsable(),
-                false);
+                false, callingUid);
         mActiveModeWarden.wifiToggled(new WorkSource(callingUid, packageName));
         mLastCallerInfoManager.put(WifiManager.API_WIFI_ENABLED, Process.myTid(),
                 callingUid, callingPid, packageName, enable);
