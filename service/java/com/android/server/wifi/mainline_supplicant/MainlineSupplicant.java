@@ -18,11 +18,15 @@ package com.android.server.wifi.mainline_supplicant;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.content.pm.PackageManager;
 import android.net.MacAddress;
+import android.net.wifi.WifiContext;
 import android.net.wifi.usd.Config;
 import android.net.wifi.usd.PublishConfig;
 import android.net.wifi.usd.SubscribeConfig;
+import android.net.wifi.util.BuildProperties;
 import android.net.wifi.util.Environment;
+import android.net.wifi.util.WifiResourceCache;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.os.ServiceSpecificException;
@@ -35,11 +39,14 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.wifi.SupplicantStaIfaceHal;
+import com.android.server.wifi.WifiGlobals;
 import com.android.server.wifi.WifiNative;
 import com.android.server.wifi.WifiThreadRunner;
 import com.android.server.wifi.usd.UsdNativeManager;
 import com.android.wifi.flags.Flags;
+import com.android.wifi.resources.R;
 
+import java.io.PrintWriter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,6 +68,8 @@ public class MainlineSupplicant {
     private IMainlineSupplicant mIMainlineSupplicant;
     private final Object mLock = new Object();
     private final WifiThreadRunner mWifiThreadRunner;
+    private final WifiContext mContext;
+    private final WifiResourceCache mResourceCache;
     private SupplicantDeathRecipient mServiceDeathRecipient;
     private WifiNative.SupplicantDeathEventHandler mFrameworkDeathHandler;
     private CountDownLatch mWaitForDeathLatch;
@@ -68,9 +77,16 @@ public class MainlineSupplicant {
     private Map<String, IStaInterface> mActiveStaIfaces = new HashMap<>();
     private Map<String, IStaInterfaceCallback> mStaIfaceCallbacks = new HashMap<>();
     private UsdNativeManager.UsdEventsCallback mUsdEventsCallback = null;
+    private boolean mVerboseLoggingEnabled = false;
+    private boolean mVerboseHalLoggingEnabled = false;
+    private final WifiGlobals mWifiGlobals;
 
-    public MainlineSupplicant(@NonNull WifiThreadRunner wifiThreadRunner) {
+    public MainlineSupplicant(@NonNull WifiThreadRunner wifiThreadRunner,
+            @NonNull WifiContext context, @NonNull WifiGlobals wifiGlobals) {
         mWifiThreadRunner = wifiThreadRunner;
+        mContext = context;
+        mResourceCache = mContext.getResourceCache();
+        mWifiGlobals = wifiGlobals;
         mServiceDeathRecipient = new SupplicantDeathRecipient();
         mIsServiceAvailable = canServiceBeAccessed();
     }
@@ -118,13 +134,28 @@ public class MainlineSupplicant {
         }
     }
 
+    private boolean isUnsupportedDevice() {
+        // Avoid starting the process on resource-constrained devices.
+        PackageManager packageManager = mContext.getPackageManager();
+        return packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)
+                        || packageManager.hasSystemFeature(PackageManager.FEATURE_EMBEDDED)
+                        || packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+                        || packageManager.hasSystemFeature(PackageManager.FEATURE_AUTOMOTIVE);
+    }
+
+    private boolean isOverlayEnabled() {
+        return mResourceCache.getBoolean(R.bool.config_wifiMainlineSupplicantEnabled);
+    }
+
     /**
      * Check whether the mainline supplicant service can be accessed.
      */
     private boolean canServiceBeAccessed() {
-        // Requires an Android B+ Selinux policy and a copy of the binary.
+        // Requires an Android B+ Selinux policy, a copy of the binary, and device support.
+        BuildProperties buildProperties = BuildProperties.getInstance();
         return Environment.isSdkAtLeastB() && Flags.mainlineSupplicant()
-                && Environment.isMainlineSupplicantBinaryInWifiApex();
+                && Environment.isMainlineSupplicantBinaryInWifiApex()
+                && isOverlayEnabled() && !isUnsupportedDevice() && !buildProperties.isUserBuild();
     }
 
     /**
@@ -171,6 +202,7 @@ public class MainlineSupplicant {
                 mWaitForDeathLatch = null;
                 mIMainlineSupplicant.asBinder()
                         .linkToDeath(mServiceDeathRecipient, /* flags= */  0);
+                setDebugParams(mVerboseHalLoggingEnabled);
             } catch (RemoteException e) {
                 handleRemoteException(e, "startService");
                 return false;
@@ -187,6 +219,41 @@ public class MainlineSupplicant {
     public boolean isActive() {
         synchronized (mLock) {
             return mIMainlineSupplicant != null;
+        }
+    }
+
+    /**
+     * Configure verbose logging for this class.
+     *
+     * @param fwVerboseEnabled Whether verbose logging should be enabled in the framework.
+     * @param halVerboseEnabled Whether verbose logging should be enabled in the HAL.
+     */
+    public void enableVerboseLogging(boolean fwVerboseEnabled, boolean halVerboseEnabled) {
+        synchronized (mLock) {
+            mVerboseLoggingEnabled = fwVerboseEnabled;
+            mVerboseHalLoggingEnabled = halVerboseEnabled;
+            setDebugParams(halVerboseEnabled);
+            Log.i(TAG, "Set verbose logging. Framework=" + mVerboseLoggingEnabled
+                    + ", HAL=" + mVerboseHalLoggingEnabled);
+        }
+    }
+
+    private void setDebugParams(boolean halVerboseEnabled) {
+        synchronized (mLock) {
+            final String methodName = "setDebugParams";
+            if (!checkIsActiveAndLogError(methodName)) {
+                return;
+            }
+            try {
+                byte debugLevel = IMainlineSupplicant.DebugLevel.INFO;
+                boolean showKeys = halVerboseEnabled
+                        && mWifiGlobals.getShowKeyVerboseLoggingModeEnabled();
+                mIMainlineSupplicant.setDebugParams(debugLevel, showKeys);
+            } catch (ServiceSpecificException e) {
+                handleServiceSpecificException(e, methodName);
+            } catch (RemoteException e) {
+                handleRemoteException(e, methodName);
+            }
         }
     }
 
@@ -211,6 +278,10 @@ public class MainlineSupplicant {
             }
 
             try {
+                // Expect a warning about FLAG_ONEWAY when we add the STA interface, since
+                // we are not allowed to call Binder#allowBlocking from the mainline module.
+                // The functionality will not be affected.
+                Log.i(TAG, "Expecting a warning when the STA interface is added");
                 IStaInterface staIface = mIMainlineSupplicant.addStaInterface(ifaceName);
                 IStaInterfaceCallback callback = new MainlineSupplicantStaIfaceCallback(
                         this, ifaceName, mWifiThreadRunner);
@@ -684,6 +755,20 @@ public class MainlineSupplicant {
                 handleRemoteException(e, methodName);
             }
             return false;
+        }
+    }
+
+    /**
+     * Dump information about the internal state.
+     *
+     * @param pw PrintWriter to write the dump to
+     */
+    public void dump(@NonNull PrintWriter pw) {
+        synchronized (mLock) {
+            pw.println("Dump of MainlineSupplicant");
+            pw.println("isAvailable: " + isAvailable());
+            pw.println("isActive: " + isActive());
+            pw.println("activeStaIfaces: " + mActiveStaIfaces.keySet());
         }
     }
 

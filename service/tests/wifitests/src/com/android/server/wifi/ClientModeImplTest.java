@@ -44,10 +44,10 @@ import static com.android.server.wifi.ClientModeImpl.CMD_PRE_DHCP_ACTION;
 import static com.android.server.wifi.ClientModeImpl.CMD_PRE_DHCP_ACTION_COMPLETE;
 import static com.android.server.wifi.ClientModeImpl.CMD_UNWANTED_NETWORK;
 import static com.android.server.wifi.ClientModeImpl.WIFI_WORK_SOURCE;
+import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 import static com.android.server.wifi.WifiBlocklistMonitor.REASON_APP_DISALLOW;
 import static com.android.server.wifi.WifiSettingsConfigStore.SECONDARY_WIFI_STA_FACTORY_MAC_ADDRESS;
 import static com.android.server.wifi.WifiSettingsConfigStore.WIFI_STA_FACTORY_MAC_ADDRESS;
-import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -193,6 +193,7 @@ import com.android.server.wifi.util.ActionListenerWrapper;
 import com.android.server.wifi.util.NativeUtil;
 import com.android.server.wifi.util.RssiUtilTest;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
 import com.android.wifi.resources.R;
 
 import org.junit.After;
@@ -573,6 +574,7 @@ public class ClientModeImplTest extends WifiBaseTest {
     @Mock ThroughputPredictor mThroughputPredictor;
     @Mock ScanRequestProxy mScanRequestProxy;
     @Mock DeviceConfigFacade mDeviceConfigFacade;
+    @Mock FeatureFlags mFeatureFlags;
     @Mock Network mNetwork;
     @Mock ConcreteClientModeManager mClientModeManager;
     @Mock WifiScoreReport mWifiScoreReport;
@@ -743,6 +745,8 @@ public class ClientModeImplTest extends WifiBaseTest {
         when(mWifiInjector.getSsidTranslator()).thenReturn(mSsidTranslator);
         when(mWifiInjector.getWifiDeviceStateChangeManager())
                 .thenReturn(mWifiDeviceStateChangeManager);
+        when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
+        when(mDeviceConfigFacade.getFeatureFlags()).thenReturn(mFeatureFlags);
         when(mWifiHandlerThread.getLooper()).thenReturn(mLooper.getLooper());
         when(mWifiNative.getDeviceWiphyCapabilities(any())).thenReturn(mDeviceWiphyCapabilities);
         if (Flags.getDeviceCrossAkmRoamingSupport() && SdkLevel.isAtLeastV()) {
@@ -3041,6 +3045,7 @@ public class ClientModeImplTest extends WifiBaseTest {
 
         WifiConfiguration config = new WifiConfiguration();
         config.SSID = TEST_SSID;
+        config.networkId = FRAMEWORK_NETWORK_ID;
         config.getNetworkSelectionStatus().setHasEverConnected(true);
         config.allowedKeyManagement.set(KeyMgmt.IEEE8021X);
         config.enterpriseConfig.setEapMethod(WifiEnterpriseConfig.Eap.SIM);
@@ -3057,6 +3062,8 @@ public class ClientModeImplTest extends WifiBaseTest {
         verify(mEapFailureNotifier).onEapFailure(
                 WifiNative.EAP_SIM_VENDOR_SPECIFIC_CERT_EXPIRED, config, true);
         verify(mWifiCarrierInfoManager).resetCarrierKeysForImsiEncryption(any());
+        verify(mWifiNative).removeNetworkCachedData(FRAMEWORK_NETWORK_ID);
+        verify(mWifiNative, times(2)).removeAllNetworks(WIFI_IFACE_NAME);
         verify(mDeviceConfigFacade).isAbnormalConnectionFailureBugreportEnabled();
         verify(mWifiScoreCard).detectAbnormalConnectionFailure(anyString());
         verify(mWifiDiagnostics, times(2)).takeBugReport(anyString(), anyString());
@@ -4025,6 +4032,25 @@ public class ClientModeImplTest extends WifiBaseTest {
                 any());
     }
 
+    @Test
+    public void testRssiIsUpdatedAfterSupplicantAssociates() throws Exception {
+        // Mock RSSI poll results to be updated when supplicant associates.
+        WifiSignalPollResults signalPollResults = new WifiSignalPollResults();
+        signalPollResults.addEntry(0, -42, 65, 54, sFreq);
+        when(mWifiNative.signalPoll(any())).thenReturn(signalPollResults);
+        triggerConnect();
+
+        mCmi.sendMessage(WifiMonitor.SUPPLICANT_STATE_CHANGE_EVENT, 0, 0,
+                new StateChangeResult(0, TEST_WIFI_SSID, TEST_BSSID_STR, sFreq,
+                        SupplicantState.ASSOCIATED));
+        mLooper.dispatchAll();
+
+        validateConnectionInfo();
+        // RSSI should be updated after supplicant associates.
+        assertEquals(signalPollResults.getRssi(), mWifiInfo.getRssi());
+        assertRssiChangeBroadcastSent(1);
+    }
+
     /**
      * Verify that RSSI and link layer stats polling works in connected mode
      */
@@ -4658,10 +4684,9 @@ public class ClientModeImplTest extends WifiBaseTest {
 
         mLooper.moveTimeForward(ClientModeImpl.CONNECTING_WATCHDOG_TIMEOUT_MS);
         mLooper.dispatchAll();
-        verify(mWifiBlocklistMonitor).handleBssidConnectionFailure(any(), any(),
-                eq(WifiBlocklistMonitor.REASON_FAILURE_NO_RESPONSE), anyInt());
-        verify(mWifiDiagnostics).reportConnectionEvent(
-                eq(WifiDiagnostics.CONNECTION_EVENT_TIMEOUT), any());
+        verify(mWifiMetrics).logStaEvent(eq(WIFI_IFACE_NAME),
+                eq(StaEvent.TYPE_FRAMEWORK_DISCONNECT),
+                eq(StaEvent.DISCONNECT_CONNECT_WATCHDOG_TIMER));
     }
 
     @Test
@@ -4669,17 +4694,17 @@ public class ClientModeImplTest extends WifiBaseTest {
         connect();
         mLooper.moveTimeForward(ClientModeImpl.CONNECTING_WATCHDOG_TIMEOUT_MS);
         mLooper.dispatchAll();
-        verify(mWifiBlocklistMonitor, never()).handleBssidConnectionFailure(any(), any(),
-                anyInt(), anyInt());
-        verify(mWifiDiagnostics, never()).reportConnectionEvent(
-                eq(WifiDiagnostics.CONNECTION_EVENT_TIMEOUT), any());
+        verify(mWifiMetrics, never()).logStaEvent(eq(WIFI_IFACE_NAME),
+                eq(StaEvent.TYPE_FRAMEWORK_DISCONNECT),
+                eq(StaEvent.DISCONNECT_CONNECT_WATCHDOG_TIMER));
     }
 
     private void verifyConnectionEventTimeoutDoesNotOccur() {
         mLooper.moveTimeForward(ClientModeImpl.CONNECTING_WATCHDOG_TIMEOUT_MS);
         mLooper.dispatchAll();
-        verify(mWifiDiagnostics, never()).reportConnectionEvent(
-                eq(WifiDiagnostics.CONNECTION_EVENT_TIMEOUT), any());
+        verify(mWifiMetrics, never()).logStaEvent(eq(WIFI_IFACE_NAME),
+                eq(StaEvent.TYPE_FRAMEWORK_DISCONNECT),
+                eq(StaEvent.DISCONNECT_CONNECT_WATCHDOG_TIMER));
     }
 
     /**
@@ -5367,6 +5392,9 @@ public class ClientModeImplTest extends WifiBaseTest {
                 eq(WifiMetrics.ConnectionEvent.FAILURE_NONE), eq(mConnectedNetwork),
                 any(String.class));
         verify(mCmiMonitor).onInternetValidated(mClientModeManager);
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
         // BSSID different, record this connection.
         verify(mWifiMetrics).incrementNumBssidDifferentSelectionBetweenFrameworkAndFirmware();
         verifyConnectionEventTimeoutDoesNotOccur();
@@ -5647,6 +5675,10 @@ public class ClientModeImplTest extends WifiBaseTest {
                 NetworkAgent.VALIDATION_STATUS_NOT_VALID, mMockUri);
         mLooper.dispatchAll();
 
+        verify(mWifiMetrics, never())
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME),
+                        eq(NetworkAgent.VALIDATION_STATUS_NOT_VALID));
         // expect no disconnection
         verify(mWifiNative, never()).disconnect(WIFI_IFACE_NAME);
     }
@@ -5783,6 +5815,10 @@ public class ClientModeImplTest extends WifiBaseTest {
         // expect not disabled since no internet is expected on this network
         verify(mWifiConfigManager, never()).updateNetworkSelectionStatus(
                 FRAMEWORK_NETWORK_ID, DISABLED_NO_INTERNET_TEMPORARY);
+        verify(mWifiMetrics, never())
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME),
+                        eq(NetworkAgent.VALIDATION_STATUS_NOT_VALID));
     }
 
     /**
@@ -5880,6 +5916,9 @@ public class ClientModeImplTest extends WifiBaseTest {
                 FRAMEWORK_NETWORK_ID, DISABLED_NONE);
         verify(mWifiScoreCard).noteValidationSuccess(any());
         verify(mWifiBlocklistMonitor).handleNetworkValidationSuccess(TEST_BSSID_STR, TEST_SSID);
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
     }
 
     /**
@@ -5921,6 +5960,9 @@ public class ClientModeImplTest extends WifiBaseTest {
                 FRAMEWORK_NETWORK_ID, DISABLED_NONE);
         verify(mWifiScoreCard).noteValidationSuccess(any());
         verify(mWifiBlocklistMonitor).handleNetworkValidationSuccess(TEST_BSSID_STR, TEST_SSID);
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
 
         // Now that the network has been validated, link properties must not have a T&C URL anymore
         // and captive is set to false
@@ -8100,9 +8142,9 @@ public class ClientModeImplTest extends WifiBaseTest {
         // Simulate watchdog timeout and ensure we retuned to disconnected state.
         mLooper.moveTimeForward(ClientModeImpl.CONNECTING_WATCHDOG_TIMEOUT_MS + 5L);
         mLooper.dispatchAll();
-
-        verify(mWifiNative).disableNetwork(WIFI_IFACE_NAME);
-        assertEquals("DisconnectedState", mCmi.getCurrentState().getName());
+        verify(mWifiMetrics).logStaEvent(eq(WIFI_IFACE_NAME),
+                eq(StaEvent.TYPE_FRAMEWORK_DISCONNECT),
+                eq(StaEvent.DISCONNECT_CONNECT_WATCHDOG_TIMER));
     }
 
     @Test
@@ -9500,6 +9542,9 @@ public class ClientModeImplTest extends WifiBaseTest {
                 eq(connectedConfig.SSID), eq(allowlistSsids));
         verify(mWifiBlocklistMonitor).updateFirmwareRoamingConfiguration(
                 eq(new ArraySet<>(allowlistSsids)));
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
     }
 
     @Test
@@ -9610,6 +9655,9 @@ public class ClientModeImplTest extends WifiBaseTest {
         verify(mWifiConfigManager)
                 .setNetworkDefaultGwMacAddress(mConnectedNetwork.networkId, gatewayMac);
         verify(mWifiConfigManager, never()).updateLinkedNetworks(connectedConfig.networkId);
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
 
         // FT/SAE scan, do not update linked networks
         ScanResult ftSaeScan = new ScanResult();
@@ -9621,7 +9669,9 @@ public class ClientModeImplTest extends WifiBaseTest {
         verify(mWifiConfigManager)
                 .setNetworkDefaultGwMacAddress(mConnectedNetwork.networkId, gatewayMac);
         verify(mWifiConfigManager, never()).updateLinkedNetworks(connectedConfig.networkId);
-
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
         // Null scan, do not update linked networks
         mWifiNetworkAgentCallbackCaptor.getValue().onValidationStatus(
                 NetworkAgent.VALIDATION_STATUS_VALID, null /* captivePortalUrl */);
@@ -9629,6 +9679,9 @@ public class ClientModeImplTest extends WifiBaseTest {
         verify(mWifiConfigManager)
                 .setNetworkDefaultGwMacAddress(mConnectedNetwork.networkId, gatewayMac);
         verify(mWifiConfigManager, never()).updateLinkedNetworks(connectedConfig.networkId);
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
     }
 
     @Test
@@ -9700,6 +9753,9 @@ public class ClientModeImplTest extends WifiBaseTest {
                 eq(connectedConfig.SSID), eq(Collections.emptyList()));
         verify(mWifiBlocklistMonitor).updateFirmwareRoamingConfiguration(
                 eq(Collections.emptySet()));
+        verify(mWifiMetrics)
+                .reportWifiValidationResult(
+                        eq(WIFI_IFACE_NAME), eq(NetworkAgent.VALIDATION_STATUS_VALID));
     }
 
     /**

@@ -182,9 +182,13 @@ final class ThroughputScorer implements WifiCandidates.CandidateScorer {
             score = 0;
         }
 
-        if (candidate.getLastSelectionWeight() > 0.0 && (mWifiContext.getResources().getBoolean(
-                R.bool.config_wifiThroughputScorerBoostForRecentlyUserSelectedNetwork)
-                        || !candidate.isUserSelected())) {
+        boolean candidateIsDisconnectedCarrierNetwork =
+                !candidate.isCurrentNetwork() && candidate.isCarrierOrPrivileged();
+        if (!candidateIsDisconnectedCarrierNetwork
+                && candidate.getLastSelectionWeight() > 0.0
+                && (mWifiContext.getResources().getBoolean(
+                        R.bool.config_wifiThroughputScorerBoostForRecentlyUserSelectedNetwork)
+                || !candidate.isUserSelected())) {
             // Put a recently-selected network in a tier above everything else,
             // but include rssi and throughput contributions for BSSID selection.
             score = TOP_TIER_BASE_SCORE + rssiBaseScore + throughputBonusScore;
@@ -193,16 +197,17 @@ final class ThroughputScorer implements WifiCandidates.CandidateScorer {
         if (mVerboseLoggingEnabled) {
             Log.d(TAG, "Score for candidate: SSID: " + candidate.getKey().matchInfo.networkSsid
                     + " BSSID: " + candidate.getKey().bssid
-                    + " rssiScore: " + rssiBaseScore
-                    + " throughputScore: " + throughputBonusScore
+                    + " rssiBoost: " + rssiBoost
+                    + " throughputBoost: " + throughputBoost
                     + " currentNetworkBoost: " + currentNetworkBoost
+                    + " bandSpecificBonus: " + bandSpecificBonus
+                    + " frequencyScore: " + frequencyScore
                     + " securityAward: " + securityAward
                     + " unmeteredAward: " + unmeteredAward
                     + " savedNetworkAward: " + savedNetworkAward
                     + " trustedAward: " + trustedAward
                     + " notOemPaidAward: " + notOemPaidAward
                     + " notOemPrivateAward: " + notOemPrivateAward
-                    + " frequencyScore: " + frequencyScore
                     + " final score: " + score);
         }
 

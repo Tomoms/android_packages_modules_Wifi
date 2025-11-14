@@ -16,9 +16,12 @@
 
 package com.android.server.wifi;
 
+import androidx.annotation.Keep;
+
 import com.android.internal.annotations.VisibleForTesting;
 
 /** Abstraction of android.os.Build, to enable mocking statics for testing. */
+@Keep
 @VisibleForTesting
 public interface BuildProperties {
     /** Returns true iff this is an eng build. */

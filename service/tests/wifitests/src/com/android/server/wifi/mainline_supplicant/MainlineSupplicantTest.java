@@ -21,23 +21,28 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.net.wifi.WifiContext;
 import android.net.wifi.usd.PublishConfig;
 import android.net.wifi.usd.SubscribeConfig;
 import android.net.wifi.util.Environment;
+import android.net.wifi.util.WifiResourceCache;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.test.TestLooper;
 import android.system.wifi.mainline_supplicant.IMainlineSupplicant;
 import android.system.wifi.mainline_supplicant.IStaInterface;
 
+import com.android.server.wifi.WifiGlobals;
 import com.android.server.wifi.WifiNative;
 import com.android.server.wifi.WifiThreadRunner;
 
@@ -46,6 +51,9 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
 /**
  * Unit tests for {@link MainlineSupplicant}.
@@ -58,6 +66,9 @@ public class MainlineSupplicantTest {
     private @Mock IBinder mIBinderMock;
     private @Mock WifiNative.SupplicantDeathEventHandler mFrameworkDeathHandler;
     private @Mock IStaInterface mIStaInterface;
+    private @Mock WifiContext mContext;
+    private @Mock WifiResourceCache mResourceCache;
+    private @Mock WifiGlobals mWifiGlobals;
     private MainlineSupplicantSpy mDut;
     private TestLooper mLooper = new TestLooper();
 
@@ -67,7 +78,7 @@ public class MainlineSupplicantTest {
     // Spy version of this class allows us to override methods for testing.
     private class MainlineSupplicantSpy extends MainlineSupplicant {
         MainlineSupplicantSpy() {
-            super(new WifiThreadRunner(new Handler(mLooper.getLooper())));
+            super(new WifiThreadRunner(new Handler(mLooper.getLooper())), mContext, mWifiGlobals);
         }
 
         @Override
@@ -82,6 +93,7 @@ public class MainlineSupplicantTest {
         MockitoAnnotations.initMocks(this);
         when(mIMainlineSupplicantMock.asBinder()).thenReturn(mIBinderMock);
         when(mIMainlineSupplicantMock.addStaInterface(anyString())).thenReturn(mIStaInterface);
+        when(mContext.getResourceCache()).thenReturn(mResourceCache);
         mDut = new MainlineSupplicantSpy();
     }
 
@@ -213,5 +225,40 @@ public class MainlineSupplicantTest {
         IStaInterface.UsdSubscribeConfig aidlConfig =
                 MainlineSupplicant.frameworkToHalUsdSubscribeConfig(frameworkConfig);
         verifyUsdBaseConfigDefaultValues(aidlConfig.baseConfig);
+    }
+
+    /**
+     * Verify that the dump method properly tracks the active interfaces.
+     */
+    @Test
+    public void testDumpActiveInterfaces() throws Exception {
+        validateServiceStart();
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+
+        // Interface has not been added, so the interface name should not be in the dump.
+        mDut.dump(pw);
+        assertFalse(sw.toString().contains(IFACE_NAME));
+
+        // Interface name should appear in the dump after it has been added.
+        assertTrue(mDut.addStaInterface(IFACE_NAME));
+        mDut.dump(pw);
+        assertTrue(sw.toString().contains(IFACE_NAME));
+    }
+
+    /**
+     * Verify that the debug parameters are set both when the service is started, and also
+     * when the verbose logging parameters are updated.
+     */
+    @Test
+    public void testSetDebugParams() throws Exception {
+        // Validate call when service is started.
+        when(mWifiGlobals.getShowKeyVerboseLoggingModeEnabled()).thenReturn(true);
+        validateServiceStart();
+        verify(mIMainlineSupplicantMock, times(1)).setDebugParams(anyByte(), eq(false));
+
+        // Validate call when enableVerboseLogging is called.
+        mDut.enableVerboseLogging(true, true);
+        verify(mIMainlineSupplicantMock, times(1)).setDebugParams(anyByte(), eq(true));
     }
 }

@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.android.server.wifi;
 
 import android.os.Build;
 
+import androidx.annotation.Keep;
+
 /**
  * Implementation of BuildProperties.
  */
+@Keep
 public class SystemBuildProperties implements BuildProperties {
     @Override
     public boolean isEngBuild() {

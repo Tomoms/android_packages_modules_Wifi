@@ -22,6 +22,7 @@ import static android.Manifest.permission.ENTER_CAR_MODE_PRIORITIZED;
 import static android.Manifest.permission.NEARBY_WIFI_DEVICES;
 import static android.Manifest.permission.RENOUNCE_PERMISSIONS;
 import static android.Manifest.permission.REQUEST_COMPANION_PROFILE_AUTOMOTIVE_PROJECTION;
+import static android.Manifest.permission.REQUEST_COMPANION_PROFILE_NEARBY_DEVICE_STREAMING;
 import static android.content.pm.PackageManager.GET_PERMISSIONS;
 import static android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES;
 
@@ -799,6 +800,15 @@ public class WifiPermissionsUtil {
     }
 
     /**
+     * Returns true if the |uid| holds REQUEST_COMPANION_PROFILE_NEARBY_DEVICE_STREAMING permission.
+     */
+    public boolean checkRequestCompanionProfileNearbyDeviceStreamingPermission(int uid) {
+        return mWifiPermissionsWrapper.getUidPermission(
+                REQUEST_COMPANION_PROFILE_NEARBY_DEVICE_STREAMING, uid)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
      * Returns true if the |uid| holds ENTER_CAR_MODE_PRIORITIZED permission.
      */
     public boolean checkEnterCarModePrioritized(int uid) {
@@ -1358,5 +1368,20 @@ public class WifiPermissionsUtil {
     public boolean isSignedWithPlatformKey(int uid) {
         return mContext.getPackageManager().checkSignatures(uid, Process.SYSTEM_UID)
                 == PackageManager.SIGNATURE_MATCH;
+    }
+
+    /** Whether the uid1 and uid2 are from the same user */
+    public boolean areTwoAppsFromSameUser(int uid1, int uid2) {
+        long ident = Binder.clearCallingIdentity();
+        try {
+            UserHandle uid1UserHandle = UserHandle.getUserHandleForUid(uid1);
+            UserHandle uid2UserHandle = UserHandle.getUserHandleForUid(uid2);
+            if (uid1UserHandle != null) {
+                return uid1UserHandle.equals(uid2UserHandle);
+            }
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+        return false;
     }
 }

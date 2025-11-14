@@ -223,7 +223,8 @@ class SupplicantStaIfaceCallbackAidlImpl extends ISupplicantStaIfaceCallback.Stu
                 mWifiMonitor.broadcastNetworkConnectionEvent(
                         mIfaceName, mStaIfaceHal.getCurrentNetworkId(mIfaceName), filsHlpSent,
                         wifiSsid, bssidStr, keyMgmtMask);
-            } else if (newState == StaIfaceCallbackState.ASSOCIATING) {
+            } else if (newState == StaIfaceCallbackState.AUTHENTICATING
+                    || newState == StaIfaceCallbackState.ASSOCIATING) {
                 mCurrentSsid = wifiSsid.toString();
             }
             mWifiMonitor.broadcastSupplicantStateChangeEvent(
@@ -346,7 +347,8 @@ class SupplicantStaIfaceCallbackAidlImpl extends ISupplicantStaIfaceCallback.Stu
                             mIfaceName, WifiManager.ERROR_AUTH_FAILURE_WRONG_PSWD, -1,
                             mCurrentSsid, MacAddress.fromBytes(bssid));
                 } else if (mStateBeforeDisconnect == StaIfaceCallbackState.ASSOCIATED
-                        && WifiConfigurationUtil.isConfigForEnterpriseNetwork(curConfiguration)) {
+                        && WifiConfigurationUtil.isConfigForEnterpriseNetwork(curConfiguration)
+                        && !curConfiguration.enterpriseConfig.isTrustOnFirstUseEnabled()) {
                     mWifiMonitor.broadcastAuthenticationFailureEvent(
                             mIfaceName, WifiManager.ERROR_AUTH_FAILURE_EAP_FAILURE, -1,
                             mCurrentSsid, MacAddress.fromBytes(bssid));

@@ -116,6 +116,7 @@ import com.android.server.wifi.MockResources;
 import com.android.server.wifi.WifiBaseTest;
 import com.android.server.wifi.WifiGlobals;
 import com.android.server.wifi.WifiInjector;
+import com.android.server.wifi.WifiLockManager;
 import com.android.server.wifi.WifiNative;
 import com.android.server.wifi.WifiSettingsConfigStore;
 import com.android.server.wifi.WifiThreadRunner;
@@ -172,6 +173,7 @@ public class WifiAwareStateManagerTest extends WifiBaseTest {
     @Mock private WifiPermissionsUtil mWifiPermissionsUtil;
     @Mock private WifiPermissionsWrapper mPermissionsWrapperMock;
     @Mock private InterfaceConflictManager mInterfaceConflictManager;
+    @Mock private WifiLockManager mWifiLockManager;
     TestAlarmManager mAlarmManager;
     @Mock private PowerManager mMockPowerManager;
     @Mock private WifiManager mMockWifiManager;
@@ -276,7 +278,7 @@ public class WifiAwareStateManagerTest extends WifiBaseTest {
         mDut.setNative(mMockNativeManager, mMockNative);
         mDut.start(mMockContext, mMockLooper.getLooper(), mAwareMetricsMock,
                 mWifiPermissionsUtil, mPermissionsWrapperMock, new Clock(),
-                mock(NetdWrapper.class), mInterfaceConflictManager);
+                mock(NetdWrapper.class), mInterfaceConflictManager, mWifiLockManager);
         verify(mMockContext, never()).registerReceiver(any(), any(IntentFilter.class));
         mDut.startLate();
         mDut.enableVerboseLogging(true, true, true);
@@ -1391,7 +1393,7 @@ public class WifiAwareStateManagerTest extends WifiBaseTest {
         IWifiAwareDiscoverySessionCallback mockSessionCallback = mock(
                 IWifiAwareDiscoverySessionCallback.class);
         ArgumentCaptor<Short> transactionId = ArgumentCaptor.forClass(Short.class);
-        InOrder inOrder = inOrder(mockCallback, mockSessionCallback, mMockNative);
+        InOrder inOrder = inOrder(mMockContext, mockCallback, mockSessionCallback, mMockNative);
         InOrder inOrderM = inOrder(mAwareMetricsMock);
 
         mDut.enableUsage();
@@ -1430,6 +1432,7 @@ public class WifiAwareStateManagerTest extends WifiBaseTest {
         inOrder.verify(mockSessionCallback).onSessionTerminated(anyInt());
         inOrder.verify(mMockNative).stopPublish(transactionId.capture(), eq(publishId));
         inOrder.verify(mockCallback).onAttachTerminate();
+        validateCorrectAwareResourcesChangeBroadcast(inOrder);
         inOrder.verify(mMockNative).disable(transactionId.capture());
 
         inOrderM.verify(mAwareMetricsMock).recordDiscoverySession(eq(uid), any());
@@ -1738,7 +1741,7 @@ public class WifiAwareStateManagerTest extends WifiBaseTest {
         IWifiAwareDiscoverySessionCallback mockSessionCallback = mock(
                 IWifiAwareDiscoverySessionCallback.class);
         ArgumentCaptor<Short> transactionId = ArgumentCaptor.forClass(Short.class);
-        InOrder inOrder = inOrder(mockCallback, mockSessionCallback, mMockNative);
+        InOrder inOrder = inOrder(mMockContext, mockCallback, mockSessionCallback, mMockNative);
 
         mDut.enableUsage();
         mMockLooper.dispatchAll();
@@ -1772,6 +1775,7 @@ public class WifiAwareStateManagerTest extends WifiBaseTest {
         inOrder.verify(mockSessionCallback).onSessionTerminated(anyInt());
         inOrder.verify(mMockNative).stopSubscribe((short) 0, subscribeId);
         inOrder.verify(mockCallback).onAttachTerminate();
+        validateCorrectAwareResourcesChangeBroadcast(inOrder);
         inOrder.verify(mMockNative).disable(anyShort());
 
         validateInternalClientInfoCleanedUp(clientId);

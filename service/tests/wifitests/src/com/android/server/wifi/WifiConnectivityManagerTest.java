@@ -223,8 +223,15 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
                 (Answer<List<WifiSsid>>) invocation -> Arrays.asList(invocation.getArgument(0),
                         WifiSsid.fromString(UNTRANSLATED_HEX_SSID))
         );
-        when(mWifiDialogManager.createSimpleDialog(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(mDialogHandle);
+        when(mWifiDialogManager.createSimpleDialogBuilder()).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setTitle(any())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setMessage(any())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setPositiveButtonText(any())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setNegativeButtonText(any())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setNeutralButtonText(any())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setMessageUrl(any(), anyInt(), anyInt())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.setCallback(any(), any())).thenReturn(mDialogBuilder);
+        when(mDialogBuilder.build()).thenReturn(mDialogHandle);
     }
 
     private void setUpResources(MockResources resources) {
@@ -329,6 +336,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
     @Mock private WifiCountryCode mWifiCountryCode;
     @Mock private DppManager mDppManager;
     @Mock private WifiDialogManager mWifiDialogManager;
+    @Mock private WifiDialogManager.SimpleDialogBuilder mDialogBuilder;
     @Mock private WifiDialogManager.DialogHandle mDialogHandle;
     @Mock private WifiInjector mWifiInjector;
     @Mock private HalDeviceManager mHalDeviceManager;
@@ -1556,7 +1564,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
                 targetConfig.networkId, Process.WIFI_UID, targetBssid);
         verify(mSecondaryClientModeManager, times(2)).enableRoaming(false);
         verify(mActiveModeWarden, times(2)).requestSecondaryLongLivedClientModeManager(
-                any(), any(), any(), any());
+                any(), any(), any(), eq(targetBssid));
 
         // Simulate connection failing on the secondary
         clearInvocations(mSecondaryClientModeManager, mPrimaryClientModeManager, mWifiNS);
@@ -4315,8 +4323,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify we started the connection without the dialog.
-        verify(mWifiDialogManager, never()).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager, never()).createSimpleDialogBuilder();
         verify(mDialogHandle, never()).launchDialog();
         verify(mPrimaryClientModeManager).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4346,8 +4353,8 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).build();
         verify(mDialogHandle).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4384,8 +4391,8 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched, and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).build();
         verify(mDialogHandle).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4400,8 +4407,6 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         // Trigger another scan and verify we don't show any more dialogs.
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
-        verify(mWifiDialogManager, times(1)).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
         verify(mDialogHandle, times(1)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4414,8 +4419,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         when(mPrimaryClientModeManager.getConnectedWifiConfiguration()).thenReturn(config);
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
-        verify(mWifiDialogManager, times(2)).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager, times(2)).createSimpleDialogBuilder();
         verify(mDialogHandle, times(2)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4445,8 +4449,9 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched, and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager).createSimpleDialogBuilder();
+        verify(mDialogBuilder).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).build();
         verify(mDialogHandle).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4454,9 +4459,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         // Same candidate should not refresh the dialog
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
-        verify(mDialogHandle).launchDialog();
+        verify(mDialogHandle, times(1)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
 
@@ -4465,8 +4468,8 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
         verify(mDialogHandle).dismissDialog();
-        verify(mWifiDialogManager, times(2)).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager, times(2)).createSimpleDialogBuilder();
+        verify(mDialogBuilder, times(2)).build();
         verify(mDialogHandle, times(2)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4501,8 +4504,9 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched, and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager).createSimpleDialogBuilder();
+        verify(mDialogBuilder).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).build();
         verify(mDialogHandle).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4515,9 +4519,7 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         // Dialog should not come up again while it's disabled.
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
-        verify(mDialogHandle).launchDialog();
+        verify(mDialogHandle, times(1)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
 
@@ -4526,8 +4528,9 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
         verify(mDialogHandle).dismissDialog();
-        verify(mWifiDialogManager, times(2)).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager, times(2)).createSimpleDialogBuilder();
+        verify(mDialogBuilder, times(2)).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder, times(2)).build();
         verify(mDialogHandle, times(2)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4557,9 +4560,9 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched, and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
-        verify(mDialogHandle).launchDialog();
+        verify(mWifiDialogManager).createSimpleDialogBuilder();
+        verify(mDialogBuilder).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).build();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
 
@@ -4595,8 +4598,9 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched, and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager).createSimpleDialogBuilder();
+        verify(mDialogBuilder).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder).build();
         verify(mDialogHandle).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4611,8 +4615,6 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         // Trigger another scan and verify we don't show any more dialogs.
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
-        verify(mWifiDialogManager, times(1)).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
         verify(mDialogHandle, times(1)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4626,8 +4628,9 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
                 new WifiNetworkSelectionConfig.Builder().build());
         mWifiScanner.startScan(settings, scanListener);
         mLooper.dispatchAll();
-        verify(mWifiDialogManager, times(2)).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mWifiDialogManager, times(2)).createSimpleDialogBuilder();
+        verify(mDialogBuilder, times(2)).setCallback(mSimpleDialogCallbackCaptor.capture(), any());
+        verify(mDialogBuilder, times(2)).build();
         verify(mDialogHandle, times(2)).launchDialog();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
@@ -4657,9 +4660,8 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         mLooper.dispatchAll();
 
         // Verify dialog was launched, and we haven't started the connection.
-        verify(mWifiDialogManager).createSimpleDialog(any(), any(), any(), any(), any(),
-                mSimpleDialogCallbackCaptor.capture(), any());
-        verify(mDialogHandle).launchDialog();
+        verify(mWifiDialogManager).createSimpleDialogBuilder();
+        verify(mDialogBuilder).build();
         verify(mPrimaryClientModeManager, never()).startConnectToNetwork(
                 CANDIDATE_NETWORK_ID, Process.WIFI_UID, CANDIDATE_BSSID);
 
@@ -4756,10 +4758,10 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         WifiConfiguration disabledConfig = WifiConfigurationTestUtil.createPskNetwork();
         disabledConfig.getNetworkSelectionStatus().setNetworkSelectionStatus(
                 WifiConfiguration.NetworkSelectionStatus.NETWORK_SELECTION_TEMPORARY_DISABLED);
-        List<ScanDetail> mockScanDetails = new ArrayList<>();
-        mockScanDetails.add(mock(ScanDetail.class));
-        when(mWifiBlocklistMonitor.tryEnablingBlockedBssids(any())).thenReturn(mockScanDetails);
-        when(mWifiConfigManager.getSavedNetworkForScanDetail(any())).thenReturn(
+        List<Integer> mockNetworkIds = new ArrayList<>();
+        mockNetworkIds.add(disabledConfig.networkId);
+        when(mWifiBlocklistMonitor.tryEnablingBlockedBssids(any())).thenReturn(mockNetworkIds);
+        when(mWifiConfigManager.getConfiguredNetwork(disabledConfig.networkId)).thenReturn(
                 disabledConfig);
 
         InOrder inOrder = inOrder(mWifiBlocklistMonitor, mWifiConfigManager);
@@ -4786,10 +4788,10 @@ public class WifiConnectivityManagerTest extends WifiBaseTest {
         WifiConfiguration disabledConfig = WifiConfigurationTestUtil.createPskNetwork();
         disabledConfig.getNetworkSelectionStatus().setNetworkSelectionStatus(
                 WifiConfiguration.NetworkSelectionStatus.NETWORK_SELECTION_PERMANENTLY_DISABLED);
-        List<ScanDetail> mockScanDetails = new ArrayList<>();
-        mockScanDetails.add(mock(ScanDetail.class));
-        when(mWifiBlocklistMonitor.tryEnablingBlockedBssids(any())).thenReturn(mockScanDetails);
-        when(mWifiConfigManager.getSavedNetworkForScanDetail(any())).thenReturn(
+        List<Integer> mockNetworkIds = new ArrayList<>();
+        mockNetworkIds.add(disabledConfig.networkId);
+        when(mWifiBlocklistMonitor.tryEnablingBlockedBssids(any())).thenReturn(mockNetworkIds);
+        when(mWifiConfigManager.getConfiguredNetwork(disabledConfig.networkId)).thenReturn(
                 disabledConfig);
 
         InOrder inOrder = inOrder(mWifiBlocklistMonitor, mWifiConfigManager);

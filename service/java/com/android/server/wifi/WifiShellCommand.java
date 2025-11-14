@@ -21,6 +21,7 @@ import static android.net.NetworkCapabilities.NET_CAPABILITY_OEM_PAID;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_OEM_PRIVATE;
 import static android.net.NetworkCapabilities.NET_CAPABILITY_TRUSTED;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
+import static android.net.TetheringManager.TETHERING_WIFI;
 import static android.net.wifi.WifiConfiguration.METERED_OVERRIDE_METERED;
 import static android.net.wifi.WifiManager.ACTION_REMOVE_SUGGESTION_DISCONNECT;
 import static android.net.wifi.WifiManager.ACTION_REMOVE_SUGGESTION_LINGER;
@@ -32,6 +33,10 @@ import static android.net.wifi.WifiManager.VERBOSE_LOGGING_LEVEL_DISABLED;
 import static android.net.wifi.WifiManager.VERBOSE_LOGGING_LEVEL_WIFI_AWARE_ENABLED_ONLY;
 import static android.net.wifi.WifiManager.WIFI_STATE_DISABLED;
 import static android.net.wifi.WifiManager.WIFI_STATE_ENABLED;
+import static android.net.wifi.aware.Characteristics.WIFI_AWARE_CIPHER_SUITE_NCS_PK_PASN_128;
+import static android.net.wifi.aware.Characteristics.WIFI_AWARE_CIPHER_SUITE_NCS_SK_128;
+import static android.net.wifi.aware.PublishConfig.PUBLISH_TYPE_SOLICITED;
+import static android.net.wifi.aware.SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE;
 
 import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_AP;
 import static com.android.server.wifi.HalDeviceManager.HDM_CREATE_IFACE_AP_BRIDGE;
@@ -52,6 +57,9 @@ import android.net.MacAddress;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.TetheringManager;
+import android.net.TetheringManager.StartTetheringCallback;
+import android.net.TetheringManager.TetheringRequest;
 import android.net.wifi.IActionListener;
 import android.net.wifi.IDppCallback;
 import android.net.wifi.ILastCallerListener;
@@ -78,6 +86,19 @@ import android.net.wifi.WifiNetworkSpecifier;
 import android.net.wifi.WifiNetworkSuggestion;
 import android.net.wifi.WifiScanner;
 import android.net.wifi.WifiSsid;
+import android.net.wifi.aware.AttachCallback;
+import android.net.wifi.aware.AwarePairingConfig;
+import android.net.wifi.aware.DiscoverySession;
+import android.net.wifi.aware.DiscoverySessionCallback;
+import android.net.wifi.aware.PeerHandle;
+import android.net.wifi.aware.PublishConfig;
+import android.net.wifi.aware.PublishDiscoverySession;
+import android.net.wifi.aware.SubscribeConfig;
+import android.net.wifi.aware.SubscribeDiscoverySession;
+import android.net.wifi.aware.WifiAwareDataPathSecurityConfig;
+import android.net.wifi.aware.WifiAwareManager;
+import android.net.wifi.aware.WifiAwareNetworkSpecifier;
+import android.net.wifi.aware.WifiAwareSession;
 import android.net.wifi.util.ScanResultUtil;
 import android.net.wifi.util.WifiResourceCache;
 import android.os.Binder;
@@ -108,6 +129,9 @@ import com.android.modules.utils.BasicShellCommandHandler;
 import com.android.modules.utils.ParceledListSlice;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.ClientMode.LinkProbeCallback;
+import com.android.server.wifi.WifiDialogManager.DialogHandle;
+import com.android.server.wifi.WifiDialogManager.SimpleDialogBuilder;
+import com.android.server.wifi.WifiDialogManager.SimpleDialogCallback;
 import com.android.server.wifi.coex.CoexManager;
 import com.android.server.wifi.coex.CoexUtils;
 import com.android.server.wifi.hal.WifiChip;
@@ -140,7 +164,7 @@ import java.util.stream.Collectors;
  *
  * To add new commands:
  * - onCommand: Add a case "<command>" execute. Return a 0
- *   if command executed successfully.
+ * if command executed successfully.
  * - onHelp: add a description string.
  *
  * Permissions: currently root permission is required for some commands. Others will
@@ -189,7 +213,8 @@ public class WifiShellCommand extends BasicShellCommandHandler {
             "force-overlay-config-value",
             "get-softap-supported-features",
             "get-wifi-supported-features",
-            "get-overlay-config-values"
+            "get-overlay-config-values",
+            "get-carrier-network-offload",
     };
 
     private static final Map<String, Pair<NetworkRequest, ConnectivityManager.NetworkCallback>>
@@ -212,6 +237,7 @@ public class WifiShellCommand extends BasicShellCommandHandler {
     private final SelfRecovery mSelfRecovery;
     private final WifiThreadRunner mWifiThreadRunner;
     private final WifiApConfigStore mWifiApConfigStore;
+    private final WifiAwareManager mWifiAwareManager;
     private int mSapState = WifiManager.WIFI_STATE_UNKNOWN;
     private final ScanRequestProxy mScanRequestProxy;
     private final @NonNull WifiDialogManager mWifiDialogManager;
@@ -230,6 +256,9 @@ public class WifiShellCommand extends BasicShellCommandHandler {
             WifiAvailableChannel.OP_MODE_WIFI_AWARE,
             WifiAvailableChannel.OP_MODE_TDLS,
     };
+    private static WifiAwareSession sWifiAwareSession;
+    private static PeerHandle sPeerHandle;
+    private static DiscoverySession sDiscoverySession;
 
     private class SoftApCallbackProxy extends ISoftApCallback.Stub {
         private final PrintWriter mPrintWriter;
@@ -477,6 +506,7 @@ public class WifiShellCommand extends BasicShellCommandHandler {
         mWifiDiagnostics = wifiInjector.getWifiDiagnostics();
         mDeviceConfig = wifiInjector.getDeviceConfigFacade();
         mAfcManager = wifiInjector.getAfcManager();
+        mWifiAwareManager = context.getSystemService(WifiAwareManager.class);
     }
 
     private String getOpModeName(@WifiAvailableChannel.OpMode int mode) {
@@ -923,9 +953,35 @@ public class WifiShellCommand extends BasicShellCommandHandler {
                     SoftApCallbackProxy softApCallback =
                             new SoftApCallbackProxy(pw, countDownLatch);
                     mWifiService.registerSoftApCallback(softApCallback);
-                    if (!mWifiService.startTetheredHotspot(config, SHELL_PACKAGE_NAME)) {
-                        pw.println("Soft AP failed to start. Please check config parameters");
+                    // Starting in B, a DHCP server will not be started for AP ifaces that weren't
+                    // requested by TetheringManager#startTethering.
+                    // TODO: This provides internet access on the AP iface if there is a suitable
+                    //       upstream available. This matches historical behavior, but consider
+                    //       starting the IpServer in local-only mode since the current clients of
+                    //       this command don't need to verify internet connection.
+                    if (SdkLevel.isAtLeastB()) {
+                        mContext.getSystemService(TetheringManager.class).startTethering(
+                                new TetheringRequest.Builder(TETHERING_WIFI)
+                                        .setSoftApConfiguration(config)
+                                        .build(),
+                                mContext.getMainExecutor(),
+                                new StartTetheringCallback() {
+                                    @Override
+                                    public void onTetheringStarted() {
+                                        Log.i(TAG, "Tethering started successfully");
+                                    }
+
+                                    @Override
+                                    public void onTetheringFailed(int errorCode) {
+                                        Log.i(TAG, "Tethering failed with error: " + errorCode);
+                                    }
+                                });
+                    } else {
+                        if (!mWifiService.startTetheredHotspot(config, SHELL_PACKAGE_NAME)) {
+                            pw.println("Soft AP failed to start. Please check config parameters");
+                        }
                     }
+
                     // Wait for softap to start and complete callback
                     countDownLatch.await(10000, TimeUnit.MILLISECONDS);
                     mWifiService.unregisterSoftApCallback(softApCallback);
@@ -1512,6 +1568,83 @@ public class WifiShellCommand extends BasicShellCommandHandler {
                     return 0;
                 }
                 case "launch-dialog-simple":
+                    SimpleDialogBuilder dialogBuilder =
+                            mWifiDialogManager.createSimpleDialogBuilder();
+                    String dialogOption = getNextOption();
+                    long simpleTimeoutMs = 15 * 1000;
+                    while (dialogOption != null) {
+                        switch (dialogOption) {
+                            case "-t":
+                                dialogBuilder.setTitle(getNextArgRequired());
+                                break;
+                            case "-m":
+                                dialogBuilder.setMessage(getNextArgRequired());
+                                break;
+                            case "-l":
+                                dialogBuilder.setMessageUrl(
+                                        getNextArgRequired() /* messageUrl */,
+                                        Integer.valueOf(getNextArgRequired()) /* messageUrlStart */,
+                                        Integer.valueOf(getNextArgRequired()) /* messageUrlEnd */);
+                                break;
+                            case "-i":
+                                dialogBuilder.setListItems(buildDialogList());
+                                break;
+                            case "-y":
+                                dialogBuilder.setPositiveButtonText(getNextArgRequired());
+                                break;
+                            case "-n":
+                                dialogBuilder.setNegativeButtonText(getNextArgRequired());
+                                break;
+                            case "-x":
+                                dialogBuilder.setNeutralButtonText(getNextArgRequired());
+                                break;
+                            case "-c":
+                                simpleTimeoutMs = Integer.parseInt(getNextArgRequired());
+                                break;
+                            default:
+                                pw.println("Ignoring unknown option " + dialogOption);
+                                break;
+                        }
+                        dialogOption = getNextOption();
+                    }
+                    ArrayBlockingQueue<String> simpleQueue = new ArrayBlockingQueue<>(1);
+                    SimpleDialogCallback dialogCallback =
+                            new SimpleDialogCallback() {
+                                @Override
+                                public void onPositiveButtonClicked() {
+                                    simpleQueue.offer("Positive button was clicked.");
+                                }
+
+                                @Override
+                                public void onNegativeButtonClicked() {
+                                    simpleQueue.offer("Negative button was clicked.");
+                                }
+
+                                @Override
+                                public void onNeutralButtonClicked() {
+                                    simpleQueue.offer("Neutral button was clicked.");
+                                }
+
+                                @Override
+                                public void onCancelled() {
+                                    simpleQueue.offer("Dialog was cancelled.");
+                                }
+                            };
+                    dialogBuilder.setCallback(dialogCallback, mWifiThreadRunner);
+                    DialogHandle simpleDialogHandle = dialogBuilder.build();
+                    simpleDialogHandle.launchDialog();
+                    pw.println("Launched dialog. Waiting up to " + simpleTimeoutMs + " ms for"
+                            + " user response before dismissing...");
+                    String simpleDialogResponse = simpleQueue.poll(simpleTimeoutMs,
+                            TimeUnit.MILLISECONDS);
+                    if (simpleDialogResponse == null) {
+                        pw.println("No response received. Dismissing dialog.");
+                        simpleDialogHandle.dismissDialog();
+                    } else {
+                        pw.println(simpleDialogResponse);
+                    }
+                    return 0;
+                case "launch-dialog-simple-legacy":
                     String title = null;
                     String message = null;
                     String messageUrl = null;
@@ -1520,12 +1653,10 @@ public class WifiShellCommand extends BasicShellCommandHandler {
                     String positiveButtonText = null;
                     String negativeButtonText = null;
                     String neutralButtonText = null;
-                    String dialogOption = getNextOption();
-                    boolean simpleTimeoutSpecified = false;
-                    long simpleTimeoutMs = 15 * 1000;
-                    boolean useLegacy = false;
-                    while (dialogOption != null) {
-                        switch (dialogOption) {
+                    String legacyDialogOption = getNextOption();
+                    long legacyTimeoutMs = 15 * 1000;
+                    while (legacyDialogOption != null) {
+                        switch (legacyDialogOption) {
                             case "-t":
                                 title = getNextArgRequired();
                                 break;
@@ -1547,77 +1678,59 @@ public class WifiShellCommand extends BasicShellCommandHandler {
                                 neutralButtonText = getNextArgRequired();
                                 break;
                             case "-c":
-                                simpleTimeoutMs = Integer.parseInt(getNextArgRequired());
-                                simpleTimeoutSpecified = true;
-                                break;
-                            case "-s":
-                                useLegacy = true;
+                                legacyTimeoutMs = Integer.parseInt(getNextArgRequired());
                                 break;
                             default:
-                                pw.println("Ignoring unknown option " + dialogOption);
+                                pw.println("Ignoring unknown option " + legacyDialogOption);
                                 break;
                         }
-                        dialogOption = getNextOption();
+                        legacyDialogOption = getNextOption();
                     }
-                    ArrayBlockingQueue<String> simpleQueue = new ArrayBlockingQueue<>(1);
-                    WifiDialogManager.SimpleDialogCallback wifiEnableRequestCallback =
-                            new WifiDialogManager.SimpleDialogCallback() {
+                    ArrayBlockingQueue<String> legacyDialogQueue = new ArrayBlockingQueue<>(1);
+                    SimpleDialogCallback wifiEnableRequestCallback =
+                            new SimpleDialogCallback() {
                                 @Override
                                 public void onPositiveButtonClicked() {
-                                    simpleQueue.offer("Positive button was clicked.");
+                                    legacyDialogQueue.offer("Positive button was clicked.");
                                 }
 
                                 @Override
                                 public void onNegativeButtonClicked() {
-                                    simpleQueue.offer("Negative button was clicked.");
+                                    legacyDialogQueue.offer("Negative button was clicked.");
                                 }
 
                                 @Override
                                 public void onNeutralButtonClicked() {
-                                    simpleQueue.offer("Neutral button was clicked.");
+                                    legacyDialogQueue.offer("Neutral button was clicked.");
                                 }
 
                                 @Override
                                 public void onCancelled() {
-                                    simpleQueue.offer("Dialog was cancelled.");
+                                    legacyDialogQueue.offer("Dialog was cancelled.");
                                 }
                             };
-                    WifiDialogManager.DialogHandle simpleDialogHandle;
-                    if (useLegacy) {
-                        simpleDialogHandle = mWifiDialogManager.createLegacySimpleDialogWithUrl(
-                                title,
-                                message,
-                                messageUrl,
-                                messageUrlStart,
-                                messageUrlEnd,
-                                positiveButtonText,
-                                negativeButtonText,
-                                neutralButtonText,
-                                wifiEnableRequestCallback,
-                                mWifiThreadRunner);
-                    } else {
-                        simpleDialogHandle = mWifiDialogManager.createSimpleDialogWithUrl(
-                                title,
-                                message,
-                                messageUrl,
-                                messageUrlStart,
-                                messageUrlEnd,
-                                positiveButtonText,
-                                negativeButtonText,
-                                neutralButtonText,
-                                wifiEnableRequestCallback,
-                                mWifiThreadRunner);
-                    }
-                    simpleDialogHandle.launchDialog();
-                    pw.println("Launched dialog. Waiting up to " + simpleTimeoutMs + " ms for"
-                            + " user response before dismissing...");
-                    String simpleDialogResponse = simpleQueue.poll(simpleTimeoutMs,
+                    DialogHandle legacyDialogHandle =
+                            mWifiDialogManager.createLegacySimpleDialogWithUrl(
+                                    title,
+                                    message,
+                                    messageUrl,
+                                    messageUrlStart,
+                                    messageUrlEnd,
+                                    positiveButtonText,
+                                    negativeButtonText,
+                                    neutralButtonText,
+                                    wifiEnableRequestCallback,
+                                    mWifiThreadRunner);
+                    legacyDialogHandle.launchDialog();
+                    pw.println("Launched legacy dialog. Waiting up to " + legacyTimeoutMs
+                            + " ms for user response before dismissing...");
+                    String legacyDialogResponse = legacyDialogQueue.poll(legacyTimeoutMs,
                             TimeUnit.MILLISECONDS);
-                    if (simpleDialogResponse == null) {
+                    if (legacyDialogResponse == null) {
                         pw.println("No response received. Dismissing dialog.");
-                        simpleDialogHandle.dismissDialog();
+                        legacyDialogHandle.dismissDialog();
                     } else {
-                        pw.println(simpleDialogResponse);
+                        pw.println(legacyDialogResponse);
                     }
                     return 0;
                 case "launch-dialog-p2p-invitation-sent": {
@@ -1707,7 +1820,7 @@ public class WifiShellCommand extends BasicShellCommandHandler {
                             p2pInvRecQueue.offer("Invitation declined");
                         }
                     };
-                    WifiDialogManager.DialogHandle p2pInvitationReceivedDialogHandle =
+                    DialogHandle p2pInvitationReceivedDialogHandle =
                             mWifiDialogManager.createP2pInvitationReceivedDialog(
                                     deviceName,
                                     isPinRequested,
@@ -2325,6 +2438,262 @@ public class WifiShellCommand extends BasicShellCommandHandler {
                     mWifiService.setScanThrottleEnabled(
                             getNextArgRequiredTrueOrFalse("enabled", "disabled"));
                     return 0;
+                case "aware-attach": {
+                    if (sWifiAwareSession != null) {
+                        return 0;
+                    }
+                    if (mWifiAwareManager == null) {
+                        pw.println("aware not support");
+                        return -1;
+                    }
+                    mWifiThreadRunner.post(() -> {
+                        mWifiAwareManager.attach(new AttachCallback() {
+                            @Override
+                            public void onAttached(WifiAwareSession session) {
+                                Log.d(TAG, "onAttached");
+                                sWifiAwareSession = session;
+                            }
+                        }, mWifiThreadRunner.getHandler());
+                    });
+                    return 0;
+                }
+                case "aware-publish": {
+                    if (sWifiAwareSession == null) {
+                        pw.println("null aware session");
+                        return -1;
+                    }
+                    String awareServiceName = getNextArgRequired();
+                    boolean securityEnabled = getNextArgRequiredTrueOrFalse("yes", "no");
+                    boolean pairingEnabled = getNextArgRequiredTrueOrFalse("yes", "no");
+                    String bootMethods = getNextArgRequired();
+                    String pairingPw = getNextArgRequired();
+                    boolean success = mWifiThreadRunner.call(() -> {
+                        try {
+                            AwarePairingConfig pairingConfig = new AwarePairingConfig.Builder()
+                                    .setPairingCacheEnabled(true)
+                                    .setPairingSetupEnabled(true)
+                                    .setPairingVerificationEnabled(true)
+                                    .setBootstrappingMethods(Integer.parseInt(bootMethods))
+                                    .build();
+                            WifiAwareDataPathSecurityConfig securityConfig =
+                                    new WifiAwareDataPathSecurityConfig
+                                            .Builder(WIFI_AWARE_CIPHER_SUITE_NCS_SK_128)
+                                            .setPskPassphrase(pairingPw)
+                                            .build();
+                            PublishConfig.Builder builder = new PublishConfig.Builder()
+                                    .setServiceName(awareServiceName)
+                                    .setPublishType(PUBLISH_TYPE_SOLICITED);
+                            if (securityEnabled) {
+                                builder.setDataPathSecurityConfig(securityConfig);
+                            }
+
+                            if (pairingEnabled && SdkLevel.isAtLeastU()) {
+                                builder.setPairingConfig(pairingConfig);
+                            }
+                            sWifiAwareSession.publish(builder.build(),
+                                    new DiscoverySessionCallback() {
+                                        @Override
+                                        public void onPublishStarted(
+                                                PublishDiscoverySession session) {
+                                            Log.d(TAG, "onPublishStarted");
+                                            sDiscoverySession = session;
+                                        }
+
+                                        public void onPairingSetupRequestReceived(
+                                                PeerHandle peerHandle, int requestId) {
+                                            Log.d(TAG, "onPairingSetupRequestReceived");
+                                            sPeerHandle = peerHandle;
+                                            if (SdkLevel.isAtLeastU()) {
+                                                sDiscoverySession.acceptPairingRequest(requestId,
+                                                        peerHandle,
+                                                        "test",
+                                                        WIFI_AWARE_CIPHER_SUITE_NCS_PK_PASN_128,
+                                                        pairingPw);
+                                            }
+                                        }
+
+                                        public void onPairingSetupSucceeded(
+                                                PeerHandle peerHandle, String alias) {
+                                            Log.d(TAG, "onPairingSetupSucceeded");
+                                        }
+
+                                        public void onPairingVerificationSucceed(
+                                                PeerHandle peerHandle, String alias) {
+                                            Log.d(TAG, "onPairingVerificationSucceed");
+                                        }
+
+                                        public void onBootstrappingSucceeded(PeerHandle peerHandle,
+                                                int method) {
+                                            sPeerHandle = peerHandle;
+                                            Log.d(TAG, "onBootstrappingSucceeded");
+                                        }
+                                    }, mWifiThreadRunner.getHandler());
+                        } catch (Exception e) {
+                            pw.println(e.getLocalizedMessage());
+                            return false;
+                        }
+                        return true;
+                    }, false);
+                    return success ? 0 : -1;
+                }
+                case "aware-subscribe": {
+                    if (sWifiAwareSession == null) {
+                        pw.println("null aware session");
+                        return -1;
+                    }
+                    String awareServiceName = getNextArgRequired();
+                    boolean enabled = getNextArgRequiredTrueOrFalse("yes", "no");
+                    String bootMethods = getNextArgRequired();
+                    boolean success = mWifiThreadRunner.call(() -> {
+                        try {
+                            AwarePairingConfig pairingConfig = new AwarePairingConfig.Builder()
+                                    .setPairingCacheEnabled(true)
+                                    .setPairingSetupEnabled(true)
+                                    .setPairingVerificationEnabled(true)
+                                    .setBootstrappingMethods(Integer.parseInt(bootMethods))
+                                    .build();
+                            SubscribeConfig.Builder builder = new SubscribeConfig.Builder()
+                                    .setServiceName(awareServiceName)
+                                    .setSubscribeType(SUBSCRIBE_TYPE_ACTIVE);
+                            if (SdkLevel.isAtLeastU()) {
+                                builder.setPairingConfig(pairingConfig);
+                            }
+                            sWifiAwareSession.subscribe(builder.build(),
+                                    new DiscoverySessionCallback() {
+                                        public void onSubscribeStarted(
+                                                SubscribeDiscoverySession session) {
+                                            Log.d(TAG, "onSubscribeStarted");
+                                            sDiscoverySession = session;
+                                        }
+
+                                        public void onServiceDiscovered(PeerHandle peerHandle,
+                                                byte[] serviceSpecificInfo,
+                                                List<byte[]> matchFilter) {
+                                            Log.d(TAG, "onServiceDiscovered " + peerHandle.peerId);
+                                            sPeerHandle = peerHandle;
+                                            if (SdkLevel.isAtLeastU()) {
+                                                sDiscoverySession.initiateBootstrappingRequest(
+                                                        peerHandle,
+                                                        Integer.parseInt(bootMethods));
+                                            }
+                                        }
+
+                                        public void onPairingSetupSucceeded(
+                                                PeerHandle peerHandle, String alias) {
+                                            Log.d(TAG, "onPairingSetupSucceeded");
+                                        }
+
+                                        public void onPairingVerificationSucceed(
+                                                PeerHandle peerHandle,
+                                                String alias) {
+                                            Log.d(TAG, "onPairingVerificationSucceed");
+                                        }
+
+                                        public void onBootstrappingSucceeded(PeerHandle peerHandle,
+                                                int method) {
+                                            Log.d(TAG, peerHandle.peerId
+                                                    + " onBootstrappingSucceeded: " + method);
+                                        }
+                                    }, mWifiThreadRunner.getHandler());
+                        } catch (Exception e) {
+                            pw.println(e.getLocalizedMessage());
+                            return false;
+                        }
+                        return true;
+                    }, false);
+                    return success ? 0 : -1;
+                }
+                case "aware-stop-publish-subscribe": {
+                    if (sDiscoverySession == null) {
+                        pw.println("null publish/subscribe session");
+                        return -1;
+                    }
+                    mWifiThreadRunner.post(() -> {
+                        sDiscoverySession.close();
+                        sDiscoverySession = null;
+                    });
+                    return 0;
+                }
+                case "aware-initiate-pairing-request": {
+                    if (sDiscoverySession == null) {
+                        pw.println("null subscribe session");
+                        return -1;
+                    }
+                    String pairingPw = getNextArgRequired();
+                    if (SdkLevel.isAtLeastU()) {
+                        mWifiThreadRunner.post(() -> sDiscoverySession.initiatePairingRequest(
+                                sPeerHandle, "test",
+                                WIFI_AWARE_CIPHER_SUITE_NCS_PK_PASN_128, pairingPw));
+                    }
+                    return 0;
+                }
+                case "aware-request-network":
+                    if (sDiscoverySession == null) {
+                        pw.println("null publish/subscribe session");
+                        return -1;
+                    }
+                    String pathPw = getNextArgRequired();
+                    mWifiThreadRunner.post(() -> {
+                        WifiAwareNetworkSpecifier networkSpecifier;
+                        if (sPeerHandle != null) {
+                            networkSpecifier =
+                                    new WifiAwareNetworkSpecifier.Builder(sDiscoverySession,
+                                            sPeerHandle).setPskPassphrase(pathPw).build();
+                        } else {
+                            networkSpecifier =
+                                    new WifiAwareNetworkSpecifier.Builder(
+                                            (PublishDiscoverySession) sDiscoverySession)
+                                            .setPskPassphrase(pathPw).build();
+                        }
+                        NetworkRequest networkRequest = new NetworkRequest.Builder()
+                                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI_AWARE)
+                                .setNetworkSpecifier(networkSpecifier)
+                                .build();
+                        mConnectivityManager.requestNetwork(networkRequest,
+                                new ConnectivityManager.NetworkCallback() {
+                                    public void onCapabilitiesChanged(Network arg1,
+                                            NetworkCapabilities arg2) {
+                                        Log.d(TAG, "onCapabilitiesChanged: "
+                                                + arg2.getTransportInfo().toString());
+                                    }
+                                });
+                    });
+                    return 0;
+                case "aware-teardown":
+                    if (sWifiAwareSession == null) {
+                        pw.println("null aware session");
+                        return -1;
+                    }
+                    mWifiThreadRunner.post(() -> {
+                        sWifiAwareSession.close();
+                        sWifiAwareSession = null;
+                        sPeerHandle = null;
+                        sDiscoverySession = null;
+                    });
+                    return 0;
+                case "aware-clean-paired-device":
+                    if (mWifiAwareManager == null) {
+                        pw.println("aware not support");
+                        return -1;
+                    }
+                    mWifiThreadRunner.post(mWifiAwareManager::resetPairedDevices);
+                    return 0;
+                case "get-carrier-network-offload":
+                    String arg1 = getNextArgRequired();
+                    int subId = -1;
+                    try {
+                        subId = Integer.parseInt(arg1);
+                    } catch (NumberFormatException e) {
+                        pw.println("Invalid argument to 'get-carrier-network-offload' "
+                                + "- 'subId' must be an Integer");
+                        return -1;
+                    }
+                    boolean enabled = mWifiCarrierInfoManager.isCarrierNetworkOffloadEnabled(subId,
+                            true);
+                    pw.println("merged network offload:" + (enabled ? "enabled" : "disabled"));
+                    enabled = mWifiCarrierInfoManager.isCarrierNetworkOffloadEnabled(subId, false);
+                    pw.println("not merged network offload:" + (enabled ? "enabled" : "disabled"));
+                    return 0;
                 default:
                     return handleDefaultCommands(cmd);
             }
@@ -2772,6 +3141,16 @@ public class WifiShellCommand extends BasicShellCommandHandler {
         return cellChannels;
     }
 
+    private List<Pair<String, String>> buildDialogList() {
+        List<Pair<String, String>> list = new ArrayList<>();
+        String nextArg = peekNextArg();
+        while (nextArg != null && !nextArg.startsWith("-")) {
+            list.add(new Pair<>(getNextArgRequired(), getNextArgRequired()));
+            nextArg = peekNextArg();
+        }
+        return list;
+    }
+
     private int sendLinkProbe(PrintWriter pw) throws InterruptedException {
         // Note: should match WifiNl80211Manager#SEND_MGMT_FRAME_TIMEOUT_MS
         final int sendMgmtFrameTimeoutMs = 1000;
@@ -3053,9 +3432,15 @@ public class WifiShellCommand extends BasicShellCommandHandler {
         pw.println(
                 "    Reset the WiFi resources cache which will cause them to be reloaded next "
                         + "time they are accessed. Necessary if overlays are manually modified.");
-        pw.println("  launch-dialog-simple [-t <title>] [-m <message>]"
-                + " [-l <url> <url_start> <url_end>] [-y <positive_button_text>]"
-                + " [-n <negative_button_text>] [-x <neutral_button_text>] [-c <timeout_millis>]");
+        pw.println("  launch-dialog-simple"
+                + " [-t <title>]"
+                + " [-m <message>]"
+                + " [-l <url> <url_start> <url_end>]"
+                + " [-i <label1> <content1> ... <labelN> <contentN>]"
+                + " [-y <positive_button_text>]"
+                + " [-n <negative_button_text>]"
+                + " [-x <neutral_button_text>]"
+                + " [-c <timeout_millis>]");
         pw.println("    Launches a simple dialog and waits up to 15 seconds to"
                 + " print the response.");
         pw.println("    -t - Title");
@@ -3065,7 +3450,18 @@ public class WifiShellCommand extends BasicShellCommandHandler {
         pw.println("    -n - Negative Button Text");
         pw.println("    -x - Neutral Button Text");
         pw.println("    -c - Optional timeout in milliseconds");
-        pw.println("    -s - Use the legacy dialog implementation on the system process");
+        pw.println("  launch-dialog-simple-legacy [-t <title>] [-m <message>]"
+                + " [-l <url> <url_start> <url_end>] [-y <positive_button_text>]"
+                + " [-n <negative_button_text>] [-x <neutral_button_text>] [-c <timeout_millis>]");
+        pw.println("    Launches a legacy dialog (i.e. on the system process) and waits up to 15"
+                + " seconds to print the response.");
+        pw.println("    -t - Title");
+        pw.println("    -m - Message");
+        pw.println("    -l - URL of the message, with the start and end index inside the message");
+        pw.println("    -y - Positive Button Text");
+        pw.println("    -n - Negative Button Text");
+        pw.println("    -x - Neutral Button Text");
+        pw.println("    -c - Optional timeout in milliseconds");
         pw.println("  launch-dialog-p2p-invitation-sent <device_name> [-d <pin>]"
                 + " [-i <display_id>]");
         pw.println("    Launches a P2P Invitation Sent dialog.");
@@ -3142,6 +3538,8 @@ public class WifiShellCommand extends BasicShellCommandHandler {
         pw.println("    each on a separate line.");
         pw.println("  get-wifi-supported-features");
         pw.println("    Gets the features supported by WifiManager");
+        pw.println("  get-carrier-network-offload <subId>");
+        pw.println("    Gets whether the carrier network offload is enabled or not for this subId");
     }
 
     private void onHelpPrivileged(PrintWriter pw) {
@@ -3428,6 +3826,34 @@ public class WifiShellCommand extends BasicShellCommandHandler {
         pw.println("    Example: set-ssid-roaming-mode test_ssid aggressive");
         pw.println("  set-scan-throttling-enabled enabled|disabled");
         pw.println("    Set wifi scan throttling for 3P apps enabled or disabled.");
+        pw.println("  aware-attach");
+        pw.println("    enable Wi-Fi Aware");
+        pw.println("  aware-publish <service name> <security enabled=yes|no>"
+                + "<pairing enabled=yes|no> <bootstrapping methods> <pairing password>");
+        pw.println("    Start Aware publish ");
+        pw.println("    <service name> - Name of the service, should be the same as subscribe");
+        pw.println("    <security enabled> - enable security or not");
+        pw.println("    <pairing enabled> - enable security or not");
+        pw.println("    <bootstrapping methods> - bootstrapping method for pairing");
+        pw.println("    <pairing password> - password used for pairing");
+        pw.println("  aware-subscribe <service name> <pairing enabled=yes|no> "
+                + "<bootstrapping methods>");
+        pw.println("    Start Aware subscribe ");
+        pw.println("    <service name> - Name of the service, should be the same as subscribe");
+        pw.println("    <pairing enabled> - enable security or not");
+        pw.println("    <bootstrapping methods> - bootstrapping method for pairing");
+        pw.println("  aware-stop-publish-subscribe");
+        pw.println("    stop current publish/subscribe session");
+        pw.println("  aware-initiate-pairing-request <pairing password>");
+        pw.println("    initiate pairing request to publisher, should be called from subscriber");
+        pw.println("    <pairing password> - password used for pairing");
+        pw.println("  aware-request-network <datapath password>");
+        pw.println("    request a datapath to the discovered peer");
+        pw.println("    <datapath password> - password used for datapath");
+        pw.println("  aware-teardown");
+        pw.println("    disable the Wi-Fi Aware");
+        pw.println("  aware-clean-paired-device");
+        pw.println("    Cleared all paired devices");
     }
 
     @Override

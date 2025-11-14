@@ -23,7 +23,6 @@ import android.net.wifi.IWifiLowLatencyLockListener;
 import android.net.wifi.WifiManager;
 import android.os.BatteryStatsManager;
 import android.os.Binder;
-import android.os.Handler;
 import android.os.IBinder;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
@@ -38,6 +37,7 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.proto.WifiStatsLog;
 import com.android.server.wifi.util.WifiPermissionsUtil;
 import com.android.server.wifi.util.WorkSourceUtil;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import java.io.PrintWriter;
@@ -73,7 +73,7 @@ public class WifiLockManager {
     private final FrameworkFacade mFrameworkFacade;
     private final ActiveModeWarden mActiveModeWarden;
     private final ActivityManager mActivityManager;
-    private final Handler mHandler;
+    private final WifiThreadRunner mThreadRunner;
     private final WifiMetrics mWifiMetrics;
 
     private final List<WifiLock> mWifiLocks = new ArrayList<>();
@@ -82,8 +82,9 @@ public class WifiLockManager {
     /** the current op mode of the primary ClientModeManager */
     private int mCurrentOpMode = WifiManager.WIFI_MODE_NO_LOCKS_HELD;
     private boolean mScreenOn = false;
-    /** whether Wifi is connected on the primary ClientModeManager */
-    private boolean mWifiConnected = false;
+    private boolean mStaConnected = false;
+    private boolean mP2pConnected = false;
+    private boolean mAwareConnected = false;
 
     // For shell command support
     private boolean mForceHiPerfMode = false;
@@ -102,10 +103,6 @@ public class WifiLockManager {
     private boolean mIsLowLatencyActivated = false;
     private WorkSource mLowLatencyBlamedWorkSource = new WorkSource();
     private WorkSource mHighPerfBlamedWorkSource = new WorkSource();
-    private enum BlameReason {
-        WIFI_CONNECTION_STATE_CHANGED,
-        SCREEN_STATE_CHANGED,
-    };
     private final Object mLock = new Object();
 
     WifiLockManager(
@@ -113,7 +110,7 @@ public class WifiLockManager {
             BatteryStatsManager batteryStats,
             ActiveModeWarden activeModeWarden,
             FrameworkFacade frameworkFacade,
-            Handler handler,
+            WifiThreadRunner threadRunner,
             Clock clock,
             WifiMetrics wifiMetrics,
             DeviceConfigFacade deviceConfigFacade,
@@ -124,7 +121,7 @@ public class WifiLockManager {
         mActiveModeWarden = activeModeWarden;
         mFrameworkFacade = frameworkFacade;
         mActivityManager = (ActivityManager) mContext.getSystemService(Context.ACTIVITY_SERVICE);
-        mHandler = handler;
+        mThreadRunner = threadRunner;
         mClock = clock;
         mWifiMetrics = wifiMetrics;
         mDeviceConfigFacade = deviceConfigFacade;
@@ -148,48 +145,19 @@ public class WifiLockManager {
     }
 
     // Check for conditions to activate high-perf lock
-    private boolean canActivateHighPerfLock(int ignoreMask) {
-        boolean check = true;
-
-        // Only condition is when Wifi is connected
-        if ((ignoreMask & IGNORE_WIFI_STATE_MASK) == 0) {
-            check = check && mWifiConnected;
-        }
-
-        return check;
-    }
-
     private boolean canActivateHighPerfLock() {
-        return canActivateHighPerfLock(0);
+        // Only condition is when Wifi is connected
+        return mStaConnected;
     }
 
     // Check for conditions to activate low-latency lock
-    private boolean canActivateLowLatencyLock(int ignoreMask, UidRec uidRec) {
-        boolean check = true;
-
-        if ((ignoreMask & IGNORE_WIFI_STATE_MASK) == 0) {
-            check = check && mWifiConnected;
-        }
-        if ((ignoreMask & IGNORE_SCREEN_STATE_MASK) == 0) {
-            check = check && mScreenOn;
-        }
-        if (uidRec != null) {
-            check = check && uidRec.mIsFg;
-        }
-
-        return check;
-    }
-
-    private boolean canActivateLowLatencyLock(int ignoreMask) {
-        return canActivateLowLatencyLock(ignoreMask, null);
-    }
-
-    private boolean canActivateLowLatencyLock() {
-        return canActivateLowLatencyLock(0, null);
+    private boolean canAppActivateLowLatencyLock(UidRec uidRec) {
+        return uidRec.mIsFg && isScreenStateValidForApp(uidRec)
+                && isConnectionRequirementSatisfiedForApp(uidRec);
     }
 
     private void onAppForeground(final int uid, final int importance) {
-        mHandler.post(() -> {
+        mThreadRunner.post(() -> {
             UidRec uidRec = mLowLatencyUidWatchList.get(uid);
             if (uidRec == null) {
                 // Not a uid in the watch list
@@ -204,15 +172,15 @@ public class WifiLockManager {
             uidRec.mIsFg = newModeIsFg;
             updateOpMode();
 
-            // If conditions for lock activation are met,
-            // then UID either share the blame, or removed from sharing
-            // whether to start or stop the blame based on UID fg/bg state
-            if (canActivateLowLatencyLock(
-                    uidRec.mIsScreenOnExempted ? IGNORE_SCREEN_STATE_MASK : 0)) {
+            // If the connection and screen conditions are met,
+            // then the foreground state change will affect blaming.
+            boolean hasValidConnection = isConnectionRequirementSatisfiedForApp(uidRec);
+            boolean hasValidScreenState = isScreenStateValidForApp(uidRec);
+            if (hasValidConnection && hasValidScreenState) {
                 setBlameLowLatencyUid(uid, uidRec.mIsFg);
                 notifyLowLatencyActiveUsersChanged();
             }
-        });
+        }, TAG + "#onAppForeground");
     }
 
     // Detect UIDs going,
@@ -268,6 +236,34 @@ public class WifiLockManager {
         return releaseLock(binder);
     }
 
+    private int getNumActiveConnectionTypes(boolean countD2dConnections) {
+        int numConnectionTypes = 0;
+        if (mStaConnected) numConnectionTypes++;
+        if (countD2dConnections) {
+            if (mP2pConnected) numConnectionTypes++;
+            if (mAwareConnected) numConnectionTypes++;
+        }
+        return numConnectionTypes;
+    }
+
+    private boolean isWifiConnectionActive() {
+        if (doesD2dSatisfyConnectionRequirementForAnyApp()) {
+            return mStaConnected || mP2pConnected || mAwareConnected;
+        }
+        return mStaConnected;
+    }
+
+    private boolean isConnectionRequirementSatisfiedForApp(UidRec uidRec) {
+        if (uidRec.mD2dSatisfiesConnectionRequirement) {
+            return mStaConnected || mP2pConnected || mAwareConnected;
+        }
+        return mStaConnected;
+    }
+
+    private boolean isScreenStateValidForApp(UidRec uidRec) {
+        return uidRec.mIsScreenOnExempted ? true : mScreenOn;
+    }
+
     /**
      * Method used to get the strongest lock type currently held by the WifiLockManager.
      *
@@ -277,8 +273,8 @@ public class WifiLockManager {
      */
     @VisibleForTesting
     synchronized int getStrongestLockMode() {
-        // If Wifi Client is not connected, then all locks are not effective
-        if (!mWifiConnected) {
+        // If the connection requirement is not met, then WifiLocks are not effective
+        if (!isWifiConnectionActive()) {
             return WifiManager.WIFI_MODE_NO_LOCKS_HELD;
         }
 
@@ -411,12 +407,45 @@ public class WifiLockManager {
 
         mScreenOn = screenOn;
 
-        if (canActivateLowLatencyLock(IGNORE_SCREEN_STATE_MASK)) {
+        // If the connection requirement is met, then the screen state change may affect blaming.
+        if (isWifiConnectionActive()) {
             // Update the running mode
             updateOpMode();
             // Adjust blaming for UIDs in foreground
-            setBlameLowLatencyWatchList(BlameReason.SCREEN_STATE_CHANGED, screenOn);
+            updateBlameForScreenStateChange();
         }
+    }
+
+    /**
+     * Handler for any connection state change.
+     *
+     * @param isStaConnection true if a STA connection was changed, or false otherwise.
+     * @param connectionWasStarted true if the connection was started,
+     *                             or false if it was stopped.
+     */
+    private void handleConnectionChanged(boolean isStaConnection, boolean connectionWasStarted) {
+        boolean shouldConsiderD2dConnections = doesD2dSatisfyConnectionRequirementForAnyApp();
+        if (!isStaConnection && !shouldConsiderD2dConnections) return;
+
+        boolean shouldBlameD2dAllowedApps = false;
+        if (shouldConsiderD2dConnections) {
+            // When multiple connection types are valid, only update blaming if the last valid
+            // connection was ended, or the first valid connection was just started.
+            int numConnectionTypes = getNumActiveConnectionTypes(true);
+            shouldBlameD2dAllowedApps = numConnectionTypes == 0
+                    || (connectionWasStarted && numConnectionTypes == 1);
+        }
+        if (!isStaConnection && !shouldBlameD2dAllowedApps) {
+            // No apps are affected by this connection state change.
+            return;
+        }
+
+        // If the screen condition is met, then the connection state change may affect blaming.
+        boolean screenExemptedAppExists = countFgLowLatencyUids(/* isScreenOnExempted */ true) > 0;
+        if (screenExemptedAppExists || mScreenOn) {
+            updateBlameForConnectionStateChange(shouldBlameD2dAllowedApps, isStaConnection);
+        }
+        updateOpMode();
     }
 
     /**
@@ -431,27 +460,45 @@ public class WifiLockManager {
             Log.d(TAG, "updateWifiClientConnected hasAtLeastOneConnection="
                     + hasAtLeastOneConnection);
         }
-        if (mWifiConnected == hasAtLeastOneConnection) {
+        if (mStaConnected == hasAtLeastOneConnection) {
             // No need to take action
             return;
         }
-        mWifiConnected = hasAtLeastOneConnection;
-
-        // Adjust blaming for UIDs in foreground carrying low latency locks
-        if (canActivateLowLatencyLock(countFgLowLatencyUids(/*isScreenOnExempted*/ true) > 0
-                ? IGNORE_SCREEN_STATE_MASK | IGNORE_WIFI_STATE_MASK
-                : IGNORE_WIFI_STATE_MASK)) {
-            setBlameLowLatencyWatchList(BlameReason.WIFI_CONNECTION_STATE_CHANGED, mWifiConnected);
-        }
+        mStaConnected = hasAtLeastOneConnection;
 
         // Adjust blaming for UIDs carrying high perf locks
         // Note that blaming is adjusted only if needed,
         // since calling this API is reference counted
-        if (canActivateHighPerfLock(IGNORE_WIFI_STATE_MASK)) {
-            setBlameHiPerfLocks(mWifiConnected);
-        }
+        setBlameHiPerfLocks(mStaConnected);
+        handleConnectionChanged(true, mStaConnected);
+    }
 
-        updateOpMode();
+    /**
+     * Handler for P2P connection state changes.
+     */
+    public void updateP2pConnected(boolean isConnected) {
+        if (mP2pConnected == isConnected) {
+            return;
+        }
+        if (mVerboseLoggingEnabled) {
+            Log.i(TAG, "Updating P2P connected state to " + isConnected);
+        }
+        mP2pConnected = isConnected;
+        handleConnectionChanged(false, mP2pConnected);
+    }
+
+    /**
+     * Handler for Aware connection state changes.
+     */
+    public void updateAwareConnected(boolean isConnected) {
+        if (mAwareConnected == isConnected) {
+            return;
+        }
+        if (mVerboseLoggingEnabled) {
+            Log.i(TAG, "Updating Aware connected state to " + isConnected);
+        }
+        mAwareConnected = isConnected;
+        handleConnectionChanged(false, mAwareConnected);
     }
 
     private synchronized void setBlameHiPerfLocks(boolean shouldBlame) {
@@ -496,6 +543,12 @@ public class WifiLockManager {
                 <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE)) {
             return true;
         }
+        // Exemption for applications that can project to a nearby device.
+        if (mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(uid)
+                && (importance
+                <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_SERVICE)) {
+            return true;
+        }
         // Add any exemption cases for applications regarding restricting Low latency locks to
         // running in the foreground.
         return false;
@@ -524,7 +577,32 @@ public class WifiLockManager {
         if (mWifiPermissionsUtil.checkRequestCompanionProfileAutomotiveProjectionPermission(uid)) {
             return true;
         }
+        // Exemption for applications that can project to a nearby device.
+        if (mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(uid)) {
+            return true;
+        }
         // Add more exemptions here
+        return false;
+    }
+
+    private boolean doesD2dSatisfyConnectionRequirementForApp(int uid) {
+        if (!Flags.wifiLockActivatedByP2pOrAware()) {
+            return false;
+        }
+        if (mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(uid)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean doesD2dSatisfyConnectionRequirementForAnyApp() {
+        if (!Flags.wifiLockActivatedByP2pOrAware()) return false;
+        for (int i = 0; i < mLowLatencyUidWatchList.size(); i++) {
+            UidRec uidRec = mLowLatencyUidWatchList.valueAt(i);
+            if (uidRec.mD2dSatisfiesConnectionRequirement) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -544,10 +622,10 @@ public class WifiLockManager {
             uidRec.mIsFgExempted = isAppExemptedFromImportance(uid,
                     ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
             uidRec.mIsScreenOnExempted = isAppExemptedFromScreenOn(uid);
+            uidRec.mD2dSatisfiesConnectionRequirement =
+                    doesD2dSatisfyConnectionRequirementForApp(uid);
 
-            if (canActivateLowLatencyLock(
-                    uidRec.mIsScreenOnExempted ? IGNORE_SCREEN_STATE_MASK : 0,
-                    uidRec)) {
+            if (canAppActivateLowLatencyLock(uidRec)) {
                 // Share the blame for this uid
                 setBlameLowLatencyUid(uid, true);
                 notifyLowLatencyActiveUsersChanged();
@@ -574,8 +652,7 @@ public class WifiLockManager {
             // Remove blame for this UID if it was already set
             // Note that blame needs to be stopped only if it was started before
             // to avoid calling the API unnecessarily, since it is reference counted
-            if (canActivateLowLatencyLock(uidRec.mIsScreenOnExempted ? IGNORE_SCREEN_STATE_MASK : 0,
-                    uidRec)) {
+            if (canAppActivateLowLatencyLock(uidRec)) {
                 setBlameLowLatencyUid(uid, false);
                 notifyLowLatencyActiveUsersChanged();
             }
@@ -649,7 +726,7 @@ public class WifiLockManager {
 
         // Recalculate the operating mode
         updateOpMode();
-        mHandler.removeCallbacksAndMessages(mLock);
+        mThreadRunner.removeCallbacks(mLock);
         return true;
     }
 
@@ -713,7 +790,8 @@ public class WifiLockManager {
                 break;
         }
         // Delay 1s to release the lock to avoid stress the HAL.
-        mHandler.postDelayed(this::updateOpMode, mLock, DELAY_LOCK_RELEASE_MS);
+        mThreadRunner.postDelayed(this::updateOpMode, DELAY_LOCK_RELEASE_MS,
+                TAG + "#updateOpMode", mLock);
         return true;
     }
 
@@ -1076,39 +1154,74 @@ public class WifiLockManager {
         }
     }
 
-    private void setBlameLowLatencyWatchList(BlameReason reason, boolean shouldBlame) {
-        boolean notify = false;
-        for (int idx = 0; idx < mLowLatencyUidWatchList.size(); idx++) {
-            UidRec uidRec = mLowLatencyUidWatchList.valueAt(idx);
-            // The blame state of the UIDs should not be changed if the app is exempted from
-            // screen-on and the reason for blaming is screen state change.
-            if (uidRec.mIsScreenOnExempted && reason == BlameReason.SCREEN_STATE_CHANGED) {
-                continue;
-            }
-            // Affect the blame for only UIDs running in foreground
-            // UIDs running in the background are already not blamed,
-            // and they should remain in that state.
-            if (uidRec.mIsFg) {
-                setBlameLowLatencyUid(uidRec.mUid, shouldBlame);
-                notify = true;
+    private void updateBlameForConnectionStateChange(boolean shouldBlameD2dAllowedApps,
+            boolean shouldBlameNonD2dAllowedApps) {
+        boolean activeUsersChanged = false;
+        for (int i = 0; i < mLowLatencyUidWatchList.size(); i++) {
+            UidRec uidRec = mLowLatencyUidWatchList.valueAt(i);
+            boolean shouldBlame = uidRec.mD2dSatisfiesConnectionRequirement
+                    ? shouldBlameD2dAllowedApps : shouldBlameNonD2dAllowedApps;
+            if (!shouldBlame) continue;
+
+            // If the screen and foreground conditions are met,
+            // then the connection state change will affect blaming.
+            boolean hasValidScreenState = isScreenStateValidForApp(uidRec);
+            if (hasValidScreenState && uidRec.mIsFg) {
+                boolean hasValidConnection = isConnectionRequirementSatisfiedForApp(uidRec);
+                setBlameLowLatencyUid(uidRec.mUid, hasValidConnection);
+                activeUsersChanged = true;
             }
         }
-        if (notify) notifyLowLatencyActiveUsersChanged();
+        if (activeUsersChanged) {
+            notifyLowLatencyActiveUsersChanged();
+        }
+    }
+
+    private void updateBlameForScreenStateChange() {
+        boolean activeUsersChanged = false;
+        for (int i = 0; i < mLowLatencyUidWatchList.size(); i++) {
+            // Only blame apps without the screen state exemption.
+            UidRec uidRec = mLowLatencyUidWatchList.valueAt(i);
+            if (uidRec.mIsScreenOnExempted) continue;
+
+            // If the connection and foreground conditions are met,
+            // then the screen state change will affect blaming.
+            boolean hasValidConnection = isConnectionRequirementSatisfiedForApp(uidRec);
+            if (hasValidConnection && uidRec.mIsFg) {
+                setBlameLowLatencyUid(uidRec.mUid, mScreenOn);
+                activeUsersChanged = true;
+            }
+        }
+        if (activeUsersChanged) {
+            notifyLowLatencyActiveUsersChanged();
+        }
     }
 
     protected synchronized void dump(PrintWriter pw) {
+        pw.println("Dump of WifiLockManager");
         pw.println("Locks acquired: "
                 + mFullHighPerfLocksAcquired + " full high perf, "
                 + mFullLowLatencyLocksAcquired + " full low latency");
         pw.println("Locks released: "
                 + mFullHighPerfLocksReleased + " full high perf, "
                 + mFullLowLatencyLocksReleased + " full low latency");
+        pw.println("Connection state: STA=" + mStaConnected + ", P2P=" + mP2pConnected
+                + ", Aware=" + mAwareConnected);
+        pw.println("Screen state: " + mScreenOn);
+        pw.println("Current operation mode: " + mCurrentOpMode);
 
         pw.println();
         pw.println("Locks held:");
         for (WifiLock lock : mWifiLocks) {
-            pw.print("    ");
-            pw.println(lock);
+            // Indent each record in the formatted output
+            pw.println("    " + lock);
+        }
+
+        pw.println();
+        pw.println("Low-latency uid watchlist:");
+        for (int i = 0; i < mLowLatencyUidWatchList.size(); i++) {
+            UidRec uidRec = mLowLatencyUidWatchList.valueAt(i);
+            pw.println("    " + uidRec);
         }
     }
 
@@ -1156,7 +1269,7 @@ public class WifiLockManager {
         }
 
         public void binderDied() {
-            mHandler.post(() -> releaseLock(mBinder));
+            mThreadRunner.post(() -> releaseLock(mBinder), TAG + "#binderDied");
         }
 
         public void unlinkDeathRecipient() {
@@ -1181,9 +1294,16 @@ public class WifiLockManager {
         boolean mIsFg;
         boolean mIsFgExempted = false;
         boolean mIsScreenOnExempted = false;
+        boolean mD2dSatisfiesConnectionRequirement = false;
 
         UidRec(int uid) {
             mUid = uid;
+        }
+
+        public String toString() {
+            return "UidRec{uid=" + mUid + ", lockCount=" + mLockCount + ", isFg=" + mIsFg
+                    + ", isFgExempt=" + mIsFgExempted + ", isScreenExempt=" + mIsScreenOnExempted
+                    + ", d2dSatisfiesConnection=" + mD2dSatisfiesConnectionRequirement + "}";
         }
     }
 }

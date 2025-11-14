@@ -39,7 +39,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import android.app.ActivityManager;
 import android.content.Context;
@@ -56,10 +59,13 @@ import android.os.test.TestLooper;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -67,6 +73,7 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -90,6 +97,7 @@ public class WifiLockManagerTest extends WifiBaseTest {
     private ActivityManager.OnUidImportanceListener mUidImportanceListener;
 
     WifiLockManager mWifiLockManager;
+    MockitoSession mSession;
     @Mock Clock mClock;
     @Mock BatteryStatsManager mBatteryStats;
     @Mock IBinder mBinder;
@@ -108,7 +116,7 @@ public class WifiLockManagerTest extends WifiBaseTest {
     @Mock WifiPermissionsUtil mWifiPermissionsUtil;
     @Mock WifiDeviceStateChangeManager mWifiDeviceStateChangeManager;
     TestLooper mLooper;
-    Handler mHandler;
+    private WifiThreadRunner mWifiThreadRunner;
 
     @Captor
     ArgumentCaptor<WifiDeviceStateChangeManager.StateChangeCallback>
@@ -129,8 +137,13 @@ public class WifiLockManagerTest extends WifiBaseTest {
                 .addNode(DEFAULT_TEST_UID_2, "tag2");
 
         MockitoAnnotations.initMocks(this);
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(Flags.class, withSettings().lenient())
+                .startMocking();
+
         mLooper = new TestLooper();
-        mHandler = new Handler(mLooper.getLooper());
+        Handler handler = new Handler(mLooper.getLooper());
+        mWifiThreadRunner = new WifiThreadRunner(handler);
         when(mContext.getSystemService(Context.ACTIVITY_SERVICE)).thenReturn(mActivityManager);
         when(mContext.getSystemService(ActivityManager.class)).thenReturn(mActivityManager);
         when(mContext.getSystemService(PowerManager.class)).thenReturn(mPowerManager);
@@ -146,6 +159,7 @@ public class WifiLockManagerTest extends WifiBaseTest {
         when(mContext.getResources()).thenReturn(mResources);
         when(mResources.getBoolean(
                 R.bool.config_wifiLowLatencyLockDisableChipPowerSave)).thenReturn(true);
+        when(Flags.wifiLockActivatedByP2pOrAware()).thenReturn(true);
 
         mWifiLockManager =
                 new WifiLockManager(
@@ -153,7 +167,7 @@ public class WifiLockManagerTest extends WifiBaseTest {
                         mBatteryStats,
                         mActiveModeWarden,
                         mFrameworkFacade,
-                        mHandler,
+                        mWifiThreadRunner,
                         mClock,
                         mWifiMetrics,
                         mDeviceConfigFacade,
@@ -161,6 +175,13 @@ public class WifiLockManagerTest extends WifiBaseTest {
                         mWifiDeviceStateChangeManager);
         verify(mWifiDeviceStateChangeManager)
                 .registerStateChangeCallback(mStateChangeCallbackArgumentCaptor.capture());
+    }
+
+    @After
+    public void cleanUp() {
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     private void acquireWifiLockSuccessful(int lockMode, String tag, IBinder binder, WorkSource ws)
@@ -968,14 +989,35 @@ public class WifiLockManagerTest extends WifiBaseTest {
     }
 
     /**
-     * Test if an exempted foreground app acquires a low-latency lock, and screen is off,
-     * then that lock becomes effective.
+     * Test that if an Android Auto exempted foreground app acquires a low-latency lock,
+     * and the screen is off, then that lock becomes effective.
      */
     @Test
-    public void testForegroundAppAcquireLowLatencyScreenOffExemption() throws Exception {
+    public void testForegroundAppAcquireLowLatencyScreenOffAutoExemption() throws Exception {
         // Set screen off, and app is foreground
         setScreenState(false);
         when(mWifiPermissionsUtil.checkRequestCompanionProfileAutomotiveProjectionPermission(
+                anyInt())).thenReturn(true);
+        when(mActivityManager.getUidImportance(anyInt())).thenReturn(
+                ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        // Acquire the lock.
+        acquireWifiLockSuccessful(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "",
+                mBinder, mWorkSource);
+        // Check for low latency.
+        assertEquals(WifiManager.WIFI_MODE_FULL_LOW_LATENCY,
+                mWifiLockManager.getStrongestLockMode());
+    }
+
+    /**
+     * Test that if a nearby-streaming exempted foreground app acquires a low-latency lock,
+     * and the screen is off, then that lock becomes effective.
+     */
+    @Test
+    public void testForegroundAppAcquireLowLatencyScreenOffNearbyStreamExemption()
+            throws Exception {
+        // Set screen off and app is in the foreground
+        setScreenState(false);
+        when(mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(
                 anyInt())).thenReturn(true);
         when(mActivityManager.getUidImportance(anyInt())).thenReturn(
                 ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
@@ -1006,17 +1048,37 @@ public class WifiLockManagerTest extends WifiBaseTest {
     }
 
     /**
-     * Test if an exempted app not in foreground acquires a low-latency lock, and screen is on,
-     * then that lock becomes effective.
+     * Test that if an Android Auto exempted app not in foreground acquires a low-latency lock,
+     * and the screen is on, then that lock becomes effective.
      */
     @Test
-    public void testBackgroundAppAcquireLowLatencyScreenOnExemption() throws Exception {
+    public void testBackgroundAppAcquireLowLatencyScreenOnAutoExemption() throws Exception {
         // Set screen on, and app is foreground service.
         setScreenState(true);
         when(mWifiPermissionsUtil.checkRequestCompanionProfileAutomotiveProjectionPermission(
                 anyInt())).thenReturn(true);
         when(mActivityManager.getUidImportance(anyInt())).thenReturn(
                 ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE);
+        // Acquire the lock.
+        acquireWifiLockSuccessful(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "",
+                mBinder, mWorkSource);
+        // Check for low latency.
+        assertEquals(WifiManager.WIFI_MODE_FULL_LOW_LATENCY,
+                mWifiLockManager.getStrongestLockMode());
+    }
+
+    /**
+     * Test that if a nearby-streaming exempted app with a low priority acquires a low-latency lock,
+     * and screen is on, then that lock becomes effective.
+     */
+    @Test
+    public void testBackgroundAppAcquireLowLatencyScreenOnNearbyStreamExemption() throws Exception {
+        // Set screen on and app is background service.
+        setScreenState(true);
+        when(mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(
+                anyInt())).thenReturn(true);
+        when(mActivityManager.getUidImportance(anyInt())).thenReturn(
+                ActivityManager.RunningAppProcessInfo.IMPORTANCE_SERVICE);
         // Acquire the lock.
         acquireWifiLockSuccessful(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "",
                 mBinder, mWorkSource);
@@ -2243,5 +2305,91 @@ public class WifiLockManagerTest extends WifiBaseTest {
         // Check for balance
         verify(mBatteryStats, times(numReports)).reportFullWifiLockAcquiredFromSource(mWorkSource);
         verify(mBatteryStats, times(numReports)).reportFullWifiLockReleasedFromSource(mWorkSource);
+    }
+
+    /**
+     * Test that connection state changes are handled correctly when both D2D-allowed and
+     * non D2D-allowed apps hold a WifiLock.
+     */
+    @Test
+    public void testConnectionStateChangeWithD2dAndNonD2dAllowedApps() throws Exception {
+        // Setup two apps, where only App 1 has the nearby streaming permission (which
+        // allows D2D connections to satisfy its connection requirement).
+        IBinder d2dAllowedBinder = mock(IBinder.class);
+        WorkSource d2dAllowedWs = new WorkSource(DEFAULT_TEST_UID_1);
+        IBinder nonD2dAllowedBinder = mock(IBinder.class);
+        WorkSource nonD2dAllowedWs = new WorkSource(DEFAULT_TEST_UID_2);
+        when(mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(
+                DEFAULT_TEST_UID_1)).thenReturn(true);
+        when(mWifiPermissionsUtil.checkRequestCompanionProfileNearbyDeviceStreamingPermission(
+                DEFAULT_TEST_UID_2)).thenReturn(false);
+
+        // Screen is on and both apps are in the foreground.
+        setScreenState(true);
+        when(mActivityManager.getUidImportance(anyInt())).thenReturn(
+                ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+
+        // When no connections are active, low-latency mode should not be enabled by either app.
+        assertTrue(mWifiLockManager.acquireWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "",
+                d2dAllowedBinder, d2dAllowedWs));
+        assertTrue(mWifiLockManager.acquireWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "",
+                nonD2dAllowedBinder, nonD2dAllowedWs));
+        assertEquals(WifiManager.WIFI_MODE_NO_LOCKS_HELD,
+                mWifiLockManager.getStrongestLockMode());
+        verifyNoInteractions(mBatteryStats);
+
+        // Starting a STA connection should affect blaming for both apps.
+        mWifiLockManager.updateWifiClientConnected(mClientModeManager, true);
+        verify(mBatteryStats).reportFullWifiLockAcquiredFromSource(d2dAllowedWs);
+        verify(mBatteryStats).reportFullWifiLockAcquiredFromSource(nonD2dAllowedWs);
+
+        // Starting a P2P connection should not affect blaming for any app.
+        mWifiLockManager.updateP2pConnected(true);
+        verifyNoMoreInteractions(mBatteryStats);
+
+        // Ending the STA connection should only affect blaming for the non D2D-allowed app.
+        mWifiLockManager.updateWifiClientConnected(mClientModeManager, false);
+        verify(mBatteryStats).reportFullWifiLockReleasedFromSource(nonD2dAllowedWs);
+        verify(mBatteryStats, never()).reportFullWifiLockReleasedFromSource(d2dAllowedWs);
+
+        // Ending the P2P connection should only affect blaming for the D2D-allowed app.
+        mWifiLockManager.updateP2pConnected(false);
+        verify(mBatteryStats).reportFullWifiLockReleasedFromSource(d2dAllowedWs);
+        verifyNoMoreInteractions(mBatteryStats);
+    }
+
+    /**
+     * Test that D2D connections do not count toward the connection requirement
+     * for non D2D-allowed apps, when a screen state change occurs.
+     */
+    @Test
+    public void testScreenStateChangeWithMultipleConnectionTypes() throws Exception {
+        // Acquire lock when app is in the foreground, screen is off, and P2P connection is active.
+        setScreenState(false);
+        mWifiLockManager.updateP2pConnected(true);
+        when(mActivityManager.getUidImportance(DEFAULT_TEST_UID_1)).thenReturn(
+                ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND);
+        assertTrue(mWifiLockManager.acquireWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "",
+                mBinder, mWorkSource));
+
+        // Low-latency should be disabled and the app should not be blamed.
+        assertEquals(WifiManager.WIFI_MODE_NO_LOCKS_HELD,
+                mWifiLockManager.getStrongestLockMode());
+        verifyNoInteractions(mBatteryStats);
+
+        // Enabling the screen should not update the blame, since the P2P connection
+        // does not satisfy this app's connection requirement.
+        setScreenState(true);
+        assertEquals(WifiManager.WIFI_MODE_NO_LOCKS_HELD,
+                mWifiLockManager.getStrongestLockMode());
+        verifyNoInteractions(mBatteryStats);
+
+        // Starting a STA connection and restarting the screen should update the blame.
+        setScreenState(false);
+        mWifiLockManager.updateWifiClientConnected(mClientModeManager, true);
+        setScreenState(true);
+        assertEquals(WifiManager.WIFI_MODE_FULL_LOW_LATENCY,
+                mWifiLockManager.getStrongestLockMode());
+        verify(mBatteryStats).reportFullWifiLockAcquiredFromSource(mWorkSource);
     }
 }

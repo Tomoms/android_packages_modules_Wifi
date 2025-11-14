@@ -298,8 +298,8 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
     // Set a two minute discover timeout to avoid STA scans from being blocked
     private static final int DISCOVER_TIMEOUT_S = 120;
 
-    // Set a 30 seconds timeout for USD service discovery and advertisement.
-    @VisibleForTesting static final int USD_BASED_SERVICE_ADVERTISEMENT_DISCOVERY_TIMEOUT_S = 30;
+    // Set a 120 seconds timeout for USD service discovery and advertisement.
+    @VisibleForTesting static final int USD_BASED_SERVICE_ADVERTISEMENT_DISCOVERY_TIMEOUT_S = 120;
 
     // Idle time after a peer is gone when the group is torn down
     private static final int GROUP_IDLE_TIME_S = 10;
@@ -4012,16 +4012,11 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
                     }
                     case WifiP2pMonitor
                             .P2P_PROV_DISC_SHOW_PAIRING_BOOTSTRAPPING_PIN_OR_PASSPHRASE_EVENT: {
-                        // TODO Change this logic:
-                        // Move to UserAuthorizingNegotiationRequestState, display the PIN or
-                        // passphrase and request user to accept/reject.
                         if (processProvisionDiscoveryRequestForV2ConnectionOnP2pDevice(
                                 (WifiP2pProvDiscEvent) message.obj)) {
                             notifyP2pProvDiscShowPinRequest(getPinOrPassphraseFromSavedPeerConfig(),
                                     mSavedPeerConfig.deviceAddress);
-                            p2pConnectWithPinDisplay(mSavedPeerConfig,
-                                    P2P_CONNECT_TRIGGER_GROUP_NEG_REQ);
-                            smTransition(this, mGroupNegotiationState);
+                            smTransition(this, mUserAuthorizingNegotiationRequestState);
                         }
                         break;
                     }
@@ -4495,7 +4490,8 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
                 if (mSavedPeerConfig.wps.setup == WpsInfo.PBC
                         || (mSavedPeerConfig.wps.setup != WpsInfo.INVALID
                         && TextUtils.isEmpty(mSavedPeerConfig.wps.pin))
-                        || isConfigForV2Connection(mSavedPeerConfig)) {
+                        || (isConfigForV2Connection(mSavedPeerConfig)
+                        && TextUtils.isEmpty(getPinOrPassphraseFromSavedPeerConfig()))) {
                     notifyInvitationReceived(
                             WifiP2pManager.ExternalApproverRequestListener
                                     .REQUEST_TYPE_NEGOTIATION);
@@ -4888,6 +4884,17 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
                                 .GROUP_CREATION_FAILURE_REASON_PROVISION_DISCOVERY_FAILED);
                         smTransition(this, mInactiveState);
                         break;
+                    case WifiP2pManager.SET_CONNECTION_REQUEST_RESULT: {
+                        if (!handleSetConnectionResultForV2ConnectionInvitationSent(message)) {
+                            replyToMessage(message,
+                                    WifiP2pManager.SET_CONNECTION_REQUEST_RESULT_FAILED,
+                                    WifiP2pManager.ERROR);
+                            break;
+                        }
+                        replyToMessage(message,
+                                WifiP2pManager.SET_CONNECTION_REQUEST_RESULT_SUCCEEDED);
+                        break;
+                    }
                     default:
                         return NOT_HANDLED;
                 }
@@ -5209,39 +5216,38 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
 
             private void showFrequencyConflictDialog() {
                 Resources r = mContext.getResources();
-                WifiDialogManager.DialogHandle dialog = mWifiInjector.getWifiDialogManager()
-                        .createSimpleDialog(
-                                null /* title */,
-                                r.getString(R.string.wifi_p2p_frequency_conflict_message,
-                                        getDeviceName(mSavedPeerConfig.deviceAddress)),
-                                r.getString(R.string.dlg_ok),
-                                r.getString(R.string.decline),
-                                null /* neutralButtonText */,
-                                new WifiDialogManager.SimpleDialogCallback() {
-                                    @Override
-                                    public void onPositiveButtonClicked() {
-                                        sendMessage(DROP_WIFI_USER_ACCEPT);
-                                    }
+                WifiDialogManager.SimpleDialogCallback callback =
+                        new WifiDialogManager.SimpleDialogCallback() {
+                            @Override
+                            public void onPositiveButtonClicked() {
+                                sendMessage(DROP_WIFI_USER_ACCEPT);
+                            }
 
-                                    @Override
-                                    public void onNegativeButtonClicked() {
-                                        sendMessage(DROP_WIFI_USER_REJECT);
-                                    }
+                            @Override
+                            public void onNegativeButtonClicked() {
+                                sendMessage(DROP_WIFI_USER_REJECT);
+                            }
 
-                                    @Override
-                                    public void onNeutralButtonClicked() {
-                                        // Not used
-                                        sendMessage(DROP_WIFI_USER_REJECT);
-                                    }
+                            @Override
+                            public void onNeutralButtonClicked() {
+                                // Not used
+                                sendMessage(DROP_WIFI_USER_REJECT);
+                            }
 
-                                    @Override
-                                    public void onCancelled() {
-                                        sendMessage(DROP_WIFI_USER_REJECT);
-                                    }
-                                },
-                                new WifiThreadRunner(getHandler()));
-                mFrequencyConflictDialog = dialog;
-                dialog.launchDialog();
+                            @Override
+                            public void onCancelled() {
+                                sendMessage(DROP_WIFI_USER_REJECT);
+                            }
+                        };
+                mFrequencyConflictDialog = mWifiInjector.getWifiDialogManager()
+                        .createSimpleDialogBuilder()
+                        .setMessage(r.getString(R.string.wifi_p2p_frequency_conflict_message,
+                                        getDeviceName(mSavedPeerConfig.deviceAddress)))
+                        .setPositiveButtonText(r.getString(R.string.dlg_ok))
+                        .setNegativeButtonText(r.getString(R.string.decline))
+                        .setCallback(callback, new WifiThreadRunner(getHandler()))
+                        .build();
+                mFrequencyConflictDialog.launchDialog();
             }
 
             private void notifyFrequencyConflict() {
@@ -6966,6 +6972,7 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
                         .setGroupClientIpProvisioningMode(
                                 GROUP_CLIENT_IP_PROVISIONING_MODE_IPV6_LINK_LOCAL)
                         .setAuthorizeConnectionFromPeerEnabled(true)
+                        .enablePersistentMode(true)
                         .build();
                 if (provDisc.getVendorData() != null) {
                     mSavedPeerConfig.setVendorData(provDisc.getVendorData());
@@ -8753,6 +8760,7 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
             return true;
         }
 
+        @SuppressLint("NewApi")
         private boolean handleSetConnectionResult(@NonNull Message message,
                 @WifiP2pManager.ExternalApproverRequestListener.RequestType int requestType) {
             if (!handleSetConnectionResultCommon(message)) return false;
@@ -8767,10 +8775,15 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
             } else if (WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE
                             == message.arg1
                     && WifiP2pManager.ExternalApproverRequestListener.REQUEST_TYPE_NEGOTIATION
-                            == requestType
-                    && WpsInfo.KEYPAD == mSavedPeerConfig.wps.setup) {
+                            == requestType) {
+                String pinOrPassphrase = "";
+                if (WpsInfo.KEYPAD == mSavedPeerConfig.wps.setup) {
+                    pinOrPassphrase = mSavedPeerConfig.wps.pin;
+                } else if (isConfigForBootstrappingMethodDisplayPinOrPassphrase(mSavedPeerConfig)) {
+                    pinOrPassphrase = getPinOrPassphraseFromSavedPeerConfig();
+                }
                 detachExternalApproverFromPeer();
-                notifyP2pProvDiscShowPinRequest(mSavedPeerConfig.wps.pin,
+                notifyP2pProvDiscShowPinRequest(pinOrPassphrase,
                         mSavedPeerConfig.deviceAddress);
                 return true;
             }
@@ -8778,15 +8791,23 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
             if (WifiP2pManager.CONNECTION_REQUEST_ACCEPT == message.arg1) {
                 if (WifiP2pManager.ExternalApproverRequestListener.REQUEST_TYPE_NEGOTIATION
                         == requestType
-                        && WpsInfo.DISPLAY == mSavedPeerConfig.wps.setup) {
+                        && (WpsInfo.DISPLAY == mSavedPeerConfig.wps.setup
+                        || isConfigForBootstrappingMethodDisplayPinOrPassphrase(
+                                mSavedPeerConfig))) {
                     sendMessage(PEER_CONNECTION_USER_CONFIRM);
                 } else {
                     Bundle extras = message.getData().getBundle(
                             WifiP2pManager.EXTRA_PARAM_KEY_BUNDLE);
+                    // TODO Define an Extra for transporting pairing bootstrapping PIN/Passphrase
                     String pin = extras.getString(
                             WifiP2pManager.EXTRA_PARAM_KEY_WPS_PIN);
                     if (!TextUtils.isEmpty(pin)) {
-                        mSavedPeerConfig.wps.pin = pin;
+                        if (isConfigForBootstrappingMethodKeypadPinOrPassphrase(mSavedPeerConfig)) {
+                            mSavedPeerConfig.getPairingBootstrappingConfig()
+                                    .setPairingBootstrappingPassword(pin);
+                        } else {
+                            mSavedPeerConfig.wps.pin = pin;
+                        }
                     }
                     sendMessage(PEER_CONNECTION_USER_ACCEPT);
                 }
@@ -8814,6 +8835,32 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
                 return true;
             }
             Log.w(TAG, "Invalid connection result: " + message.arg1);
+            return false;
+        }
+
+        private boolean handleSetConnectionResultForV2ConnectionInvitationSent(
+                @NonNull Message message) {
+            if (!handleSetConnectionResultCommon(message)) {
+                return false;
+            }
+
+            if (!isConfigForV2Connection(mSavedPeerConfig)) {
+                return false;
+            }
+
+            logd("handle connection result for P2P V2 Display pin/passphrase from the approver,"
+                    + " result= " + message.arg1);
+            // For deferring result, the approver should be removed first to avoid notifying
+            // the application again.
+            if (WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE == message.arg1
+                    && isConfigForBootstrappingMethodDisplayPinOrPassphrase(mSavedPeerConfig)) {
+                detachExternalApproverFromPeer();
+                notifyInvitationSent(getPinOrPassphraseFromSavedPeerConfig(),
+                        mSavedPeerConfig.deviceAddress);
+                return true;
+            }
+            Log.w(TAG, "Invalid connection result: " + message.arg1
+                    + ", config: " + mSavedPeerConfig);
             return false;
         }
 

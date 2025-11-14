@@ -78,6 +78,7 @@ import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiScanner;
 import android.net.wifi.WifiSsid;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.Process;
 import android.os.UserHandle;
@@ -339,6 +340,7 @@ public class WifiConfigManagerTest extends WifiBaseTest {
         when(mPackageManager.getPackagesHoldingPermissions(any(String[].class), anyInt()))
                 .thenReturn(Collections.emptyList());
         when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfigFacade);
+        when(mDeviceConfigFacade.getFeatureFlags()).thenReturn(mFeatureFlags);
         mWifiCarrierInfoManager = spy(new WifiCarrierInfoManager(mTelephonyManager,
                 mSubscriptionManager, mWifiInjector, mock(FrameworkFacade.class),
                 wifiContext, mock(WifiConfigStore.class), mock(Handler.class),
@@ -8510,7 +8512,6 @@ public class WifiConfigManagerTest extends WifiBaseTest {
      */
     @Test
     public void testConfiguredNetworkWithPassword() {
-
         NetworkSelectionStatus.Builder builder = new NetworkSelectionStatus.Builder();
         NetworkSelectionStatus networkSelectionStatus = builder.build();
         SecurityParams params = SecurityParams.createSecurityParamsBySecurityType(
@@ -8531,5 +8532,34 @@ public class WifiConfigManagerTest extends WifiBaseTest {
                 WifiSsid.fromString(TEST_SSID), SECURITY_TYPE_PSK);
         // Test there is no network with TEST_SSID and FT_PSK
         assertNull(wifiConfig);
+    }
+
+    /**
+     * Verify that the other user can't update (enable/disable network) and remove this network.
+     * but admin is allowed to remove it.
+     */
+    @Test
+    public void testConfigOnlyCanBeUpdatedByCreatorUser() {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+        when(mWifiPermissionsUtil.areTwoAppsFromSameUser(anyInt(), anyInt())).thenReturn(false);
+        // Adding a network which disallow other user to edit it.
+        WifiConfiguration openNetwork = WifiConfigurationTestUtil.createOpenNetwork();
+        openNetwork.setAllowedToUpdateByOtherUsers(false);
+        assertFalse(openNetwork.isAllowedToUpdateByOtherUsers());
+        verifyAddNetworkToWifiConfigManager(openNetwork);
+        assertFalse(mWifiConfigManager.enableNetwork(
+                openNetwork.networkId, false, TEST_UPDATE_UID, TEST_CREATOR_NAME));
+        assertFalse(mWifiConfigManager.disableNetwork(
+                openNetwork.networkId, TEST_UPDATE_UID, TEST_CREATOR_NAME));
+        assertFalse(mWifiConfigManager.removeNetwork(
+                openNetwork.networkId, TEST_UPDATE_UID, TEST_CREATOR_NAME));
+        // Now switch the user to user 2 and user 2 is admin
+        when(mUserManager.isForegroundUserAdmin()).thenReturn(true);
+        mWifiConfigManager.handleUserSwitch(TEST_DEFAULT_USER + 1);
+        mWifiConfigManager.handleUserUnlock(TEST_DEFAULT_USER + 1);
+        // Current user is admin and allow to remove a network.
+        assertTrue(mWifiConfigManager.removeNetwork(
+                openNetwork.networkId, TEST_UPDATE_UID, TEST_CREATOR_NAME));
     }
 }

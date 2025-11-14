@@ -175,6 +175,7 @@ public class WifiNetworkSuggestionsManager {
     private final Clock mClock;
     // Keep order of network connection.
     private final LruConnectionTracker mLruConnectionTracker;
+    private final BuildProperties mBuildProperties;
 
     private class OnNetworkUpdateListener implements
             WifiConfigManager.OnNetworkUpdateListener {
@@ -681,7 +682,7 @@ public class WifiNetworkSuggestionsManager {
         mWifiKeyStore = keyStore;
         mNotificationManager = mWifiInjector.getWifiNotificationManager();
         mClock = clock;
-
+        mBuildProperties = mWifiInjector.getBuildProperties();
         // register the data store for serializing/deserializing data.
         wifiConfigStore.registerStoreData(
                 wifiInjector.makeNetworkSuggestionStoreData(new NetworkSuggestionDataSource()));
@@ -1212,7 +1213,8 @@ public class WifiNetworkSuggestionsManager {
             // Not carrier merged.
             return true;
         }
-        if (!wns.wifiConfiguration.isEnterprise() && wns.passpointConfiguration == null) {
+        if (!wns.wifiConfiguration.isEnterprise() && wns.passpointConfiguration == null
+                && mBuildProperties.isUserBuild()) {
             // Carrier merged network must be a enterprise network.
             return false;
         }
@@ -1684,12 +1686,7 @@ public class WifiNetworkSuggestionsManager {
 
     private void sendUserApprovalDialog(@NonNull String packageName, int uid) {
         CharSequence appName = mFrameworkFacade.getAppName(mContext, packageName, uid);
-        mWifiInjector.getWifiDialogManager().createSimpleDialog(
-                mResources.getString(R.string.wifi_suggestion_title),
-                mResources.getString(R.string.wifi_suggestion_content, appName),
-                mResources.getString(R.string.wifi_suggestion_action_allow_app),
-                mResources.getString(R.string.wifi_suggestion_action_disallow_app),
-                null /* neutralButtonText */,
+        WifiDialogManager.SimpleDialogCallback callback =
                 new WifiDialogManager.SimpleDialogCallback() {
                     @Override
                     public void onPositiveButtonClicked() {
@@ -1711,8 +1708,17 @@ public class WifiNetworkSuggestionsManager {
                     public void onCancelled() {
                         handleUserDismissAction();
                     }
-                },
-                new WifiThreadRunner(mHandler)).launchDialog();
+                };
+        mWifiInjector.getWifiDialogManager().createSimpleDialogBuilder()
+                .setTitle(mResources.getString(R.string.wifi_suggestion_title))
+                .setMessage(mResources.getString(R.string.wifi_suggestion_content, appName))
+                .setPositiveButtonText(
+                        mResources.getString(R.string.wifi_suggestion_action_allow_app))
+                .setNegativeButtonText(
+                        mResources.getString(R.string.wifi_suggestion_action_disallow_app))
+                .setCallback(callback, new WifiThreadRunner(mHandler))
+                .build()
+                .launchDialog();
         mNotificationUpdateTime = mClock.getElapsedSinceBootMillis()
                 + NOTIFICATION_UPDATE_DELAY_MILLS;
         mIsLastUserApprovalUiDialog = true;
@@ -2831,6 +2837,10 @@ public class WifiNetworkSuggestionsManager {
     }
 
     /**
+     * Tag to be used in dumpsys request
+     */
+    public static final String DUMP_ARG = "WifiNetworkSuggestionsManager";
+    /**
      * Dump of {@link WifiNetworkSuggestionsManager}.
      */
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
@@ -2845,8 +2855,9 @@ public class WifiNetworkSuggestionsManager {
                     + (appInfo.carrierId != TelephonyManager.UNKNOWN_CARRIER_ID));
             for (ExtendedWifiNetworkSuggestion extNetworkSuggestion
                     : appInfo.extNetworkSuggestions.values()) {
-                pw.println("Network: " + extNetworkSuggestion);
+                pw.println(extNetworkSuggestion);
             }
+            pw.println();
         }
         pw.println("WifiNetworkSuggestionsManager - Networks End ----");
     }

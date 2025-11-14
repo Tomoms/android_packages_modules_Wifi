@@ -76,6 +76,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.OutcomeReceiver;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.os.RemoteException;
@@ -5919,10 +5920,21 @@ public class WifiManager {
 
     /**
      * Check if input configuration is valid.
-     *
+     * <p>
+     * This will return {@code false} if a non-null BSSID is set but the caller does not have any of
+     * <ul>
+     *     <li>{@link android.Manifest.permission.NETWORK_SETTINGS}</li>
+     *     <li>{@link android.Manifest.permission.NETWORK_STACK}</li>
+     *     <li>{@link NetworkStack.PERMISSION_MAINLINE_NETWORK_STACK}</li>
+     * </ul>
      * @param config a configuration would like to be checked.
      * @return true if config is valid, otherwise false.
      */
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            android.Manifest.permission.NETWORK_STACK,
+            NetworkStack.PERMISSION_MAINLINE_NETWORK_STACK
+    }, conditional = true)
     public boolean validateSoftApConfiguration(@NonNull SoftApConfiguration config) {
         if (config == null) {
             throw new IllegalArgumentException(TAG + ": config can not be null");
@@ -11159,7 +11171,8 @@ public class WifiManager {
     @SystemApi
     @RequiresPermission(anyOf = {
             android.Manifest.permission.NETWORK_SETTINGS,
-            android.Manifest.permission.NETWORK_SETUP_WIZARD})
+            android.Manifest.permission.NETWORK_SETUP_WIZARD,
+            android.Manifest.permission.NETWORK_CARRIER_PROVISIONING})
     public void setCarrierNetworkOffloadEnabled(int subscriptionId, boolean merged,
             boolean enabled) {
         try {
@@ -11622,21 +11635,21 @@ public class WifiManager {
 
     /**
      * DialogType for a simple dialog.
-     * @see {@link com.android.server.wifi.WifiDialogManager#createSimpleDialog}
+     * @see com.android.server.wifi.WifiDialogManager#createSimpleDialogBuilder
      * @hide
      */
     public static final int DIALOG_TYPE_SIMPLE = 1;
 
     /**
      * DialogType for a P2P Invitation Sent dialog.
-     * @see {@link com.android.server.wifi.WifiDialogManager#createP2pInvitationSentDialog}
+     * @see com.android.server.wifi.WifiDialogManager#createP2pInvitationSentDialog
      * @hide
      */
     public static final int DIALOG_TYPE_P2P_INVITATION_SENT = 2;
 
     /**
      * DialogType for a P2P Invitation Received dialog.
-     * @see {@link com.android.server.wifi.WifiDialogManager#createP2pInvitationReceivedDialog}
+     * @see com.android.server.wifi.WifiDialogManager#createP2pInvitationReceivedDialog
      * @hide
      */
     public static final int DIALOG_TYPE_P2P_INVITATION_RECEIVED = 3;
@@ -11739,6 +11752,20 @@ public class WifiManager {
      */
     public static final String EXTRA_DIALOG_MESSAGE_URL_END =
             "android.net.wifi.extra.DIALOG_MESSAGE_URL_END";
+
+    /**
+     * Extra String indicating the labels for the list items of a simple dialog.
+     * @hide
+     */
+    public static final String EXTRA_DIALOG_LIST_LABELS =
+            "android.net.wifi.extra.EXTRA_DIALOG_LIST_LABELS";
+
+    /**
+     * Extra String indicating the contents for the list items of a simple dialog.
+     * @hide
+     */
+    public static final String EXTRA_DIALOG_LIST_CONTENTS =
+            "android.net.wifi.extra.EXTRA_DIALOG_LIST_CONTENTS";
 
     /**
      * Extra String indicating the positive button text of a simple dialog.
@@ -13301,6 +13328,57 @@ public class WifiManager {
         }
         try {
             return mService.isUsdPublisherSupported();
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Query the list of {@link WifiConfiguration} with credentials.
+     *
+     * <p> This API is similar to {@link #getPrivilegedConfiguredNetworks()}, but this new API
+     * is the async version of it.
+     *
+     * @param executor The executor on which callback will be invoked.
+     * @param resultsCallback An asynchronous callback that will return
+     *                        {@link OutcomeReceiver}
+     *
+     * @throws UnsupportedOperationException if the API is not supported on this SDK version.
+     * @throws SecurityException if the caller does not have permission.
+     *
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_GET_CONFIG_EMPTY_REASON)
+    @RequiresApi(Build.VERSION_CODES.S)
+    @SystemApi
+    @RequiresPermission(allOf = {NEARBY_WIFI_DEVICES, READ_WIFI_CREDENTIAL})
+    public void queryPrivilegedConfiguredNetworks(@NonNull @CallbackExecutor Executor executor,
+            @NonNull OutcomeReceiver<List<WifiConfiguration>, Error> resultsCallback) {
+        if (!SdkLevel.isAtLeastS()) {
+            throw new UnsupportedOperationException();
+        }
+        Objects.requireNonNull(executor, "executor cannot be null");
+        Objects.requireNonNull(resultsCallback, "resultsCallback cannot be null");
+        Bundle extras = new Bundle();
+        extras.putParcelable(EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE,
+                mContext.getAttributionSource());
+        try {
+            mService.queryPrivilegedConfiguredNetworks(
+                    new IPrivilegedConfiguredNetworksListener.Stub() {
+                        @Override
+                        public void onResult(ParceledListSlice<WifiConfiguration> result,
+                                String errorMsg) {
+                            Binder.clearCallingIdentity();
+                            executor.execute(
+                                    () -> {
+                                        if (result != null) {
+                                            resultsCallback.onResult(result.getList());
+                                        } else {
+                                            resultsCallback.onError(new Error(errorMsg));
+                                        }
+                                    });
+                        }
+                    }, extras);
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

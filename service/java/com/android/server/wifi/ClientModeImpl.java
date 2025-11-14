@@ -910,6 +910,7 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                 mFacade,
                 mNotificationManager,
                 mWifiInjector.getWifiDialogManager(),
+                mWifiInjector.getDeviceConfigFacade().getFeatureFlags(),
                 isTrustOnFirstUseSupported(),
                 mWifiGlobals.isInsecureEnterpriseConfigurationAllowed(),
                 mInsecureEapNetworkHandlerCallbacksImpl,
@@ -1045,6 +1046,14 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
     protected void clearQueuedQosMessages() {
         removeMessages(WifiMonitor.QOS_POLICY_RESET_EVENT);
         removeMessages(WifiMonitor.QOS_POLICY_REQUEST_EVENT);
+    }
+
+    private void handleP2pConnectionStateChanged(Message msg) {
+        if (msg != null && msg.obj != null) {
+            NetworkInfo info = (NetworkInfo) msg.obj;
+            mWifiLockManager.updateP2pConnected(info.isConnected());
+            mWifiConnectivityManager.saveP2pGroupStarted(info.isConnected());
+        }
     }
 
     /**
@@ -3266,6 +3275,9 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                 setMultiLinkInfoFromScanCache(stateChangeResult.bssid);
             }
             if (state == SupplicantState.ASSOCIATED) {
+                long txBytes = mFacade.getTotalTxBytes() - mFacade.getMobileTxBytes();
+                long rxBytes = mFacade.getTotalRxBytes() - mFacade.getMobileRxBytes();
+                updateLinkLayerStatsRssiSpeedFrequencyCapabilities(txBytes, rxBytes);
                 updateWifiInfoLinkParamsAfterAssociation();
             }
             mWifiInfo.setInformationElements(findMatchingInfoElements(stateChangeResult.bssid));
@@ -5116,14 +5128,11 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                     if (mVerboseLoggingEnabled) logd("SET_MIRACAST_MODE: " + (int)message.arg1);
                     mWifiConnectivityManager.saveMiracastMode((int)message.arg1);
                     break;
-                case WifiP2pServiceImpl.P2P_CONNECTION_CHANGED:
-                    NetworkInfo info = (NetworkInfo) message.obj;
-                    if (info != null) {
-                        NetworkInfo.DetailedState detailedState = info.getDetailedState();
-                        mWifiConnectivityManager.saveP2pGroupStarted(
-                                detailedState == NetworkInfo.DetailedState.CONNECTED);
-                    }
+                case WifiP2pServiceImpl.P2P_CONNECTION_CHANGED: {
+                    // Handle in the base state so that this applies to all states.
+                    handleP2pConnectionStateChanged(message);
                     break;
+                }
                 case CMD_RESET_SIM_NETWORKS:
                 case WifiMonitor.NETWORK_CONNECTION_EVENT:
                 case WifiMonitor.NETWORK_DISCONNECTION_EVENT:
@@ -5461,6 +5470,13 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
         mNetworkAgent.sendNetworkCapabilitiesAndCache(networkCapabilities);
     }
 
+    private void removeCurrentNetworkAndNativeData(int networkId) {
+        // remove local PMKSA cache in framework
+        mWifiNative.removeNetworkCachedData(networkId);
+        // remove network so that supplicant's PMKSA cache & other cached data are cleared.
+        mWifiNative.removeAllNetworks(mInterfaceName);
+    }
+
     private void handleEapAuthFailure(int networkId, int errorCode) {
         WifiConfiguration targetedNetwork =
                 mWifiConfigManager.getConfiguredNetwork(mTargetNetworkId);
@@ -5471,6 +5487,7 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                 case WifiEnterpriseConfig.Eap.AKA_PRIME:
                     if (errorCode == WifiNative.EAP_SIM_VENDOR_SPECIFIC_CERT_EXPIRED) {
                         mWifiCarrierInfoManager.resetCarrierKeysForImsiEncryption(targetedNetwork);
+                        removeCurrentNetworkAndNativeData(networkId);
                     } else {
                         int carrierId = targetedNetwork.carrierId;
                         if (mWifiCarrierInfoManager.isOobPseudonymFeatureEnabled(carrierId)) {
@@ -5511,6 +5528,8 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
         public void onValidationStatus(int status, @Nullable Uri redirectUri) {
             if (!isThisCallbackActive()) return;
             if (status == mLastNetworkStatus) return;
+
+            long validationTimestamp = mClock.getElapsedSinceBootMillis();
             mLastNetworkStatus = status;
             if (status == NetworkAgent.VALIDATION_STATUS_NOT_VALID) {
                 if (mVerboseLoggingEnabled) {
@@ -5535,6 +5554,14 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                 mWifiConfigManager.noteCaptivePortalDetected(mWifiInfo.getNetworkId());
                 mCmiMonitor.onCaptivePortalDetected(mClientModeManager);
                 mCurrentConnectionDetectedCaptivePortal = true;
+            }
+
+            mWifiMetrics.setLastValidationInfo(
+                    mInterfaceName, status, mL3ConnectedStateTimestamp, validationTimestamp,
+                    captivePortalDetected);
+            if (status == NetworkAgent.VALIDATION_STATUS_VALID) {
+                // Log vaidation success for each connection session
+                mWifiMetrics.reportWifiValidationResult(mInterfaceName, status);
             }
         }
 
@@ -6434,13 +6461,10 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                 case CMD_CONNECTING_WATCHDOG_TIMER: {
                     if (mConnectingWatchdogCount == message.arg1) {
                         if (mVerboseLoggingEnabled) log("Connecting watchdog! -> disconnect");
-                        reportConnectionAttemptEnd(
-                                WifiMetrics.ConnectionEvent.FAILURE_NO_RESPONSE,
-                                WifiMetricsProto.ConnectionEvent.HLF_NONE,
-                                WifiMetricsProto.ConnectionEvent.FAILURE_REASON_UNKNOWN, 0);
-                        handleNetworkDisconnect(false,
-                                WifiStatsLog.WIFI_DISCONNECT_REPORTED__FAILURE_CODE__CONNECTING_WATCHDOG_TIMER);
-                        transitionTo(mDisconnectedState);
+                        mFrameworkDisconnectReasonOverride =
+                                WifiStatsLog.WIFI_DISCONNECT_REPORTED__FAILURE_CODE__CONNECTING_WATCHDOG_TIMER;
+                        sendMessageAtFrontOfQueue(CMD_DISCONNECT,
+                                StaEvent.DISCONNECT_CONNECT_WATCHDOG_TIMER);
                     }
                     break;
                 }
@@ -6690,7 +6714,7 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                     NetworkConnectionEventInfo connectionInfo =
                             (NetworkConnectionEventInfo) message.obj;
                     mLastNetworkId = connectionInfo.networkId;
-                    mWifiMetrics.onRoamComplete();
+                    mWifiMetrics.onRoamComplete(mInterfaceName);
                     handleNetworkConnectionEventInfo(
                             getConnectedWifiConfigurationInternal(), connectionInfo);
                     mWifiInfo.setMacAddress(mWifiNative.getMacAddress(mInterfaceName));
@@ -6850,10 +6874,7 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
                             mWifiMetrics.logStaEvent(mInterfaceName,
                                     StaEvent.TYPE_FRAMEWORK_DISCONNECT,
                                     StaEvent.DISCONNECT_RESET_SIM_NETWORKS);
-                            // remove local PMKSA cache in framework
-                            mWifiNative.removeNetworkCachedData(mLastNetworkId);
-                            // remove network so that supplicant's PMKSA cache is cleared
-                            mWifiNative.removeAllNetworks(mInterfaceName);
+                            removeCurrentNetworkAndNativeData(mLastNetworkId);
                             if (isPrimary() && isSimBasedNetwork && !isLastSubReady) {
                                 mSimRequiredNotifier.showSimRequiredNotification(
                                         config, mLastSimBasedConnectionCarrierName);

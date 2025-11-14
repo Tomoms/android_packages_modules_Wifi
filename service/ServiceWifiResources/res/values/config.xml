@@ -1090,6 +1090,9 @@
          decisions (note: packages included in
          `config_excludedFromUserApprovalForD2dInterfacePriority` are excluded). -->
     <bool translatable="false" name="config_wifiUserApprovalRequiredForD2dInterfacePriority">false</bool>
+    <!-- Indicates the timeout in seconds to cancel the user approval dialog for device-to-device
+         interface priority decisions if no reply was received. -->
+    <integer translatable="false" name="config_wifiUserApprovalForD2dTimeoutSeconds">300</integer>
     <!-- list of package names that are excluded from the user approval flag
          `config_wifiUserApprovalRequiredForD2dInterfacePriority`. I.e. any priority conflicts from
           requests by these packages will be handled by the default resolution of the framework. -->
@@ -1420,4 +1423,6 @@
          has longer off-channel dwell time (500 milliseconds to 1 sec) and a much longer pause
          timeout (60 sec) once it finds a subscriber. -->
     <bool translatable="false" name="config_wifiUsdPublisherSupported">false</bool>
+    <!-- Boolean indicating whether the mainline supplicant service should be enabled -->
+    <bool translatable="false" name="config_wifiMainlineSupplicantEnabled">false</bool>
 </resources>

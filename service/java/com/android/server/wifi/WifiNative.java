@@ -268,6 +268,7 @@ public class WifiNative {
         mHostapdHal.enableVerboseLogging(verboseEnabled, halVerboseEnabled);
         mWifiVendorHal.enableVerboseLogging(verboseEnabled, halVerboseEnabled);
         mIfaceMgr.enableVerboseLogging(verboseEnabled);
+        mMainlineSupplicant.enableVerboseLogging(verboseEnabled, halVerboseEnabled);
     }
 
     /**
@@ -4680,6 +4681,7 @@ public class WifiNative {
         pw.println("mIsLocationModeEnabled: " + mIsLocationModeEnabled);
         pw.println("mLastLocationModeEnabledTimeMs: " + mLastLocationModeEnabledTimeMs);
         mHostapdHal.dump(pw);
+        mMainlineSupplicant.dump(pw);
     }
 
     //---------------------------------------------------------------------------------

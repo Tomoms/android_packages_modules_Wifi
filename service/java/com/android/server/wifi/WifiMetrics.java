@@ -19,31 +19,30 @@ package com.android.server.wifi;
 import static android.net.wifi.WifiConfiguration.MeteredOverride;
 
 import static com.android.server.wifi.ActiveModeManager.ROLE_CLIENT_PRIMARY;
-import static com.android.server.wifi.proto.WifiStatsLog.WIFI_CONFIG_SAVED;
-import static com.android.server.wifi.proto.WifiStatsLog.WIFI_IS_UNUSABLE_REPORTED;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_NO_CELLULAR_MODEM;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_NO_SIM_INSERTED;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_SCORING_DISABLED;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_CELLULAR_OFF;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_CELLULAR_UNAVAILABLE;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_NO_CELLULAR_MODEM;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_NO_SIM_INSERTED;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_OTHERS;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_DS__TRUE;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_SCORING_DISABLED;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_DS__FALSE;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_US__TRUE;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_DS__TRUE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_US__FALSE;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_THROUGHPUT_PREDICTOR_DS__TRUE;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_US__TRUE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_THROUGHPUT_PREDICTOR_DS__FALSE;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_THROUGHPUT_PREDICTOR_US__TRUE;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_THROUGHPUT_PREDICTOR_DS__TRUE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_THROUGHPUT_PREDICTOR_US__FALSE;
-import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__UNUSABLE_EVENT__EVENT_FRAMEWORK_DATA_STALL;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_THROUGHPUT_PREDICTOR_US__TRUE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__UNUSABLE_EVENT__EVENT_FIRMWARE_ALERT;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__UNUSABLE_EVENT__EVENT_FRAMEWORK_DATA_STALL;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__UNUSABLE_EVENT__EVENT_IP_REACHABILITY_LOST;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__UNUSABLE_EVENT__EVENT_NONE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__WIFI_FRAMEWORK_STATE__FRAMEWORK_STATE_AWAKENING;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__WIFI_FRAMEWORK_STATE__FRAMEWORK_STATE_CONNECTED;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__WIFI_FRAMEWORK_STATE__FRAMEWORK_STATE_LINGERING;
-
+import static com.android.server.wifi.proto.WifiStatsLog.WIFI_CONFIG_SAVED;
+import static com.android.server.wifi.proto.WifiStatsLog.WIFI_IS_UNUSABLE_REPORTED;
 
 import static java.lang.StrictMath.toIntExact;
 
@@ -301,9 +300,6 @@ public class WifiMetrics {
     private WifiLinkLayerStats mLastLinkLayerStats;
     private WifiHealthMonitor mWifiHealthMonitor;
     private WifiScoreCard mWifiScoreCard;
-    private SessionData mPreviousSession;
-    @VisibleForTesting
-    public SessionData mCurrentSession;
     private Map<String, String> mLastBssidPerIfaceMap = new ArrayMap<>();
     private Map<String, Integer> mLastFrequencyPerIfaceMap = new ArrayMap<>();
     private int mSeqNumInsideFramework = 0;
@@ -369,6 +365,8 @@ public class WifiMetrics {
      * The latest started (but un-ended) connection attempt per interface.
      */
     private final Map<String, ConnectionEvent> mCurrentConnectionEventPerIface = new ArrayMap<>();
+    private final Map<String, SessionData> mPreviousConnectionSessionPerIface = new ArrayMap<>();
+    private final Map<String, SessionData> mCurrentConnectionSessionPerIface = new ArrayMap<>();
     /**
      * Count of number of times each scan return code, indexed by WifiLog.ScanReturnCode
      */
@@ -730,6 +728,8 @@ public class WifiMetrics {
         private int mAuthType;
         public ConnectionEvent mConnectionEvent;
         private long mLastRoamCompleteMillis;
+        public WifiValidationInfo mValidationInfo;
+        public int mDisconnectReason;
 
         SessionData(ConnectionEvent connectionEvent, String ssid, long sessionStartTimeMillis,
                 int band, int authType) {
@@ -739,15 +739,74 @@ public class WifiMetrics {
             mBand = band;
             mAuthType = authType;
             mLastRoamCompleteMillis = sessionStartTimeMillis;
+            mValidationInfo = new WifiValidationInfo();
         }
     }
 
     /**
      * Sets the timestamp after roaming is complete.
      */
-    public void onRoamComplete() {
-        if (mCurrentSession != null) {
-            mCurrentSession.mLastRoamCompleteMillis = mClock.getElapsedSinceBootMillis();
+    public void onRoamComplete(String ifaceName) {
+        SessionData currentSession = mCurrentConnectionSessionPerIface.get(ifaceName);
+        if (currentSession != null) {
+            currentSession.mLastRoamCompleteMillis = mClock.getElapsedSinceBootMillis();
+        }
+    }
+
+    static class WifiValidationInfo {
+        public int mStatus;
+        public long mL3ConnectedStateTimestamp;
+        public long mLastValidationTimestamp;
+        private boolean mCaptivePortalDetected;
+
+        private int mValidationCount = 0;
+        private boolean mHasReportedValidationResult = false;
+    }
+
+    /**
+     *  Sets last Wifi validation status
+     */
+    public void setLastValidationInfo(
+            String ifaceName,
+            int status,
+            long l3ConnectedStateTimestamp,
+            long lastValidationTimestamp,
+            boolean captivePortalDetected) {
+        SessionData currentSession = mCurrentConnectionSessionPerIface.get(ifaceName);
+        if (currentSession != null) {
+            currentSession.mValidationInfo.mStatus = status;
+            currentSession.mValidationInfo.mL3ConnectedStateTimestamp = l3ConnectedStateTimestamp;
+            currentSession.mValidationInfo.mLastValidationTimestamp = lastValidationTimestamp;
+            currentSession.mValidationInfo.mValidationCount += 1;
+            currentSession.mValidationInfo.mCaptivePortalDetected = captivePortalDetected;
+        }
+    }
+
+    /**
+     * Call when wifi network validation success. Log wifi network validation result and time
+     * duration for the connected network.
+     *
+     * <p>Only log for the following conditions: 1. The first validation success in current session.
+     * 2. If never success, log the last validation info when disconnect.
+     * @param ifaceName interface name for this validation result.
+     * @param status Network validation result, a value from NetworkAgent.ValidationStatus.
+     */
+    public void reportWifiValidationResult(
+            String ifaceName, int status) {
+        SessionData currentSession = mCurrentConnectionSessionPerIface.get(ifaceName);
+        if (currentSession != null
+                && !currentSession.mValidationInfo.mHasReportedValidationResult) {
+            currentSession.mValidationInfo.mHasReportedValidationResult = true;
+            long wifiNetworkValidationDurationMillis =
+                    currentSession.mValidationInfo.mLastValidationTimestamp
+                    - currentSession.mValidationInfo.mL3ConnectedStateTimestamp;
+            // Write metrics to statsd
+            WifiStatsLog.write(
+                    WifiStatsLog.WIFI_NETWORK_VALIDATION_REPORT,
+                    status,
+                    wifiNetworkValidationDurationMillis,
+                    currentSession.mValidationInfo.mValidationCount,
+                    currentSession.mValidationInfo.mCaptivePortalDetected);
         }
     }
 
@@ -2039,7 +2098,6 @@ public class WifiMetrics {
                     mNetworkSelectorExperimentId;
             currentConnectionEvent.updateFromWifiConfiguration(config);
             currentConnectionEvent.mIsOobPseudonymEnabled = isOobPseudonymEnabled;
-            currentConnectionEvent.mConfigBssid = "any";
             currentConnectionEvent.mWifiState = mWifiState;
             currentConnectionEvent.mScreenOn = mScreenOn;
             currentConnectionEvent.mConnectionEvent.isFirstConnectionAfterBoot =
@@ -2147,11 +2205,12 @@ public class WifiMetrics {
                 int nominator = currentConnectionEvent.mConnectionEvent.connectionNominator;
                 int trigger = WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__TRIGGER__UNKNOWN;
 
+                SessionData previousSession = mPreviousConnectionSessionPerIface.get(ifaceName);
                 if (nominator == WifiMetricsProto.ConnectionEvent.NOMINATOR_MANUAL) {
                     trigger = WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__TRIGGER__MANUAL;
-                } else if (mPreviousSession == null) {
+                } else if (previousSession == null) {
                     trigger = WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__TRIGGER__AUTOCONNECT_BOOT;
-                } else if (ssid != null && ssid.equals(mPreviousSession.mSsid)) {
+                } else if (ssid != null && ssid.equals(previousSession.mSsid)) {
                     trigger = WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__TRIGGER__RECONNECT_SAME_NETWORK;
                 } else if (nominator != WifiMetricsProto.ConnectionEvent.NOMINATOR_UNKNOWN) {
                     trigger = WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__TRIGGER__AUTOCONNECT_CONFIGURED_NETWORK;
@@ -2314,10 +2373,11 @@ public class WifiMetrics {
                                 - currentConnectionEvent.mConnectionEvent.startTimeSinceBootMillis);
 
                 if (connectionSucceeded) {
-                    mCurrentSession = new SessionData(currentConnectionEvent,
+                    SessionData currentSession = new SessionData(currentConnectionEvent,
                             currentConnectionEvent.mConfigSsid,
                             mClock.getElapsedSinceBootMillis(),
                             band, currentConnectionEvent.mAuthType);
+                    mCurrentConnectionSessionPerIface.put(ifaceName, currentSession);
                     if (currentConnectionEvent.mRole == WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__ROLE__ROLE_CLIENT_PRIMARY) {
                         WifiStatsLog.write(WifiStatsLog.WIFI_CONNECTION_STATE_CHANGED,
                                 true, band, currentConnectionEvent.mAuthType);
@@ -2336,10 +2396,15 @@ public class WifiMetrics {
                 // Write metrics to statsd
                 int wwFailureCode = getConnectionResultFailureCode(level2FailureCode,
                         level2FailureReason);
-                int timeSinceConnectedSeconds = (int) ((mPreviousSession != null
+                SessionData previousSession = mPreviousConnectionSessionPerIface.get(ifaceName);
+                int timeSinceConnectedSeconds = (int) ((previousSession != null
                         ? (mClock.getElapsedSinceBootMillis()
-                                - mPreviousSession.mSessionEndTimeMillis) :
+                                - previousSession.mSessionEndTimeMillis) :
                         mClock.getElapsedSinceBootMillis()) / 1000);
+                int lastDisconnectReason = (previousSession != null
+                        ? previousSession.mDisconnectReason :
+                        WifiStatsLog.WIFI_DISCONNECT_REPORTED__FAILURE_CODE__UNKNOWN);
+
                 WifiStatsLog.write(WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED,
                         connectionSucceeded,
                         wwFailureCode, currentConnectionEvent.mConnectionEvent.signalStrength,
@@ -2359,7 +2424,8 @@ public class WifiMetrics {
                         currentConnectionEvent.mUid,
                         frequency,
                         currentConnectionEvent.mL2ConnectingDuration,
-                        currentConnectionEvent.mL3ConnectingDuration);
+                        currentConnectionEvent.mL3ConnectingDuration,
+                        lastDisconnectReason);
 
                 if (connectionSucceeded) {
                     reportRouterCapabilities(currentConnectionEvent.mRouterFingerPrint);
@@ -2802,42 +2868,46 @@ public class WifiMetrics {
     public void reportNetworkDisconnect(String ifaceName, int disconnectReason, int rssi,
             int linkSpeed, long lastRssiUpdateMillis) {
         synchronized (mLock) {
-            if (!isPrimary(ifaceName)) {
-                return;
-            }
-            if (mCurrentSession != null) {
-                if (mCurrentSession.mConnectionEvent.mRole == WifiStatsLog.WIFI_CONNECTION_RESULT_REPORTED__ROLE__ROLE_CLIENT_PRIMARY) {
+            SessionData currentSession = mCurrentConnectionSessionPerIface.get(ifaceName);
+            if (currentSession != null) {
+                if (currentSession.mConnectionEvent.mRole == WifiStatsLog
+                        .WIFI_CONNECTION_RESULT_REPORTED__ROLE__ROLE_CLIENT_PRIMARY) {
                     WifiStatsLog.write(WifiStatsLog.WIFI_CONNECTION_STATE_CHANGED,
                             false,
-                            mCurrentSession.mBand,
-                            mCurrentSession.mAuthType);
+                            currentSession.mBand,
+                            currentSession.mAuthType);
                 }
-                mCurrentSession.mSessionEndTimeMillis = mClock.getElapsedSinceBootMillis();
-                int durationSeconds = (int) (mCurrentSession.mSessionEndTimeMillis
-                        - mCurrentSession.mSessionStartTimeMillis) / 1000;
-                int connectedSinceLastRoamSeconds = (int) (mCurrentSession.mSessionEndTimeMillis
-                        - mCurrentSession.mLastRoamCompleteMillis) / 1000;
+                currentSession.mSessionEndTimeMillis = mClock.getElapsedSinceBootMillis();
+                int durationSeconds = (int) (currentSession.mSessionEndTimeMillis
+                        - currentSession.mSessionStartTimeMillis) / 1000;
+                int connectedSinceLastRoamSeconds = (int) (currentSession.mSessionEndTimeMillis
+                        - currentSession.mLastRoamCompleteMillis) / 1000;
                 int timeSinceLastRssiUpdateSeconds = (int) (mClock.getElapsedSinceBootMillis()
                         - lastRssiUpdateMillis) / 1000;
+                currentSession.mDisconnectReason = disconnectReason;
 
                 WifiStatsLog.write(WifiStatsLog.WIFI_DISCONNECT_REPORTED,
                         durationSeconds,
                         disconnectReason,
-                        mCurrentSession.mBand,
-                        mCurrentSession.mAuthType,
+                        currentSession.mBand,
+                        currentSession.mAuthType,
                         rssi,
                         linkSpeed,
                         timeSinceLastRssiUpdateSeconds,
                         connectedSinceLastRoamSeconds,
-                        mCurrentSession.mConnectionEvent.mRole,
-                        toMetricEapType(mCurrentSession.mConnectionEvent.mEapType),
-                        toMetricPhase2Method(mCurrentSession.mConnectionEvent.mPhase2Method),
-                        mCurrentSession.mConnectionEvent.mPasspointRoamingType,
-                        mCurrentSession.mConnectionEvent.mCarrierId,
-                        mCurrentSession.mConnectionEvent.mUid);
-
-                mPreviousSession = mCurrentSession;
-                mCurrentSession = null;
+                        currentSession.mConnectionEvent.mRole,
+                        toMetricEapType(currentSession.mConnectionEvent.mEapType),
+                        toMetricPhase2Method(currentSession.mConnectionEvent.mPhase2Method),
+                        currentSession.mConnectionEvent.mPasspointRoamingType,
+                        currentSession.mConnectionEvent.mCarrierId,
+                        currentSession.mConnectionEvent.mUid);
+                /* Log validation never succeed */
+                WifiValidationInfo validationInfo = currentSession.mValidationInfo;
+                if (validationInfo != null && validationInfo.mValidationCount > 0) {
+                    reportWifiValidationResult(ifaceName, validationInfo.mStatus);
+                }
+                mPreviousConnectionSessionPerIface.put(ifaceName, currentSession);
+                mCurrentConnectionSessionPerIface.remove(ifaceName);
             }
         }
     }
@@ -6727,6 +6797,8 @@ public class WifiMetrics {
                 return "DISCONNECT_UNWANTED";
             case StaEvent.DISCONNECT_ROAM_WATCHDOG_TIMER:
                 return "DISCONNECT_ROAM_WATCHDOG_TIMER";
+            case StaEvent.DISCONNECT_CONNECT_WATCHDOG_TIMER:
+                return "DISCONNECT_CONNECT_WATCHDOG_TIMER";
             case StaEvent.DISCONNECT_P2P_DISCONNECT_WIFI_REQUEST:
                 return "DISCONNECT_P2P_DISCONNECT_WIFI_REQUEST";
             case StaEvent.DISCONNECT_RESET_SIM_NETWORKS:

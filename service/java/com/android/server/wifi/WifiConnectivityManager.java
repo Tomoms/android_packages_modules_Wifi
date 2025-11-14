@@ -528,12 +528,6 @@ public class WifiConnectivityManager {
         // For secondary STA of multi internet connection, when ROLE_CLIENT_SECONDARY_LONG_LIVED
         // is used, specify the target BSSID explicitly to avoid firmware choosing same BSSID
         // as primary STA.
-        // TODO: Use new STA+STA user case DUAL_STA_NON_TRANSIENT_SECONDARY and remove the BSSID
-        // if roaming is supported on secondary.
-        String bssidToConnect = null;
-        if (!mConnectivityHelper.isFirmwareRoamingSupported()) {
-            bssidToConnect = targetBssid2;
-        }
         // Request for a new client mode manager to spin up concurrent connection
         mActiveModeWarden.requestSecondaryLongLivedClientModeManager(
                 (cm) -> {
@@ -576,7 +570,7 @@ public class WifiConnectivityManager {
                             targetNetwork.isPasspoint());
                 }, secondaryRequestorWs,
                 secondaryCmmCandidate.SSID,
-                bssidToConnect);
+                targetBssid2);
         return true;
     }
 
@@ -674,10 +668,10 @@ public class WifiConnectivityManager {
         }
 
         // Check if any blocklisted BSSIDs can be freed.
-        List<ScanDetail> enabledDetails =
+        List<Integer> enabledNetworks =
                 mWifiBlocklistMonitor.tryEnablingBlockedBssids(scanDetails);
-        for (ScanDetail scanDetail : enabledDetails) {
-            WifiConfiguration config = mConfigManager.getSavedNetworkForScanDetail(scanDetail);
+        for (int networkId : enabledNetworks) {
+            WifiConfiguration config = mConfigManager.getConfiguredNetwork(networkId);
             if (config != null && config.getNetworkSelectionStatus().isNetworkTemporaryDisabled()) {
                 mConfigManager.updateNetworkSelectionStatus(config.networkId,
                         WifiConfiguration.NetworkSelectionStatus.DISABLED_NONE);
@@ -1811,31 +1805,33 @@ public class WifiConnectivityManager {
         Log.i(TAG, "Need user approval for connecting to candidate "
                 + candidate.getProfileKey());
         resetNetworkSwitchDialog();
-        mNetworkSwitchDialog = mWifiDialogManager.createSimpleDialog(
-                mContext.getString(connectedConfig.hasNoInternetAccess()
+        Runnable onSwitchApproved = () -> {
+            resetNetworkSwitchDialog();
+            continueConnectionRunnable.run();
+            primaryManager.onNetworkSwitchAccepted(candidate.networkId,
+                    candidate.getNetworkSelectionStatus().getNetworkSelectionBSSID());
+        };
+        Runnable onSwitchRejected = () -> {
+            Log.i(TAG, "User rejected network switch to "
+                    + candidate.getProfileKey());
+            mNetworkSwitchDialogRejected = true;
+            primaryManager.onNetworkSwitchRejected(candidate.networkId,
+                    candidate.getNetworkSelectionStatus().getNetworkSelectionBSSID());
+        };
+        NetworkSwitchDialogCallback callback = new NetworkSwitchDialogCallback(
+                onSwitchApproved, onSwitchRejected);
+        mNetworkSwitchDialog = mWifiDialogManager.createSimpleDialogBuilder()
+                .setTitle(mContext.getString(connectedConfig.hasNoInternetAccess()
                                 ? R.string.wifi_network_switch_dialog_title_no_internet
                                 : R.string.wifi_network_switch_dialog_title_bad_internet,
                         WifiInfo.removeDoubleQuotes(connectedConfig.SSID),
-                        WifiInfo.removeDoubleQuotes(candidate.SSID)),
-                /* message */ null,
-                mContext.getString(R.string.wifi_network_switch_dialog_positive_button),
-                mContext.getString(R.string.wifi_network_switch_dialog_negative_button),
-                /* neutralButtonText */ null,
-                new NetworkSwitchDialogCallback(
-                /* onSwitchApprovedRunnable */ () -> {
-                    resetNetworkSwitchDialog();
-                    continueConnectionRunnable.run();
-                    primaryManager.onNetworkSwitchAccepted(candidate.networkId,
-                            candidate.getNetworkSelectionStatus().getNetworkSelectionBSSID());
-                },
-                /* onSwitchRejectedRunnable */ () -> {
-                    Log.i(TAG, "User rejected network switch to "
-                            + candidate.getProfileKey());
-                    mNetworkSwitchDialogRejected = true;
-                    primaryManager.onNetworkSwitchRejected(candidate.networkId,
-                            candidate.getNetworkSelectionStatus().getNetworkSelectionBSSID());
-                }),
-                mWifiThreadRunner);
+                        WifiInfo.removeDoubleQuotes(candidate.SSID)))
+                .setPositiveButtonText(
+                        mContext.getString(R.string.wifi_network_switch_dialog_positive_button))
+                .setNegativeButtonText(
+                        mContext.getString(R.string.wifi_network_switch_dialog_negative_button))
+                .setCallback(callback, mWifiThreadRunner)
+                .build();
         mNetworkSwitchDialog.launchDialog();
         mDialogCandidateNetId = candidate.networkId;
     }
