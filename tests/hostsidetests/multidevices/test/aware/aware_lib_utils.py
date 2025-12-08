@@ -18,8 +18,12 @@ import base64
 import datetime
 import json
 import logging
+import os
+import statistics
 import time
 from typing import Any, Callable, Dict, List, Optional
+from queue import Empty
+
 
 from aware import constants
 
@@ -461,6 +465,7 @@ def start_attach(
   ad.log.info('Attach Wi-Fi Aware session succeeded.')
   return attach_event.callback_id, mac_address
 
+
 def create_discovery_pair(
     p_dut: android_device.AndroidDevice,
     s_dut: android_device.AndroidDevice,
@@ -571,6 +576,7 @@ def create_discovery_pair(
     return p_id, s_id, p_disc_id, s_disc_id, peer_id_on_sub, peer_id_on_pub
   return p_id, s_id, p_disc_id, s_disc_id, peer_id_on_sub
 
+
 def request_network(
     ad: android_device.AndroidDevice,
     discovery_session: str,
@@ -601,7 +607,7 @@ def request_network(
       net_work_request_id, network_request_dict, _REQUEST_NETWORK_TIMEOUT_MS
   )
 
-def wait_for_network(
+def wait_for_networks(
     ad: android_device.AndroidDevice,
     request_network_cb_handler: callback_handler_v2.CallbackHandlerV2,
     expected_channel: str | None = None,
@@ -656,32 +662,159 @@ def wait_for_network(
     )
   return network_callback_event
 
-def wait_for_link(
-    ad: android_device.AndroidDevice,
-    request_network_cb_handler: callback_handler_v2.CallbackHandlerV2,
-) -> callback_event.CallbackEvent:
-  """Waits for and verifies the establishment of a Wi-Fi Aware network."""
-  network_callback_event = request_network_cb_handler.waitAndGet(
-      event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-      timeout=_DEFAULT_TIMEOUT,
-  )
-  callback_name = network_callback_event.data[_CALLBACK_NAME]
-  if callback_name == constants.NetworkCbName.ON_UNAVAILABLE:
-    asserts.fail(
-        f'{ad} failed to request the network, got callback {callback_name}.'
-    )
-  elif callback_name == constants.NetworkCbName.ON_PROPERTIES_CHANGED:
-    iface_name = network_callback_event.data[
-        constants.NetworkCbEventKey.NETWORK_INTERFACE_NAME
-    ]
-    ad.log.info('interface name = %s', iface_name)
-  else:
-    asserts.fail(
-        f'{ad} got unknown request network callback {callback_name}.'
-    )
-  ad.log.info('type = %s', type(network_callback_event))
-  return network_callback_event
 
+def wait_for_network(
+        ad: android_device.AndroidDevice,
+        request_network_cb_handler: callback_handler_v2.CallbackHandlerV2,
+        expected_channel: str | None = None,
+    ) -> callback_event.CallbackEvent:
+    """
+    Waits for Wi-Fi Aware network events, attempting up to 3 times.
+
+    This function collects all available network callbacks within the attempts
+    and then searches for a definitive success or failure event to verify.
+    """
+    collected_events = []
+    # Loop a maximum of 2 times to collect events.
+    for attempt in range(2):
+        try:
+            event = request_network_cb_handler.waitAndGet(
+                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
+                timeout=_DEFAULT_TIMEOUT,
+            )
+            ad.log.info(f'Attempt {attempt + 1}: Collected event'
+                        f' {event.data.get(_CALLBACK_NAME)}')
+            collected_events.append(event)
+        except Empty:
+            ad.log.info(f'Attempt {attempt + 1}: No event received in time.'
+                        ' Stopping collection.')
+            # If the queue is empty, no need to try again.
+            break
+        except Exception as e:
+            asserts.fail(f'An unexpected error occurred while waiting for'
+                         f' event: {e}')
+
+    # After collecting events, process them to find the one we need.
+    success_event = None
+    for event in collected_events:
+        callback_name = event.data.get(_CALLBACK_NAME)
+
+        if callback_name == constants.NetworkCbName.ON_UNAVAILABLE:
+            # A definitive failure event was found. Fail immediately.
+            asserts.fail(
+                f'{ad} failed to request the network. Received ON_UNAVAILABLE.'
+            )
+        elif callback_name == constants.NetworkCbName.ON_CAPABILITIES_CHANGED:
+            # This is the primary success event. Store it and stop searching.
+            success_event = event
+            break
+
+    # After checking all collected events, verify the success event.
+    if success_event:
+        # `network` is the network whose capabilities have changed.
+        network = success_event.data[constants.NetworkCbEventKey.NETWORK]
+        network_capabilities = success_event.data[
+            constants.NetworkCbEventKey.NETWORK_CAPABILITIES
+        ]
+        asserts.assert_true(
+            network and network_capabilities,
+            f'{ad} received a null Network or NetworkCapabilities!?.',
+            )
+        transport_info_class_name = success_event.data[
+            constants.NetworkCbEventKey.TRANSPORT_INFO_CLASS_NAME
+        ]
+        ad.log.info(f'Got class_name {transport_info_class_name}')
+        asserts.assert_equal(
+            transport_info_class_name,
+            constants.AWARE_NETWORK_INFO_CLASS_NAME,
+            f'{ad} network capabilities changed but it is not a WiFi Aware'
+            ' network.',
+        )
+        if expected_channel:
+            mhz_list = success_event.data[
+                constants.NetworkCbEventKey.CHANNEL_IN_MHZ
+            ]
+            asserts.assert_equal(
+                mhz_list,
+                [expected_channel],
+                f'{ad} Channel freq does not match the request.',
+            )
+        # Return the successfully validated event.
+        return success_event
+    else:
+        # If the loop finishes and no success_event was found, fail.
+        event_names = [e.data.get(_CALLBACK_NAME) for e in collected_events]
+        asserts.fail(
+            f'{ad} did not receive ON_CAPABILITIES_CHANGED after all attempts.'
+            f' Got events: {event_names}'
+        )
+
+def wait_for_link(
+        ad: android_device.AndroidDevice,
+        request_network_cb_handler: callback_handler_v2.CallbackHandlerV2,
+    ) -> callback_event.CallbackEvent:
+    """
+    Waits for and verifies the establishment of a Wi-Fi Aware network,
+    attempting to fetch events up to 3 times.
+    """
+    collected_events = []
+    # Loop a maximum of 3 times to collect any available events.
+    for attempt in range(2):
+        try:
+            event = request_network_cb_handler.waitAndGet(
+                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
+                timeout=_DEFAULT_TIMEOUT,
+            )
+            ad.log.info(
+                f'Attempt {attempt + 1}: Collected event'
+                f' {event.data.get(_CALLBACK_NAME)}'
+            )
+            collected_events.append(event)
+        except Empty:
+            ad.log.info(
+                f'Attempt {attempt + 1}: No more events in the queue. '
+                'Stopping collection.'
+            )
+            # If the queue is empty, there's no need to try again.
+            break
+        except Exception as e:
+            asserts.fail(
+                f'An unexpected error occurred while waiting for event: {e}'
+            )
+
+    # After collecting events, process them to find the one we need.
+    success_event = None
+    for event in collected_events:
+        # Use .get() for safe access in case the key is missing.
+        callback_name = event.data.get(_CALLBACK_NAME)
+
+        if callback_name == constants.NetworkCbName.ON_UNAVAILABLE:
+            # A definitive failure event was found. Fail the test immediately.
+            asserts.fail(
+                f'{ad} failed to request the network, received ON_UNAVAILABLE.'
+            )
+        elif callback_name == constants.NetworkCbName.ON_PROPERTIES_CHANGED:
+            # This is the success event we are looking for.
+            success_event = event
+            # We found the event, no need to check the rest of the list.
+            break
+
+    # After checking all collected events, verify the outcome.
+    if success_event:
+        # If we found the success event, log its details and return it.
+        iface_name = success_event.data[
+            constants.NetworkCbEventKey.NETWORK_INTERFACE_NAME
+        ]
+        ad.log.info('Successfully found link. Interface name = %s', iface_name)
+        ad.log.info('type = %s', type(success_event))
+        return success_event
+    else:
+        # If the loop finishes and no success_event was found, fail the test.
+        event_names = [e.data.get(_CALLBACK_NAME) for e in collected_events]
+        asserts.fail(
+            f'{ad} did not receive ON_PROPERTIES_CHANGED after all attempts. '
+            f'Got events: {event_names}'
+        )
 
 def _wait_accept_success(
     pub_accept_handler: callback_handler_v2.CallbackHandlerV2
@@ -696,7 +829,6 @@ def _wait_accept_success(
         asserts.fail(
             f'Publisher failed to accept the connection. Error: {error}'
         )
-
 
 def _send_socket_msg(
     sender_ad: android_device.AndroidDevice,
@@ -725,7 +857,6 @@ def _send_socket_msg(
         f'{received_message}.'
     )
     receiver_ad.log.info('Read data from the socket.')
-
 
 def establish_socket_and_send_msg(
     publisher: android_device.AndroidDevice,
@@ -765,21 +896,216 @@ def establish_socket_and_send_msg(
 
 
 def run_ping6(dut: android_device.AndroidDevice, peer_ipv6: str):
-  """Run a ping6 over the specified device/link.
+    """Run a ping6 over the specified device/link.
 
-  Args:
-    dut: Device on which to execute ping6.
-    peer_ipv6: Scoped IPv6 address of the peer to ping.
-  """
-  cmd = 'ping6 -c 3 -W 5 %s' % peer_ipv6
-  try:
-    dut.log.info(cmd)
-    results = dut.adb.shell(cmd)
-  except adb.AdbError:
-    time.sleep(1)
-    dut.log.info('CMD RETRY: %s', cmd)
-    results = dut.adb.shell(cmd)
+    Args:
+       dut: Device on which to execute ping6.
+       peer_ipv6: Scoped IPv6 address of the peer to ping.
+    """
+    cmd = 'ping6 -c 3 -W 5 %s' % peer_ipv6
+    try:
+        dut.log.info(cmd)
+        results = dut.adb.shell(cmd)
+    except adb.AdbError:
+        time.sleep(1)
+        dut.log.info('CMD RETRY: %s', cmd)
+        results = dut.adb.shell(cmd)
+    dut.log.info("cmd='%s' -> '%s'", cmd, results)
+    if not results:
+        asserts.fail("ping6 empty results - seems like a failure")
+    return results
 
-  dut.log.info("cmd='%s' -> '%s'", cmd, results)
-  if not results:
-    asserts.fail("ping6 empty results - seems like a failure")
+def iperf_server(ad,  extra_args=""):
+    """
+    Starts an iperf3 server and checks the immediate output for errors.
+
+    NOTE: This is a blocking call and will hang if the server starts
+    successfully. It only proceeds if the command fails instantly.
+    """
+    out = ad.adb.shell("iperf3 -s {}".format(extra_args))
+    clean_out = str(out, 'utf-8').strip().split('\n')
+    if "error" in clean_out:
+        return False, clean_out
+    return True, clean_out
+
+def configure_power_setting(dut, mode, name, value):
+    """Use the command-line API to configure the power setting
+
+    Args:
+        dut: Device on which to perform configuration
+        mode: The power mode being set, should be "default", "inactive", or "idle"
+        name: One of the power settings from 'wifiaware set-power'.
+        value: An integer.
+    """
+    dut.adb.shell("cmd wifiaware native_api set-power %s %s %d" % (mode, name, value))
+
+
+def config_power_settings(dut,
+                          dw_24ghz,
+                          dw_5ghz,
+                          disc_beacon_interval=None,
+                          num_ss_in_disc=None,
+                          enable_dw_early_term=None):
+    """Configure device's discovery window (DW) values to the specified values -
+    whether the device is in interactive or non-interactive mode.
+
+    Args:
+        dw_24ghz: DW interval in the 2.4GHz band.
+        dw_5ghz: DW interval in the 5GHz band.
+        disc_beacon_interval: The discovery beacon interval (in ms). If None then
+                          not set.
+        num_ss_in_disc: Number of spatial streams to use for discovery. If None then
+                    not set.
+    enable_dw_early_term: If True then enable early termination of the DW. If
+                          None then not set.
+    """
+    configure_power_setting(dut, "default", "dw_24ghz", dw_24ghz)
+    configure_power_setting(dut, "default", "dw_5ghz", dw_5ghz)
+    configure_power_setting(dut, "inactive", "dw_24ghz", dw_24ghz)
+    configure_power_setting(dut, "inactive", "dw_5ghz", dw_5ghz)
+
+    if disc_beacon_interval is not None:
+        configure_power_setting(dut, "default", "disc_beacon_interval_ms",
+                                disc_beacon_interval)
+        configure_power_setting(dut, "inactive", "disc_beacon_interval_ms",
+                                disc_beacon_interval)
+
+    if num_ss_in_disc is not None:
+        configure_power_setting(dut, "default", "num_ss_in_discovery",
+                                num_ss_in_disc)
+        configure_power_setting(dut, "inactive", "num_ss_in_discovery",
+                                num_ss_in_disc)
+
+    if enable_dw_early_term is not None:
+        configure_power_setting(dut, "default", "enable_dw_early_term",
+                                enable_dw_early_term)
+        configure_power_setting(dut, "inactive", "enable_dw_early_term",
+                                enable_dw_early_term)
+
+def extract_stats(ad, data, results, key_prefix, log_prefix, csv_filepath=None):
+    num_samples = len(data)
+    results[f'{key_prefix}num_samples'] = num_samples
+    if not data:
+        return
+    data_min = min(data)
+    data_max = max(data)
+    data_mean = statistics.mean(data)
+    data_cdf = extract_cdf(data)
+    data_cdf_decile = extract_cdf_decile(data_cdf)
+
+    # --- Populate the results dictionary ---
+    results[f'{key_prefix}min'] = data_min
+    results[f'{key_prefix}max'] = data_max
+    results[f'{key_prefix}mean'] = data_mean
+    results[f'{key_prefix}cdf'] = data_cdf
+    results[f'{key_prefix}cdf_decile'] = data_cdf_decile
+    results[f'{key_prefix}raw_data'] = data
+    # --- Build the log string and handle CSV output ---
+    log_message = ""
+    csv_header = "log_message" # A simple header for our single-column CSV
+
+    if num_samples > 1:
+        data_stdev = statistics.stdev(data)
+        results[f'{key_prefix}stdev'] = data_stdev
+        # Format the string that will be used for both logging and the CSV
+        log_message = (
+            f'{log_prefix}: num_samples={num_samples}, min={data_min:.2f}, '
+            f'max={data_max:.2f}, mean={data_mean:.2f}, stdev={data_stdev:.2f}, '
+            f'cdf_decile={data_cdf_decile}'
+        )
+    else:
+        log_message = (
+            f'{log_prefix}: num_samples={num_samples}, min={data_min:.2f}, '
+            f'max={data_max:.2f}, mean={data_mean:.2f}, '
+            f'cdf_decile={data_cdf_decile}'
+        )
+
+    # Log the message to the console/logcat
+    ad.log.info(log_message)
+    # If a CSV file path was provided, write the same message to the file
+    if csv_filepath:
+        write_to_csv(csv_filepath, csv_header, log_message)
+
+def extract_cdf(data):
+    """Calculates the Cumulative Distribution Function (CDF) of the data.
+
+    Args:
+        data: A list containing data (does not have to be sorted).
+
+    Returns: a list of 2 lists: the X and Y axis of the CDF.
+    """
+    x = []
+    cdf = []
+    if not data:
+        return (x, cdf)
+    all_values = sorted(data)
+    for val in all_values:
+        if not x:
+            x.append(val)
+            cdf.append(1)
+        else:
+            if x[-1] == val:
+                cdf[-1] += 1
+            else:
+                x.append(val)
+                cdf.append(cdf[-1] + 1)
+    scale = 1.0 / len(all_values)
+    for i in range(len(cdf)):
+        cdf[i] = cdf[i] * scale
+    return (x, cdf)
+
+def extract_cdf_decile(cdf):
+    """Extracts the 10%, 20%, ..., 90% points from the CDF and returns their
+    value (a list of 9 values).
+
+    Since CDF may not (will not) have exact x% value picks the value >= x%.
+
+    Args:
+        cdf: a list of 2 lists, the X and Y of the CDF.
+    """
+    decades = []
+    next_decade = 10
+    for x, y in zip(cdf[0], cdf[1]):
+        while 100 * y >= next_decade:
+            decades.append(x)
+            next_decade = next_decade + 10
+        if next_decade == 100:
+            break
+    return decades
+
+# The new function to save the results
+def save_results_to_json(results: dict, filepath: str):
+    """Saves a dictionary to a file in a human-readable JSON format."""
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(results, f, indent=4)
+        logging.info(f"Successfully saved results to {filepath}")
+    except IOError as e:
+        logging.error(f"Failed to write to file {filepath}: {e}")
+    except TypeError as e:
+        logging.error(
+            f"Data contains a type that cannot be serialized to JSON: {e}")
+
+def write_to_csv(filepath: str, header: str, row: str):
+    """
+    Appends a row to a CSV file.
+    Creating it and adding a header if it doesn't exist.
+
+    Args:
+        filepath: The path to the CSV file.
+        header: The header string to write if the file is new.
+        row: The data string to append as a new line.
+    """
+    try:
+        # Check if the file exists to decide whether to write the header
+        file_exists = os.path.exists(filepath)
+
+        # Use 'a' (append mode) to add to the file without overwriting it
+        with open(filepath, 'a') as f:
+            if not file_exists:
+                f.write(header + '\n')
+            f.write(row + '\n')
+
+    except IOError as e:
+        # Use the standard logging module for errors
+        logging.error(f"Could not write to CSV file {filepath}: {e}")

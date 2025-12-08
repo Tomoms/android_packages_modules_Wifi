@@ -38,6 +38,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 /**
  * Unit tests for {@link com.android.server.wifi.WifiSettingsBackupRestoreTest}.
@@ -74,7 +75,8 @@ public class WifiSettingsBackupRestoreTest extends WifiBaseTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         when(mWifiSettingsConfigStore.getAllKeys()).thenReturn(TEST_KEYS);
-        when(mWifiSettingsConfigStore.getAllBackupRestoreKeys()).thenReturn(TEST_KEYS);
+        when(mWifiSettingsConfigStore.getAllBackupRestoreKeys()).thenReturn(
+                new HashSet<>(TEST_KEYS));
         mWifiSettingsBackupRestore = new WifiSettingsBackupRestore(mWifiSettingsConfigStore);
         mWifiSettingsBackupRestore.enableVerboseLogging(true);
     }
@@ -95,16 +97,16 @@ public class WifiSettingsBackupRestoreTest extends WifiBaseTest {
         order.verify(mXmlSerializer).startTag(eq(null),
                 eq(XML_TAG_SECTION_HEADER_WIFI_SETTINGS_DATA));
         order.verify(mXmlSerializer).startTag(eq(null),
-                eq(WifiSettingsConfigStore.StoreData.XML_TAG_SECTION_HEADER));
+                eq(WifiSettingsConfigStore.XML_TAG_SECTION_HEADER));
         order.verify(mXmlSerializer).startTag(eq(null), eq("map"));
         order.verify(mXmlSerializer).attribute(eq(null), eq("name"),
-                eq(WifiSettingsConfigStore.StoreData.XML_TAG_VALUES));
+                eq(WifiSettingsConfigStore.XML_TAG_VALUES));
         for (WifiSettingsConfigStore.Key key : mWifiSettingsConfigStore.getAllKeys()) {
             order.verify(mXmlSerializer).attribute(eq(null), eq("name"), eq(key.getKey()));
         }
         order.verify(mXmlSerializer).endTag(eq(null), eq("map"));
         order.verify(mXmlSerializer).endTag(eq(null),
-                eq(WifiSettingsConfigStore.StoreData.XML_TAG_SECTION_HEADER));
+                eq(WifiSettingsConfigStore.XML_TAG_SECTION_HEADER));
         order.verify(mXmlSerializer).endTag(eq(null),
                 eq(XML_TAG_SECTION_HEADER_WIFI_SETTINGS_DATA));
     }

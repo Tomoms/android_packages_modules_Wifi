@@ -34,10 +34,13 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.withSettings;
 import static org.mockito.Mockito.when;
 
+import android.app.ActivityManager;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiEnterpriseConfig;
 import android.net.wifi.WifiNetworkSuggestion;
@@ -49,16 +52,21 @@ import android.util.Pair;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.WifiNetworkSuggestionsManager.ExtendedWifiNetworkSuggestion;
 import com.android.server.wifi.WifiNetworkSuggestionsManager.PerAppInfo;
 import com.android.server.wifi.entitlement.PseudonymInfo;
+import com.android.wifi.flags.Flags;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -94,11 +102,21 @@ public class NetworkSuggestionNominatorTest extends WifiBaseTest {
     private NetworkSuggestionNominator mNetworkSuggestionNominator;
     private List<Pair<ScanDetail, WifiConfiguration>> mPasspointCandidates =
             Collections.emptyList();
+    private MockitoSession mSession;
 
     /** Sets up test. */
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        // static mocking
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(ActivityManager.class, withSettings().lenient())
+                .mockStatic(Flags.class, withSettings().lenient())
+                .strictness(Strictness.LENIENT)
+                .startMocking();
+        // Mock necessary method and enable flag by default to make sure test won't be broken.
+        when(Flags.multiUserWifiEnhancement()).thenReturn(true);
+        when(ActivityManager.getCurrentUser()).thenReturn(0);
         mNetworkSuggestionNominator = new NetworkSuggestionNominator(
                 mWifiNetworkSuggestionsManager, mWifiConfigManager,
                 new LocalLog(100), mWifiCarrierInfoManager, mWifiPseudonymManager,
@@ -106,6 +124,15 @@ public class NetworkSuggestionNominatorTest extends WifiBaseTest {
         when(mWifiCarrierInfoManager.getBestMatchSubscriptionId(any())).thenReturn(
                 SubscriptionManager.INVALID_SUBSCRIPTION_ID);
         when(mWifiConfigManager.isNetworkTemporarilyDisabledByUser(anyString())).thenReturn(false);
+    }
+
+
+    @After
+    public void cleanUp() throws Exception {
+        validateMockitoUsage();
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     /**

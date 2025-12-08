@@ -179,8 +179,7 @@ public class WifiAwareServiceImplTest extends WifiBaseTest {
                 .thenReturn(true);
         when(mPackageManagerMock.hasSystemFeature(PackageManager.FEATURE_WIFI_RTT))
                 .thenReturn(true);
-        when(mDeviceConfigFacade.isAwareSuspensionEnabled()).thenReturn(true);
-        Characteristics characteristics = getCharacteristics(mDeviceConfigFacade);
+        Characteristics characteristics = getCharacteristics();
         when(mAwareStateManagerMock.getCharacteristics()).thenReturn(characteristics);
         when(mWifiSettingsConfigStore.get(WIFI_AWARE_VERBOSE_LOGGING_ENABLED))
                 .thenReturn(true);
@@ -849,7 +848,7 @@ public class WifiAwareServiceImplTest extends WifiBaseTest {
         cap.isInstantCommunicationModeSupported = true;
         cap.isSuspensionSupported = true;
 
-        Characteristics characteristics = cap.toPublicCharacteristics(mDeviceConfigFacade);
+        Characteristics characteristics = cap.toPublicCharacteristics();
         assertEquals(characteristics.getMaxServiceNameLength(), maxServiceName);
         assertEquals(characteristics.getMaxServiceSpecificInfoLength(), MAX_LENGTH);
         assertEquals(characteristics.getMaxMatchFilterLength(), maxMatchFilter);
@@ -1111,7 +1110,7 @@ public class WifiAwareServiceImplTest extends WifiBaseTest {
         return clientId.getValue();
     }
 
-    private static Characteristics getCharacteristics(DeviceConfigFacade deviceConfigFacade) {
+    private static Characteristics getCharacteristics() {
         Capabilities cap = new Capabilities();
         cap.maxConcurrentAwareClusters = 1;
         cap.maxPublishes = 2;
@@ -1128,7 +1127,7 @@ public class WifiAwareServiceImplTest extends WifiBaseTest {
         cap.supportedDataPathCipherSuites = Characteristics.WIFI_AWARE_CIPHER_SUITE_NCS_SK_256;
         cap.isInstantCommunicationModeSupported = false;
         cap.isNanPairingSupported = false;
-        return cap.toPublicCharacteristics(deviceConfigFacade);
+        return cap.toPublicCharacteristics();
     }
 
     private int getInternalStateUid(int clientId) throws Exception {

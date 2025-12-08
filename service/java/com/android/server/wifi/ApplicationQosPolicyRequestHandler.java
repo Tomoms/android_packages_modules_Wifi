@@ -20,7 +20,9 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
+import android.net.DscpPolicy;
 import android.net.wifi.IListListener;
+import android.net.wifi.QosCharacteristics;
 import android.net.wifi.QosPolicyParams;
 import android.net.wifi.WifiManager;
 import android.os.Handler;
@@ -31,6 +33,7 @@ import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.build.SdkLevel;
+import com.android.server.wifi.proto.WifiStatsLog;
 import com.android.wifi.resources.R;
 
 import java.io.PrintWriter;
@@ -311,6 +314,7 @@ public class ApplicationQosPolicyRequestHandler {
     public void queueAddRequest(@NonNull List<QosPolicyParams> policies,
             @NonNull IListListener listener, @NonNull IBinder binder, int uid) {
         Log.i(TAG, "Queueing add request. size=" + policies.size());
+        logMetricsForRequestedPolicies(policies, uid);
         QueuedRequest request = new QueuedRequest(
                 REQUEST_TYPE_ADD, policies, null, listener, binder, uid);
         queueRequestOnAllIfaces(request);
@@ -745,6 +749,97 @@ public class ApplicationQosPolicyRequestHandler {
         binder.unlinkToDeath(mApplicationDeathRecipient, /* flags */ 0);
         mApplicationBinderToUidMap.remove(binder);
         mApplicationUidToBinderMap.remove(uid);
+    }
+
+    private void logMetricsForRequestedPolicies(List<QosPolicyParams> policies, int requesterUid) {
+        if (policies == null || policies.isEmpty()) return;
+        int direction =
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__UNKNOWN;
+        // All policies in the batch have the same direction.
+        switch (policies.get(0).getDirection()) {
+            case QosPolicyParams.DIRECTION_DOWNLINK:
+                direction = WifiStatsLog
+                        .WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__DOWNLINK;
+                break;
+            case QosPolicyParams.DIRECTION_UPLINK:
+                direction = WifiStatsLog
+                        .WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__UPLINK;
+                break;
+        }
+
+        // Track whether any policy in the batch uses the following classifiers.
+        boolean usesSrcIp, usesDstIp, usesSrcPort, usesDstPort, usesDstPortRange, usesProtocol,
+                usesIpVersion, usesFlowLabel, usesDscp, usesQosCharacteristics, usesMaxMsduSize,
+                usesServiceStartTimeInfo, usesMeanDataRate, usesBurstSize, usesMsduLifetime,
+                usesMsduDeliveryInfo;
+        usesSrcIp = usesDstIp = usesSrcPort = usesDstPort = usesDstPortRange = usesProtocol =
+                usesIpVersion = usesFlowLabel = usesDscp = usesQosCharacteristics =
+                usesMaxMsduSize = usesServiceStartTimeInfo = usesMeanDataRate = usesBurstSize =
+                usesMsduLifetime = usesMsduDeliveryInfo = false;
+        for (QosPolicyParams policy : policies) {
+            if (!usesSrcIp && policy.getSourceAddress() != null) {
+                usesSrcIp = true;
+            }
+            if (!usesDstIp && policy.getDestinationAddress() != null) {
+                usesDstIp = true;
+            }
+            if (!usesSrcPort && policy.getSourcePort() != DscpPolicy.SOURCE_PORT_ANY) {
+                usesSrcPort = true;
+            }
+            if (!usesDstPort
+                    && policy.getDestinationPort() != QosPolicyParams.DESTINATION_PORT_ANY) {
+                usesDstPort = true;
+            }
+            if (!usesDstPortRange && policy.getDestinationPortRange() != null) {
+                usesDstPortRange = true;
+            }
+            if (!usesProtocol && policy.getProtocol() != QosPolicyParams.PROTOCOL_ANY) {
+                usesProtocol = true;
+            }
+            if (!usesIpVersion && policy.getIpVersion() != QosPolicyParams.IP_VERSION_ANY) {
+                usesIpVersion = true;
+            }
+            if (!usesFlowLabel && policy.getFlowLabel() != null) {
+                usesFlowLabel = true;
+            }
+            if (!usesDscp && policy.getDscp() != QosPolicyParams.DSCP_ANY) {
+                usesDscp = true;
+            }
+
+            // Classifiers specific to QoS R3 are stored in the QosCharacteristics.
+            if (SdkLevel.isAtLeastV() && policy.getQosCharacteristics() != null) {
+                usesQosCharacteristics = true;
+                if (!usesMaxMsduSize && policy.getQosCharacteristics()
+                        .containsOptionalField(QosCharacteristics.MAX_MSDU_SIZE)) {
+                    usesMaxMsduSize = true;
+                }
+                if (!usesServiceStartTimeInfo && policy.getQosCharacteristics()
+                        .containsOptionalField(QosCharacteristics.SERVICE_START_TIME)) {
+                    usesServiceStartTimeInfo = true;
+                }
+                if (!usesMeanDataRate && policy.getQosCharacteristics()
+                        .containsOptionalField(QosCharacteristics.MEAN_DATA_RATE)) {
+                    usesMeanDataRate = true;
+                }
+                if (!usesBurstSize && policy.getQosCharacteristics()
+                        .containsOptionalField(QosCharacteristics.BURST_SIZE)) {
+                    usesBurstSize = true;
+                }
+                if (!usesMsduLifetime && policy.getQosCharacteristics()
+                        .containsOptionalField(QosCharacteristics.MSDU_LIFETIME)) {
+                    usesMsduLifetime = true;
+                }
+                if (!usesMsduDeliveryInfo && policy.getQosCharacteristics()
+                        .containsOptionalField(QosCharacteristics.MSDU_DELIVERY_INFO)) {
+                    usesMsduDeliveryInfo = true;
+                }
+            }
+        }
+        WifiStatsLog.write(WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED,
+                policies.size(), requesterUid, direction, usesSrcIp, usesDstIp, usesSrcPort,
+                usesDstPort, usesDstPortRange, usesProtocol, usesIpVersion, usesFlowLabel,
+                usesDscp, usesQosCharacteristics, usesMaxMsduSize, usesServiceStartTimeInfo,
+                usesMeanDataRate, usesBurstSize, usesMsduLifetime, usesMsduDeliveryInfo);
     }
 
     /**

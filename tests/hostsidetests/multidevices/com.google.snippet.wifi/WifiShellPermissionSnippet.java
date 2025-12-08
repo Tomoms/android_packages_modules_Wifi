@@ -21,6 +21,9 @@ import android.os.RemoteException;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 
+import com.google.android.mobly.snippet.util.Log;
+
+import java.util.Arrays;
 import java.util.concurrent.Callable;
 
 /**
@@ -40,8 +43,11 @@ public class WifiShellPermissionSnippet {
         // Reuse an UiAutomation instance if there is an existing one; otherwise, get one.
         UiAutomation uia = InstrumentationRegistry.getInstrumentation().getUiAutomation();
         if (permissions.length == 0) {
+            Log.d("Adopting shell identity of the shell UID for all permissions.");
             uia.adoptShellPermissionIdentity();
         } else {
+            Log.d("Adopting shell identity of the shell UID for permissions: "
+                    + Arrays.toString(permissions));
             uia.adoptShellPermissionIdentity(permissions);
         }
     }

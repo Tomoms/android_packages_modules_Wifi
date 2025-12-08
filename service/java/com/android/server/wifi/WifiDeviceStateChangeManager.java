@@ -32,22 +32,30 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
 import com.android.wifi.flags.FeatureFlags;
 
+import java.io.FileDescriptor;
+import java.io.PrintWriter;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Set;
 
 /** A centralized manager to handle all the device state changes */
 public class WifiDeviceStateChangeManager {
+    // check screen state change every 1 hour if no updates had been received
+    public static final long SCREEN_STATE_CHANGE_ACTIVE_QUERY_INTERVAL_MS = 60 * 60 * 1000;
     private static final String TAG = "WifiDeviceStateChangeManager";
     private final WifiThreadRunner mWifiThreadRunner;
     private final Context mContext;
 
     private final PowerManager mPowerManager;
     private final WifiInjector mWifiInjector;
+    private final Clock mClock;
     private AdvancedProtectionManager mAdvancedProtectionManager;
     private FeatureFlags mFeatureFlags;
 
     private final Set<StateChangeCallback> mChangeCallbackList = new ArraySet<>();
     private boolean mIsWifiServiceStarted = false;
-
+    private boolean mLastScreenOn;
+    private String mLastActiveScreenStateQuery = "";
     /**
      * Callback to receive the device state change event. Caller should implement the method to
      * listen to the interested event
@@ -75,7 +83,25 @@ public class WifiDeviceStateChangeManager {
         mContext = context;
         mWifiInjector = wifiInjector;
         mPowerManager = mContext.getSystemService(PowerManager.class);
+        mClock = wifiInjector.getClock();
     }
+
+    @VisibleForTesting
+    public Runnable mQueryScreenStateIfNeededRunnable = new Runnable() {
+        @Override
+        public void run() {
+            boolean screenOn = mPowerManager.isInteractive();
+            mLastActiveScreenStateQuery = LocalDateTime.now(ZoneId.systemDefault())
+                    + " - " + "screenOn=" + screenOn;
+            if (screenOn != mLastScreenOn) {
+                // If screen state changed then trigger the registered callbacks
+                handleScreenStateChanged(screenOn);
+                return;
+            }
+            // Otherwise, just schedule the next query
+            maybeScheduleDelayedScreenStateQuery(screenOn);
+        }
+    };
 
     /** Handle the boot completed event. Start to register the receiver and callback. */
     @SuppressLint("NewApi")
@@ -84,7 +110,8 @@ public class WifiDeviceStateChangeManager {
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_SCREEN_OFF);
-        mContext.registerReceiver(
+
+        BroadcastReceiver screenChangedReceiver =
                 new BroadcastReceiver() {
                     @Override
                     public void onReceive(Context context, Intent intent) {
@@ -96,8 +123,13 @@ public class WifiDeviceStateChangeManager {
                                             Intent.ACTION_SCREEN_ON)), TAG + "SCREEN_CHANGE");
                         }
                     }
-                },
-                filter);
+                };
+        if (mFeatureFlags.monitorIntentForAllUsers()) {
+            mContext.registerReceiverForAllUsers(screenChangedReceiver, filter,
+                    null, mWifiThreadRunner.getHandler());
+        } else {
+            mContext.registerReceiver(screenChangedReceiver, filter);
+        }
         handleScreenStateChanged(mPowerManager.isInteractive());
         if (Environment.isSdkAtLeastB() && mFeatureFlags.wepDisabledInApm()
                 && isAapmApiFlagEnabled()) {
@@ -148,10 +180,32 @@ public class WifiDeviceStateChangeManager {
         mChangeCallbackList.remove(callback);
     }
 
+    /**
+     * Dump the local logs.
+     */
+    public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
+        pw.println("Dump of WifiDeviceStateChangeManager");
+        pw.println("WifiDeviceStateChangeManager - Log Begin ----");
+        pw.println("mLastActiveScreenStateQuery: " + mLastActiveScreenStateQuery);
+        pw.println("mLastScreenOn: " + mLastScreenOn);
+        pw.println("WifiDeviceStateChangeManager - Log End ----");
+    }
+
+    private void maybeScheduleDelayedScreenStateQuery(boolean screenOn) {
+        mWifiThreadRunner.removeCallbacks(mQueryScreenStateIfNeededRunnable);
+        if (screenOn) {
+            mWifiThreadRunner.postDelayed(mQueryScreenStateIfNeededRunnable,
+                    SCREEN_STATE_CHANGE_ACTIVE_QUERY_INTERVAL_MS,
+                    TAG + "#queryScreenStateIfNeeded", mQueryScreenStateIfNeededRunnable);
+        }
+    }
+
     private void handleScreenStateChanged(boolean screenOn) {
+        mLastScreenOn = screenOn;
         for (StateChangeCallback callback : mChangeCallbackList) {
             callback.onScreenStateChanged(screenOn);
         }
+        maybeScheduleDelayedScreenStateQuery(screenOn);
     }
 
     private void handleAdvancedProtectionModeStateChanged(boolean apmOn) {

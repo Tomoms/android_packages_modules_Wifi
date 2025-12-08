@@ -648,11 +648,13 @@ public class InformationElementUtil {
         private static final int CO_HOSTED_BSS_PRESENT_MASK = 0x80;
         private static final int VHT_OPERATION_INFO_START_INDEX = 6;
         private static final int HE_BW_80_80_160 = 3;
+        private static final int HE_BSS_COLOR_DISABLED_MASK = 0x80;
 
         private boolean mPresent = false;
         private boolean mTwtRequired = false;
         private boolean mVhtInfoPresent = false;
         private boolean m6GhzInfoPresent = false;
+        private boolean mBssColorDisabled = true;
         private int mChannelWidth;
         private ApType6GHz mApType6GHz = ApType6GHz.AP_TYPE_6GHZ_UNKNOWN;
         private int mPrimaryChannel;
@@ -767,6 +769,16 @@ public class InformationElementUtil {
             }
         }
 
+        /**
+         * Returns whether the BSS Coloring is enabled. Reference IEEE Std 802.11ax™-2021
+         * Section - 9.4.2.249 HE Operation element - BSS Color Information field format - B7:
+         * BSS Color disabled.
+         * The BSS Color Disabled subfield is set to 1 to disable the use of color for the BSS.
+         */
+        public boolean isBssColorEnabled() {
+            return !mBssColorDisabled;
+        }
+
         /** Parse HE Operation IE */
         public void from(InformationElement ie) {
             if (ie.id != InformationElement.EID_EXTENSION_PRESENT
@@ -789,6 +801,7 @@ public class InformationElementUtil {
             boolean coHostedBssPresent = (ie.bytes[1] & CO_HOSTED_BSS_PRESENT_MASK) != 0;
             int expectedLen = HE_OPERATION_BASIC_LENGTH + (mVhtInfoPresent ? 3 : 0)
                     + (coHostedBssPresent ? 1 : 0) + (m6GhzInfoPresent ? 5 : 0);
+            mBssColorDisabled = (ie.bytes[3] & HE_BSS_COLOR_DISABLED_MASK) != 0;
 
             // Make sure the byte array length is at least fitting the known parameters
             if (ie.bytes.length < expectedLen) {

@@ -1353,6 +1353,45 @@ public class SoftApManagerTest extends WifiBaseTest {
     }
 
     /**
+     * Verify onInstanceFailure handling for the second instance of bridgeAP
+     * when ApInfoChanged() for the second instance is not received.
+     */
+    @Test
+    public void testHostapdOnInstanceFailureWithoutOnApInfoChangedEvent() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastS());
+        SoftApConfiguration bridgedConfig = generateBridgedModeSoftApConfig(null);
+        SoftApModeConfiguration apConfig = new SoftApModeConfiguration(
+                WifiManager.IFACE_IP_MODE_TETHERED, bridgedConfig,
+                        mTestSoftApCapability, TEST_COUNTRY_CODE, TEST_TETHERING_REQUEST);
+        startSoftApAndVerifyEnabled(apConfig);
+        reset(mCallback);
+        // Setup the mock to return both instances when getBridgedApInstances is called
+        when(mWifiNative.getBridgedApInstances(eq(TEST_INTERFACE_NAME)))
+                .thenReturn(new ArrayList<>(ImmutableList.of(TEST_FIRST_INSTANCE_NAME,
+                        TEST_SECOND_INSTANCE_NAME)));
+        // SoftApInfo updated only for the first instance
+        mockApInfoChangedEvent(mTestSoftApInfoOnFirstInstance);
+        mLooper.dispatchAll();
+
+        // Verify that only the first instance is in the map
+        verify(mCallback).onConnectedClientsOrInfoChanged(
+                mTestSoftApInfoMap, mTestWifiClientsMap, true);
+        assertEquals(1, mTestSoftApInfoMap.size());
+        verify(mCallback, times(1)).onConnectedClientsOrInfoChanged(
+                mTestSoftApInfoMap, mTestWifiClientsMap, true);
+
+        // Trigger onInstanceFailure for the second instance
+        mSoftApHalCallbackCaptor.getValue().onInstanceFailure(TEST_SECOND_INSTANCE_NAME);
+        mLooper.dispatchAll();
+        verify(mWifiNative).removeIfaceInstanceFromBridgedApIface(eq(TEST_INTERFACE_NAME),
+                eq(TEST_SECOND_INSTANCE_NAME), eq(false));
+
+        // Verify that callback is received only on First Instance
+        verify(mCallback, times(1)).onConnectedClientsOrInfoChanged(
+                mTestSoftApInfoMap, mTestWifiClientsMap, true);
+    }
+
+    /**
      * Verify that both of instances failure are handled by SoftApManager.
      */
     @Test

@@ -26,10 +26,11 @@ from mobly import records
 from mobly import test_runner
 from mobly import utils
 from mobly.controllers import android_device
+from snippet_uiautomator import uiautomator
 
 import wifi_test_utils
 
-
+_SERVICE_DISCOVER_RETRY = 3
 @ApiTest(
     [
         "android.net.wifi.p2p.WifiP2pManager#discoverServices(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.WifiP2pManager.ActionListener)",
@@ -63,12 +64,16 @@ class ServiceDiscoveryTest(base_test.BaseTestClass):
         )
         self.responder_ad, self.requester_ad, *_ = self.ads
         self.responder_ad.debug_tag = (
-            f'{self.responder_ad.serial}(Responder)'
+            f'{self.responder_ad.serial}-Responder'
         )
-        self.requester_ad.debug_tag = f'{self.requester_ad.serial}(Requester)'
+        self.requester_ad.debug_tag = f'{self.requester_ad.serial}-Requester'
 
     def _setup_device(self, ad: android_device.AndroidDevice) -> None:
         ad.load_snippet('wifi', constants.WIFI_SNIPPET_PACKAGE_NAME)
+        # set the wifi snippet to foreground
+        ad.wifi.utilityBringToForeground()
+        # Load snippet UiAutomator
+        ad.ui = uiautomator.UiDevice(ui=ad.wifi)
         wifi_test_utils.enable_wifi_verbose_logging(ad)
         wifi_test_utils.set_screen_on_and_unlock(ad)
         wifi_test_utils.restart_wifi_and_disable_connection_scan(ad)
@@ -285,17 +290,22 @@ class ServiceDiscoveryTest(base_test.BaseTestClass):
         # Initialize test listener.
         p2p_utils.set_upnp_response_listener(requester)
         p2p_utils.set_dns_sd_response_listeners(requester)
-        # Search service
-        requester.ad.wifi.wifiP2pDiscoverServices()
+        service_discovered = False
+        for _ in range(_SERVICE_DISCOVER_RETRY):
+            # Search service
+            requester.ad.wifi.wifiP2pDiscoverServices()
+            # Initiates service discovery and check expected services.
+            service_discovered = p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=(),
+                expected_dns_txt_sequence=(),
+                expected_upnp_sequence=constants.ServiceData.ALL_UPNP_SERVICES
+            )
+            if service_discovered:
+                return
+        asserts.assert_true(service_discovered, f'{requester.ad} Timed out waiting for services:')
 
-        # Initiates service discovery and check expected services.
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=(),
-            expected_dns_txt_sequence=(),
-            expected_upnp_sequence=constants.ServiceData.ALL_UPNP_SERVICES
-        )
 
     def test_serv_req_clear_request(self) -> None:
         """Checks that API `WifiP2pManager#clearServiceRequests` works well.
@@ -379,30 +389,34 @@ class ServiceDiscoveryTest(base_test.BaseTestClass):
 
         # Discover services
         requester.ad.log.info('Initiating service discovery.')
-        requester.ad.wifi.wifiP2pDiscoverServices(channel1)
-        responder_address = responder.p2p_device.device_address
+        service_discovered = False
+        for _ in range(_SERVICE_DISCOVER_RETRY):
+            requester.ad.wifi.wifiP2pDiscoverServices(channel1)
 
-        # Check discovered services
-        # Channel1 receive only UPnP service.
-        requester.ad.log.info('Checking services on channel %d.', channel1)
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=(),
-            expected_dns_txt_sequence=(),
-            expected_upnp_sequence=constants.ServiceData.ALL_UPNP_SERVICES,
-            channel_id=channel1,
-        )
-        # Channel2 receive only Bonjour service.
-        requester.ad.log.info('Checking services on channel %d.', channel2)
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=constants.ServiceData.ALL_DNS_SD,
-            expected_dns_txt_sequence=constants.ServiceData.ALL_DNS_TXT,
-            expected_upnp_sequence=(),
-            channel_id=channel2,
-        )
+            # Check discovered services
+            # Channel1 receive only UPnP service.
+            requester.ad.log.info('Checking services on channel %d.', channel1)
+            service_discovered = p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=(),
+                expected_dns_txt_sequence=(),
+                expected_upnp_sequence=constants.ServiceData.ALL_UPNP_SERVICES,
+                channel_id=channel1,
+            )
+            # Channel2 receive only Bonjour service.
+            requester.ad.log.info('Checking services on channel %d.', channel2)
+            service_discovered &= p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=constants.ServiceData.ALL_DNS_SD,
+                expected_dns_txt_sequence=constants.ServiceData.ALL_DNS_TXT,
+                expected_upnp_sequence=(),
+                channel_id=channel2,
+            )
+            if service_discovered:
+                break
+        asserts.assert_true(service_discovered, f'{requester.ad} Timed out waiting for services:')
 
         # Clean up.
         p2p_utils.reset_p2p_service_state(requester.ad, channel1)
@@ -451,30 +465,34 @@ class ServiceDiscoveryTest(base_test.BaseTestClass):
 
         # Discover services
         requester.ad.log.info('Initiating service discovery.')
-        requester.ad.wifi.wifiP2pDiscoverServices(channel1)
-        responder_address = responder.p2p_device.device_address
+        service_discovered = False
+        for _ in range(_SERVICE_DISCOVER_RETRY):
+            requester.ad.wifi.wifiP2pDiscoverServices(channel1)
 
-        # Check discovered services
-        # Channel1 receive only Bonjour IPP PTR.
-        requester.ad.log.info('Checking services on channel %d.', channel1)
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=constants.ServiceData.IPP_DNS_SD,
-            expected_dns_txt_sequence=(),
-            expected_upnp_sequence=(),
-            channel_id=channel1,
-        )
-        # Channel2 receive only Bonjour AFP TXT.
-        requester.ad.log.info('Checking services on channel %d.', channel2)
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=(),
-            expected_dns_txt_sequence=constants.ServiceData.AFP_DNS_TXT,
-            expected_upnp_sequence=(),
-            channel_id=channel2,
-        )
+            # Check discovered services
+            # Channel1 receive only Bonjour IPP PTR.
+            requester.ad.log.info('Checking services on channel %d.', channel1)
+            service_discovered = p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=constants.ServiceData.IPP_DNS_SD,
+                expected_dns_txt_sequence=(),
+                expected_upnp_sequence=(),
+                channel_id=channel1,
+            )
+            # Channel2 receive only Bonjour AFP TXT.
+            requester.ad.log.info('Checking services on channel %d.', channel2)
+            service_discovered &= p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=(),
+                expected_dns_txt_sequence=constants.ServiceData.AFP_DNS_TXT,
+                expected_upnp_sequence=(),
+                channel_id=channel2,
+            )
+            if service_discovered:
+                break
+        asserts.assert_true(service_discovered, f'{requester.ad} Timed out waiting for services:')
 
         # Clean up.
         p2p_utils.reset_p2p_service_state(requester.ad, channel1)
@@ -532,19 +550,23 @@ class ServiceDiscoveryTest(base_test.BaseTestClass):
 
         # Discover services
         requester.ad.log.info('Initiating service discovery.')
-        requester.ad.wifi.wifiP2pDiscoverServices(channel1)
-        responder_address = responder.p2p_device.device_address
+        service_discovered = False
+        for _ in range(_SERVICE_DISCOVER_RETRY):
+            requester.ad.wifi.wifiP2pDiscoverServices(channel1)
 
-        # Check that Bonjour response can be received on channel1
-        requester.ad.log.info('Checking Bonjour services on channel %d.', channel1)
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=constants.ServiceData.ALL_DNS_SD,
-            expected_dns_txt_sequence=constants.ServiceData.AFP_DNS_TXT,
-            expected_upnp_sequence=(),
-            channel_id=channel1,
-        )
+            # Check that Bonjour response can be received on channel1
+            requester.ad.log.info('Checking Bonjour services on channel %d.', channel1)
+            service_discovered = p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=constants.ServiceData.ALL_DNS_SD,
+                expected_dns_txt_sequence=constants.ServiceData.AFP_DNS_TXT,
+                expected_upnp_sequence=(),
+                channel_id=channel1,
+            )
+            if service_discovered:
+                break
+        asserts.assert_true(service_discovered, f'{requester.ad} Timed out waiting for services:')
 
         # Clean up.
         p2p_utils.reset_p2p_service_state(requester.ad, channel1)
@@ -570,16 +592,22 @@ class ServiceDiscoveryTest(base_test.BaseTestClass):
         requester.ad.log.info('Initiating service discovery.')
         p2p_utils.set_upnp_response_listener(requester)
         p2p_utils.set_dns_sd_response_listeners(requester)
-        requester.ad.wifi.wifiP2pDiscoverServices()
+        service_discovered = False
+        for _ in range(_SERVICE_DISCOVER_RETRY):
+            requester.ad.wifi.wifiP2pDiscoverServices()
 
-        requester.ad.log.info('Checking discovered services.')
-        p2p_utils.check_discovered_services(
-            requester,
-            responder.p2p_device.device_address,
-            expected_dns_sd_sequence=expected_dns_sd_sequence,
-            expected_dns_txt_sequence=expected_dns_txt_sequence,
-            expected_upnp_sequence=expected_upnp_sequence,
-        )
+            requester.ad.log.info('Checking discovered services.')
+            service_discovered = p2p_utils.check_discovered_services(
+                requester,
+                responder.p2p_device.device_address,
+                expected_dns_sd_sequence=expected_dns_sd_sequence,
+                expected_dns_txt_sequence=expected_dns_txt_sequence,
+                expected_upnp_sequence=expected_upnp_sequence,
+            )
+            if service_discovered:
+                break
+        asserts.assert_true(service_discovered, f'{requester.ad} Timed out waiting for services:')
+
 
     def _add_p2p_services(self, responder: p2p_utils.DeviceState):
         """Sets up P2P services on the responder device.

@@ -352,13 +352,13 @@
           <item type="bool" name="config_wifiTwtSupported" />
           <item type="bool" name="config_wifiNetworkSelectionSetTargetBssid" />
           <item type="bool" name="config_wifiWepAllowedControlSupported" />
-          <item type="array" name="config_wifiDelayedSelectionCarrierIds" />
-          <item type="integer" name="config_wifiDelayedCarrierSelectionTimeMs" />
           <item type="bool" name="config_wifiRsnOverridingEnabled" />
           <item type="bool" name="config_wifi_subsystem_restart_bugreport_enabled" />
           <item type="bool" name="config_wifiVoipDetectionEnabled" />
           <item type="bool" name="config_wifiUsdPublisherSupported" />
           <item type="bool" name="config_wifiMainlineSupplicantEnabled" />
+          <item type="integer" name="config_internalScorerType" />
+          <item type="bool" name="config_prioritizeExternalScorer" />
 
           <!-- Params from config.xml that can be overlayed -->
 
@@ -399,6 +399,8 @@
           <item type="string" name="wifi_p2p_dialog2_sent_title_display_pin" />
           <item type="string" name="wifi_p2p_dialog2_sent_message" />
           <item type="string" name="wifi_p2p_dialog2_sent_message_display_pin" />
+          <item type="string" name="wifi_p2p_dialog2_sent_title_display_password" />
+          <item type="string" name="wifi_p2p_dialog2_sent_message_display_password" />
           <item type="string" name="wifi_p2p_dialog2_sent_positive_button" />
           <item type="string" name="wifi_p2p_dialog2_received_title" />
           <item type="string" name="wifi_p2p_dialog2_received_message" />
@@ -408,6 +410,10 @@
           <item type="string" name="wifi_p2p_dialog2_received_negative_button" />
           <item type="string" name="wifi_p2p_dialog2_enter_pin_label" />
           <item type="string" name="wifi_p2p_dialog2_display_pin_label" />
+          <item type="string" name="wifi_p2p_dialog2_enter_password_label" />
+          <item type="string" name="wifi_p2p_dialog2_display_password_label" />
+          <item type="string" name="wifi_p2p_dialog2_received_message_enter_password" />
+          <item type="string" name="wifi_p2p_dialog2_received_message_display_password" />
           <item type="string" name="wifi_p2p_frequency_conflict_message" />
           <item type="string" name="dlg_ok" />
           <item type="string" name="wifi_cannot_connect_with_randomized_mac_title" />
@@ -547,6 +553,12 @@
           <item type="style" name="wifi_p2p_dialog2_display_pin_section" />
           <item type="style" name="wifi_p2p_dialog2_display_pin_label" />
           <item type="style" name="wifi_p2p_dialog2_display_pin" />
+          <item type="style" name="wifi_p2p_dialog2_enter_password_section" />
+          <item type="style" name="wifi_p2p_dialog2_enter_password_label" />
+          <item type="style" name="wifi_p2p_dialog2_enter_password" />
+          <item type="style" name="wifi_p2p_dialog2_display_password_section" />
+          <item type="style" name="wifi_p2p_dialog2_display_password_label" />
+          <item type="style" name="wifi_p2p_dialog2_display_password" />
           <!-- Params from styles.xml that can be overlayed -->
 
           <!-- Params from drawable/ that can be overlayed -->

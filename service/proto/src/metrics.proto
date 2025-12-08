@@ -2062,6 +2062,9 @@ message SoftApConnectedClientsEvent {
   // is used to record the number of the clients on specific instance. (depends
   // on channel_frequency)
   optional int32 num_connected_clients_on_current_frequency = 12;
+
+  // Auto shutdown enabled setting in SoftApConfiguration
+  optional bool auto_shutdown_is_enabled = 13;
 }
 
 // Power stats for Wifi
@@ -2904,6 +2907,8 @@ message RateStats {
     WIFI_PREAMBLE_VHT = 3;
     // Preamble type for IEEE 802.11ax, IEEE Std 802.11-2020, Section 27
     WIFI_PREAMBLE_HE = 5;
+    // Preamble type for IEEE 802.11be, IEEE Std 802.11-2021, Section 36
+    WIFI_PREAMBLE_EHT = 6;
     // Invalid
     WIFI_PREAMBLE_INVALID = -1;
   }

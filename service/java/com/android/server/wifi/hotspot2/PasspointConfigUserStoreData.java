@@ -17,7 +17,9 @@
 package com.android.server.wifi.hotspot2;
 
 import android.annotation.Nullable;
+import android.app.ActivityManager;
 import android.net.wifi.hotspot2.PasspointConfiguration;
+import android.net.wifi.util.Environment;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -27,6 +29,7 @@ import com.android.server.wifi.WifiConfigStore;
 import com.android.server.wifi.WifiKeyStore;
 import com.android.server.wifi.util.WifiConfigStoreEncryptionUtil;
 import com.android.server.wifi.util.XmlUtil;
+import com.android.wifi.flags.Flags;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -369,11 +372,13 @@ public class PasspointConfigUserStoreData implements WifiConfigStore.StoreData {
         if (config == null) {
             throw new XmlPullParserException("Missing Passpoint configuration");
         }
+        int creatorUserId = (Environment.isSdkNewerThanB() && Flags.multiUserWifiEnhancement())
+                ? ActivityManager.getCurrentUser() : -2;
         PasspointProvider provider =  new PasspointProvider(config, mKeyStore,
                 mWifiCarrierInfoManager,
                 providerId, creatorUid, packageName, isFromSuggestion, caCertificateAliases,
                 clientPrivateKeyAndCertificateAlias, remediationCaCertificateAlias,
-                hasEverConnected, shared, mClock);
+                hasEverConnected, shared, mClock, creatorUserId);
         provider.setUserConnectChoice(connectChoice, connectChoiceRssi);
         if (isFromSuggestion) {
             provider.setTrusted(isTrusted);

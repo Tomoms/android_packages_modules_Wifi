@@ -31,8 +31,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
+import android.app.ActivityManager;
 import android.app.test.MockAnswerUtil;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -46,16 +49,21 @@ import android.util.Xml;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.internal.util.FastXmlSerializer;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.util.EncryptedData;
 import com.android.server.wifi.util.WifiConfigStoreEncryptionUtil;
 import com.android.server.wifi.util.XmlUtilTest;
+import com.android.wifi.flags.Flags;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlSerializer;
 
@@ -80,6 +88,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
     private static final String TEST_CREATOR_NAME = "CreatorName";
     private static final MacAddress TEST_RANDOMIZED_MAC =
             MacAddress.fromString("da:a1:19:c4:26:fa");
+    private static final int TEST_CREATOR_USER_ID = 999;
 
     private static final String SINGLE_OPEN_NETWORK_DATA_XML_STRING_FORMAT =
             "<Network>\n"
@@ -157,6 +166,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                     + "<byte-array name=\"DppConnector\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppCSignKey\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppNetAccessKey\" num=\"0\"></byte-array>\n"
+                    + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                     + "</WifiConfiguration>\n"
                     + "<NetworkStatus>\n"
                     + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"
@@ -249,6 +259,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                     + "<byte-array name=\"DppConnector\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppCSignKey\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppNetAccessKey\" num=\"0\"></byte-array>\n"
+                    + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                     + "</WifiConfiguration>\n"
                     + "<NetworkStatus>\n"
                     + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"
@@ -367,6 +378,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                     + "<byte-array name=\"DppConnector\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppCSignKey\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppNetAccessKey\" num=\"0\"></byte-array>\n"
+                    + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                     + "</WifiConfiguration>\n"
                     + "<NetworkStatus>\n"
                     + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"
@@ -458,6 +470,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                     + "<byte-array name=\"DppConnector\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppCSignKey\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"DppNetAccessKey\" num=\"0\"></byte-array>\n"
+                    + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                     + "</WifiConfiguration>\n"
                     + "<NetworkStatus>\n"
                     + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"
@@ -559,6 +572,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                     + "<int name=\"MacRandomizationSetting\" value=\"3\" />\n"
                     + "<int name=\"CarrierId\" value=\"-1\" />\n"
                     + "<boolean name=\"IsMostRecentlyConnected\" value=\"false\" />\n"
+                    + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                     + "</WifiConfiguration>\n"
                     + "<NetworkStatus>\n"
                     + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"
@@ -583,10 +597,17 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
     @Mock private WifiConfigStoreEncryptionUtil mWifiConfigStoreEncryptionUtil;
     private Map<EncryptedData, byte[]> mEncryptedDataMap = new HashMap<>();
     private boolean mShouldEncrypt = false;
+    private MockitoSession mSession;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        // static mocking
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(ActivityManager.class, withSettings().lenient())
+                .mockStatic(Flags.class, withSettings().lenient())
+                .strictness(Strictness.LENIENT)
+                .startMocking();
         when(mContext.getPackageManager()).thenReturn(mPackageManager);
         when(mPackageManager.getNameForUid(anyInt())).thenReturn(TEST_CREATOR_NAME);
         mNetworkListSharedStoreData = new NetworkListSharedStoreData(mContext);
@@ -602,6 +623,14 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                 return mEncryptedDataMap.get(data);
             }
         }).when(mWifiConfigStoreEncryptionUtil).decrypt(any());
+    }
+
+    @After
+    public void cleanUp() throws Exception {
+        validateMockitoUsage();
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     /**
@@ -820,6 +849,7 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
                         + "<int name=\"LastConnectUid\" value=\"0\" />\n"
                         + "<string name=\"RandomizedMacAddress\">%s</string>\n"
                         + "<int name=\"MacRandomizationSetting\" value=\"3\" />\n"
+                        + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                         + "</WifiConfiguration>\n"
                         + "<NetworkStatus>\n"
                         + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"
@@ -904,6 +934,9 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
      */
     @Test
     public void parseNetworkWithInvalidCreatorUidResetsToSystem() throws Exception {
+        int testUserId = 999;
+        when(ActivityManager.getCurrentUser()).thenReturn(testUserId);
+        when(Flags.multiUserWifiEnhancement()).thenReturn(true);
         WifiConfiguration openNetwork = WifiConfigurationTestUtil.createOpenNetwork();
         openNetwork.creatorUid = -1;
         // Return null for invalid uid.
@@ -921,6 +954,9 @@ public class NetworkListStoreDataTest extends WifiBaseTest {
         assertEquals(1, deserializedNetworks.size());
         assertEquals(openNetwork.getKey(), deserializedNetworks.get(0).getKey());
         assertEquals(SYSTEM_UID, deserializedNetworks.get(0).creatorUid);
+        // The creatorUid is system uid, so using TEST_CREATOR_USER_ID as creatorUserId
+        assertEquals(Environment.isSdkNewerThanB() ? TEST_CREATOR_USER_ID : -2,
+                deserializedNetworks.get(0).getCreatorUserIdInternal());
         assertEquals(TEST_CREATOR_NAME, deserializedNetworks.get(0).creatorName);
     }
 

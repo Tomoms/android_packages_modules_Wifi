@@ -24,6 +24,7 @@ import android.annotation.SystemApi;
 import android.os.Parcel;
 import android.os.Parcelable;
 import android.telephony.Annotation.NetworkType;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -187,8 +188,10 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
     private final int mThreadDeviceRole;
     /** Data stall status */
     private final int mStatusDataStall;
+    private int mInternalScore;
+    private int mInternalScorerType;
 
-    /** {@hide} */
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(prefix = {"WME_ACCESS_CATEGORY_"}, value = {
         WME_ACCESS_CATEGORY_BE,
@@ -219,6 +222,25 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
     public static final int WME_ACCESS_CATEGORY_VO = 3;
     /** Number of WME Access Categories */
     public static final int NUM_WME_ACCESS_CATEGORIES = 4;
+
+    /** @hide */
+    @IntDef(prefix = { "SCORER_TYPE_" }, value = {
+        SCORER_TYPE_INVALID,
+        SCORER_TYPE_VELOCITY,
+        SCORER_TYPE_ML
+    })
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface ScorerType {}
+
+    /** Invalid scorer */
+    @FlaggedApi(Flags.FLAG_FEED_INTERNAL_SCORE_TO_EXTERNAL_SCORER)
+    public static final int SCORER_TYPE_INVALID = -1;
+    /** Velocity based scorer which is the traditional AOSP scorer */
+    @FlaggedApi(Flags.FLAG_FEED_INTERNAL_SCORE_TO_EXTERNAL_SCORER)
+    public static final int SCORER_TYPE_VELOCITY = 0;
+    /** Machine learning scorer */
+    @FlaggedApi(Flags.FLAG_FEED_INTERNAL_SCORE_TO_EXTERNAL_SCORER)
+    public static final int SCORER_TYPE_ML = 1;
 
     /**
      * Data packet contention time statistics.
@@ -378,7 +400,7 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
         }
     }
 
-    /** {@hide} */
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(prefix = {"WIFI_PREAMBLE_"}, value = {
         WIFI_PREAMBLE_OFDM,
@@ -405,7 +427,7 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
     /** Invalid */
     public static final int WIFI_PREAMBLE_INVALID = -1;
 
-    /** {@hide} */
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(prefix = {"WIFI_SPATIAL_STREAMS_"}, value = {
         WIFI_SPATIAL_STREAMS_ONE,
@@ -426,7 +448,7 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
     /** Invalid */
     public static final int WIFI_SPATIAL_STREAMS_INVALID = -1;
 
-    /** {@hide} */
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef(prefix = {"WIFI_BANDWIDTH_"}, value = {
         WIFI_BANDWIDTH_20_MHZ,
@@ -1170,7 +1192,10 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
     /** Link stats per link */
     private final SparseArray<LinkStats> mLinkStats;
 
-    /** Constructor function {@hide} */
+    /**
+     * Constructor function
+     * @hide
+     */
     public WifiUsabilityStatsEntry(long timeStampMillis, int rssi, int linkSpeedMbps,
             long totalTxSuccess, long totalTxRetries, long totalTxBad, long totalRxSuccess,
             long totalRadioOnTimeMillis, long totalRadioTxTimeMillis, long totalRadioRxTimeMillis,
@@ -1194,7 +1219,8 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
             int isThroughputPredictorDownstreamSufficient,
             int isThroughputPredictorUpstreamSufficient, boolean isBluetoothConnected,
             int uwbAdapterState, boolean isLowLatencyActivated, int maxSupportedTxLinkSpeed,
-            int maxSupportedRxLinkSpeed, int voipMode, int threadDeviceRole, int statusDataStall) {
+            int maxSupportedRxLinkSpeed, int voipMode, int threadDeviceRole, int statusDataStall,
+            int internalScore, int internalScorerType) {
         mTimeStampMillis = timeStampMillis;
         mRssi = rssi;
         mLinkSpeedMbps = linkSpeedMbps;
@@ -1249,6 +1275,8 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
         mVoipMode = voipMode;
         mThreadDeviceRole = threadDeviceRole;
         mStatusDataStall = statusDataStall;
+        mInternalScore = internalScore;
+        mInternalScorerType = internalScorerType;
     }
 
     /** Implement the Parcelable interface */
@@ -1312,6 +1340,8 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
         dest.writeInt(mVoipMode);
         dest.writeInt(mThreadDeviceRole);
         dest.writeInt(mStatusDataStall);
+        dest.writeInt(mInternalScore);
+        dest.writeInt(mInternalScorerType);
     }
 
     /** Implement the Parcelable interface */
@@ -1337,7 +1367,7 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
                     in.readInt(), in.readLong(), in.readLong(), in.readInt(), in.readInt(),
                     in.readInt(), in.readInt(), in.readInt(), in.readInt(), in.readBoolean(),
                     in.readInt(), in.readBoolean(), in.readInt(), in.readInt(), in.readInt(),
-                    in.readInt(), in.readInt()
+                    in.readInt(), in.readInt(), in.readInt(), in.readInt()
             );
         }
 
@@ -2056,6 +2086,36 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
         return mIsSameRegisteredCell;
     }
 
+    /**
+     * Get the score calculated by the internal scorer based on the usability statistics within this
+     * class. Any external scorer can then use this score as a reference for their final Wi-Fi
+     * usability decision.
+     */
+    @FlaggedApi(Flags.FLAG_FEED_INTERNAL_SCORE_TO_EXTERNAL_SCORER)
+    public @IntRange(from = 0, to = 100) int getInternalScore() {
+        return mInternalScore;
+    }
+
+    /** @hide */
+    public void setInternalScore(int score) {
+        mInternalScore = score;
+    }
+
+
+    /**
+     * Get the type of the internal scorer that calculates the score returned by
+     * {@link #getInternalScore()}
+     */
+    @FlaggedApi(Flags.FLAG_FEED_INTERNAL_SCORE_TO_EXTERNAL_SCORER)
+    public @ScorerType int getInternalScorerType() {
+        return mInternalScorerType;
+    }
+
+    /** @hide */
+    public void setInternalScorerType(@ScorerType int scorerType) {
+        mInternalScorerType = scorerType;
+    }
+
     /** @hide */
     public int getWifiLinkCount() {
         return mWifiLinkCount;
@@ -2144,5 +2204,792 @@ public final class WifiUsabilityStatsEntry implements Parcelable {
     /** @hide */
     public int getStatusDataStall() {
         return mStatusDataStall;
+    }
+
+    /**
+     * A Builder for WifiUsabilityStatsEntry for tests.
+     *
+     * @hide
+     */
+    public static final class Builder {
+        private long mTimeStampMillis = 0;
+        private int mRssi = WifiInfo.INVALID_RSSI;
+        private int mLinkSpeedMbps = WifiInfo.LINK_SPEED_UNKNOWN;
+        private long mTotalTxSuccess = 0;
+        private long mTotalTxRetries = 0;
+        private long mTotalTxBad = 0;
+        private long mTotalRxSuccess = 0;
+        private long mTotalRadioOnTimeMillis = 0;
+        private long mTotalRadioTxTimeMillis = 0;
+        private long mTotalRadioRxTimeMillis = 0;
+        private long mTotalScanTimeMillis = 0;
+        private long mTotalNanScanTimeMillis = 0;
+        private long mTotalBackgroundScanTimeMillis = 0;
+        private long mTotalRoamScanTimeMillis = 0;
+        private long mTotalPnoScanTimeMillis = 0;
+        private long mTotalHotspot2ScanTimeMillis = 0;
+        private long mTotalCcaBusyFreqTimeMillis = 0;
+        private long mTotalRadioOnFreqTimeMillis = 0;
+        private long mTotalBeaconRx = 0;
+        @ProbeStatus
+        private int mProbeStatusSinceLastUpdate = PROBE_STATUS_UNKNOWN;
+        private int mProbeElapsedTimeSinceLastUpdateMillis = 0;
+        private int mProbeMcsRateSinceLastUpdate = 0;
+        private int mRxLinkSpeedMbps = WifiInfo.LINK_SPEED_UNKNOWN;
+        private int mTimeSliceDutyCycleInPercent = -1;
+        private ContentionTimeStats[] mContentionTimeStats = null;
+        private RateStats[] mRateStats = null;
+        private RadioStats[] mRadioStats = null;
+        private int mChannelUtilizationRatio = -1;
+        private boolean mIsThroughputSufficient = false;
+        private boolean mIsWifiScoringEnabled = false;
+        private boolean mIsCellularDataAvailable = false;
+        private @NetworkType int mCellularDataNetworkType = TelephonyManager.NETWORK_TYPE_UNKNOWN;
+        private int mCellularSignalStrengthDbm = 0;
+        private int mCellularSignalStrengthDb = 0;
+        private boolean mIsSameRegisteredCell = false;
+        private SparseArray<LinkStats> mLinkStats = new SparseArray<>();
+        private int mWifiLinkCount = 1;
+        private @WifiManager.MloMode int mMloMode = WifiManager.MLO_MODE_DEFAULT;
+        private long mTxTransmittedBytes = 0;
+        private long mRxTransmittedBytes = 0;
+        private int mLabelBadEventCount = 0;
+        private int mWifiFrameworkState = WifiManager.WIFI_STATE_UNKNOWN;
+        private int mIsNetworkCapabilitiesDownstreamSufficient = 0;
+        private int mIsNetworkCapabilitiesUpstreamSufficient = 0;
+        private int mIsThroughputPredictorDownstreamSufficient = 0;
+        private int mIsThroughputPredictorUpstreamSufficient = 0;
+        private boolean mIsBluetoothConnected = false;
+        private int mUwbAdapterState = 0;
+        private boolean mIsLowLatencyActivated = false;
+        private int mMaxSupportedTxLinkSpeed = WifiInfo.LINK_SPEED_UNKNOWN;
+        private int mMaxSupportedRxLinkSpeed = WifiInfo.LINK_SPEED_UNKNOWN;
+        private int mVoipMode = 0;
+        private int mThreadDeviceRole = 0;
+        private int mStatusDataStall = 0;
+        private int mInternalScore = 0;
+        private int mInternalScorerType = SCORER_TYPE_INVALID;
+
+        /**
+         * Constructs a new Builder.
+         */
+        public Builder() {
+        }
+
+        /**
+         * Sets the timestamp in milliseconds from device boot.
+         *
+         * @param timeStampMillis The timestamp.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTimeStampMillis(long timeStampMillis) {
+            this.mTimeStampMillis = timeStampMillis;
+            return this;
+        }
+
+        /**
+         * Sets the RSSI in dBm.
+         *
+         * @param rssi The RSSI value.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setRssi(int rssi) {
+            this.mRssi = rssi;
+            return this;
+        }
+
+        /**
+         * Sets the link speed in Mbps.
+         *
+         * @param linkSpeedMbps The link speed.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setLinkSpeedMbps(int linkSpeedMbps) {
+            this.mLinkSpeedMbps = linkSpeedMbps;
+            return this;
+        }
+
+        /**
+         * Sets the total number of successful transmissions.
+         *
+         * @param totalTxSuccess The count of successful transmissions.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalTxSuccess(long totalTxSuccess) {
+            this.mTotalTxSuccess = totalTxSuccess;
+            return this;
+        }
+
+        /**
+         * Sets the total number of transmission retries.
+         *
+         * @param totalTxRetries The count of transmission retries.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalTxRetries(long totalTxRetries) {
+            this.mTotalTxRetries = totalTxRetries;
+            return this;
+        }
+
+        /**
+         * Sets the total number of failed transmissions.
+         *
+         * @param totalTxBad The count of failed transmissions.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalTxBad(long totalTxBad) {
+            this.mTotalTxBad = totalTxBad;
+            return this;
+        }
+
+        /**
+         * Sets the total number of successful receptions.
+         *
+         * @param totalRxSuccess The count of successful receptions.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalRxSuccess(long totalRxSuccess) {
+            this.mTotalRxSuccess = totalRxSuccess;
+            return this;
+        }
+
+        /**
+         * Sets the total time the Wi-Fi radio has been on in milliseconds.
+         *
+         * @param totalRadioOnTimeMillis The total on time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalRadioOnTimeMillis(long totalRadioOnTimeMillis) {
+            this.mTotalRadioOnTimeMillis = totalRadioOnTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time the Wi-Fi radio has been transmitting in milliseconds.
+         *
+         * @param totalRadioTxTimeMillis The total transmit time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalRadioTxTimeMillis(long totalRadioTxTimeMillis) {
+            this.mTotalRadioTxTimeMillis = totalRadioTxTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time the Wi-Fi radio has been receiving in milliseconds.
+         *
+         * @param totalRadioRxTimeMillis The total receive time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalRadioRxTimeMillis(long totalRadioRxTimeMillis) {
+            this.mTotalRadioRxTimeMillis = totalRadioRxTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time spent on all types of scans in milliseconds.
+         *
+         * @param totalScanTimeMillis The total scan time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalScanTimeMillis(long totalScanTimeMillis) {
+            this.mTotalScanTimeMillis = totalScanTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time spent on NAN scans in milliseconds.
+         *
+         * @param totalNanScanTimeMillis The total NAN scan time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalNanScanTimeMillis(long totalNanScanTimeMillis) {
+            this.mTotalNanScanTimeMillis = totalNanScanTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time spent on background scans in milliseconds.
+         *
+         * @param totalBackgroundScanTimeMillis The total background scan time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalBackgroundScanTimeMillis(long totalBackgroundScanTimeMillis) {
+            this.mTotalBackgroundScanTimeMillis = totalBackgroundScanTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time spent on roam scans in milliseconds.
+         *
+         * @param totalRoamScanTimeMillis The total roam scan time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalRoamScanTimeMillis(long totalRoamScanTimeMillis) {
+            this.mTotalRoamScanTimeMillis = totalRoamScanTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time spent on PNO scans in milliseconds.
+         *
+         * @param totalPnoScanTimeMillis The total PNO scan time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalPnoScanTimeMillis(long totalPnoScanTimeMillis) {
+            this.mTotalPnoScanTimeMillis = totalPnoScanTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time spent on Hotspot 2.0 scans and GAS exchange in milliseconds.
+         *
+         * @param totalHotspot2ScanTimeMillis The total Hotspot 2.0 scan time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalHotspot2ScanTimeMillis(long totalHotspot2ScanTimeMillis) {
+            this.mTotalHotspot2ScanTimeMillis = totalHotspot2ScanTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total time CCA has been busy on the current frequency in milliseconds.
+         *
+         * @param totalCcaBusyFreqTimeMillis The total CCA busy time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalCcaBusyFreqTimeMillis(long totalCcaBusyFreqTimeMillis) {
+            this.mTotalCcaBusyFreqTimeMillis = totalCcaBusyFreqTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total radio on time on the current frequency in milliseconds.
+         *
+         * @param totalRadioOnFreqTimeMillis The total radio on time on the current frequency.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalRadioOnFreqTimeMillis(long totalRadioOnFreqTimeMillis) {
+            this.mTotalRadioOnFreqTimeMillis = totalRadioOnFreqTimeMillis;
+            return this;
+        }
+
+        /**
+         * Sets the total number of beacons received.
+         *
+         * @param totalBeaconRx The total beacon count.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTotalBeaconRx(long totalBeaconRx) {
+            this.mTotalBeaconRx = totalBeaconRx;
+            return this;
+        }
+
+        /**
+         * Sets the status of the link probe since the last update.
+         *
+         * @param probeStatusSinceLastUpdate The probe status.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setProbeStatusSinceLastUpdate(int probeStatusSinceLastUpdate) {
+            this.mProbeStatusSinceLastUpdate = probeStatusSinceLastUpdate;
+            return this;
+        }
+
+        /**
+         * Sets the elapsed time of the most recent link probe in milliseconds.
+         *
+         * @param probeElapsedTimeSinceLastUpdateMillis The elapsed time.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setProbeElapsedTimeSinceLastUpdateMillis(
+                int probeElapsedTimeSinceLastUpdateMillis) {
+            this.mProbeElapsedTimeSinceLastUpdateMillis = probeElapsedTimeSinceLastUpdateMillis;
+            return this;
+        }
+
+        /**
+         * Sets the MCS rate of the most recent link probe.
+         *
+         * @param probeMcsRateSinceLastUpdate The MCS rate.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setProbeMcsRateSinceLastUpdate(int probeMcsRateSinceLastUpdate) {
+            this.mProbeMcsRateSinceLastUpdate = probeMcsRateSinceLastUpdate;
+            return this;
+        }
+
+        /**
+         * Sets the RX link speed in Mbps.
+         *
+         * @param rxLinkSpeedMbps The RX link speed.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setRxLinkSpeedMbps(int rxLinkSpeedMbps) {
+            this.mRxLinkSpeedMbps = rxLinkSpeedMbps;
+            return this;
+        }
+
+        /**
+         * Sets the duty cycle in percent.
+         *
+         * @param timeSliceDutyCycleInPercent The duty cycle percentage.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTimeSliceDutyCycleInPercent(int timeSliceDutyCycleInPercent) {
+            this.mTimeSliceDutyCycleInPercent = timeSliceDutyCycleInPercent;
+            return this;
+        }
+
+        /**
+         * Sets the contention time statistics.
+         *
+         * @param contentionTimeStats An array of ContentionTimeStats objects.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setContentionTimeStats(ContentionTimeStats[] contentionTimeStats) {
+            this.mContentionTimeStats = contentionTimeStats;
+            return this;
+        }
+
+        /**
+         * Sets the rate statistics.
+         *
+         * @param rateStats An array of RateStats objects.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setRateStats(RateStats[] rateStats) {
+            this.mRateStats = rateStats;
+            return this;
+        }
+
+        /**
+         * Sets the Wi-Fi link layer radio statistics.
+         *
+         * @param radiostats An array of RadioStats objects.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setWifiLinkLayerRadioStats(RadioStats[] radiostats) {
+            this.mRadioStats = radiostats;
+            return this;
+        }
+
+        /**
+         * Sets the channel utilization ratio.
+         *
+         * @param channelUtilizationRatio The channel utilization ratio.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setChannelUtilizationRatio(int channelUtilizationRatio) {
+            this.mChannelUtilizationRatio = channelUtilizationRatio;
+            return this;
+        }
+
+        /**
+         * Sets whether throughput is considered sufficient.
+         *
+         * @param isThroughputSufficient True if throughput is sufficient, false otherwise.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsThroughputSufficient(boolean isThroughputSufficient) {
+            this.mIsThroughputSufficient = isThroughputSufficient;
+            return this;
+        }
+
+        /**
+         * Sets whether Wi-Fi scoring is enabled.
+         *
+         * @param isWifiScoringEnabled True if Wi-Fi scoring is enabled, false otherwise.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsWifiScoringEnabled(boolean isWifiScoringEnabled) {
+            this.mIsWifiScoringEnabled = isWifiScoringEnabled;
+            return this;
+        }
+
+        /**
+         * Sets whether cellular data is available.
+         *
+         * @param isCellularDataAvailable True if cellular data is available, false otherwise.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsCellularDataAvailable(boolean isCellularDataAvailable) {
+            this.mIsCellularDataAvailable = isCellularDataAvailable;
+            return this;
+        }
+
+        /**
+         * Sets the cellular data network type.
+         *
+         * @param cellularDataNetworkType The cellular data network type.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setCellularDataNetworkType(int cellularDataNetworkType) {
+            this.mCellularDataNetworkType = cellularDataNetworkType;
+            return this;
+        }
+
+        /**
+         * Sets the cellular signal strength in dBm.
+         *
+         * @param cellularSignalStrengthDbm The signal strength in dBm.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setCellularSignalStrengthDbm(int cellularSignalStrengthDbm) {
+            this.mCellularSignalStrengthDbm = cellularSignalStrengthDbm;
+            return this;
+        }
+
+        /**
+         * Sets the cellular signal strength in dB.
+         *
+         * @param cellularSignalStrengthDb The signal strength in dB.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setCellularSignalStrengthDb(int cellularSignalStrengthDb) {
+            this.mCellularSignalStrengthDb = cellularSignalStrengthDb;
+            return this;
+        }
+
+        /**
+         * Sets whether the registered cell is the same.
+         *
+         * @param isSameRegisteredCell True if the cell is the same, false otherwise.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsSameRegisteredCell(boolean isSameRegisteredCell) {
+            this.mIsSameRegisteredCell = isSameRegisteredCell;
+            return this;
+        }
+
+        /**
+         * Sets the link statistics.
+         *
+         * @param linkStats A SparseArray of LinkStats objects.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setLinkStats(SparseArray<LinkStats> linkStats) {
+            this.mLinkStats = linkStats;
+            return this;
+        }
+
+        /**
+         * Sets the number of Wi-Fi links.
+         *
+         * @param wifiLinkCount The number of links.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setWifiLinkCount(int wifiLinkCount) {
+            this.mWifiLinkCount = wifiLinkCount;
+            return this;
+        }
+
+        /**
+         * Sets the MLO mode.
+         *
+         * @param mloMode The MLO mode.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setMloMode(int mloMode) {
+            this.mMloMode = mloMode;
+            return this;
+        }
+
+        /**
+         * Sets the number of transmitted bytes.
+         *
+         * @param txTransmittedBytes The number of transmitted bytes.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setTxTransmittedBytes(long txTransmittedBytes) {
+            this.mTxTransmittedBytes = txTransmittedBytes;
+            return this;
+        }
+
+        /**
+         * Sets the number of received bytes.
+         *
+         * @param rxTransmittedBytes The number of received bytes.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setRxTransmittedBytes(long rxTransmittedBytes) {
+            this.mRxTransmittedBytes = rxTransmittedBytes;
+            return this;
+        }
+
+        /**
+         * Sets the count of bad label events.
+         *
+         * @param labelBadEventCount The count of bad label events.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setLabelBadEventCount(int labelBadEventCount) {
+            this.mLabelBadEventCount = labelBadEventCount;
+            return this;
+        }
+
+        /**
+         * Sets the Wi-Fi framework state.
+         *
+         * @param wifiFrameworkState The framework state.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setWifiFrameworkState(int wifiFrameworkState) {
+            this.mWifiFrameworkState = wifiFrameworkState;
+            return this;
+        }
+
+        /**
+         * Sets whether network capabilities indicate sufficient downstream throughput.
+         *
+         * @param isNetworkCapabilitiesDownstreamSufficient The status.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsNetworkCapabilitiesDownstreamSufficient(
+                int isNetworkCapabilitiesDownstreamSufficient) {
+            this.mIsNetworkCapabilitiesDownstreamSufficient =
+                    isNetworkCapabilitiesDownstreamSufficient;
+            return this;
+        }
+
+        /**
+         * Sets whether network capabilities indicate sufficient upstream throughput.
+         *
+         * @param isNetworkCapabilitiesUpstreamSufficient The status.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsNetworkCapabilitiesUpstreamSufficient(
+                int isNetworkCapabilitiesUpstreamSufficient) {
+            this.mIsNetworkCapabilitiesUpstreamSufficient =
+                    isNetworkCapabilitiesUpstreamSufficient;
+            return this;
+        }
+
+        /**
+         * Sets whether the throughput predictor indicates sufficient downstream throughput.
+         *
+         * @param isThroughputPredictorDownstreamSufficient The status.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsThroughputPredictorDownstreamSufficient(
+                int isThroughputPredictorDownstreamSufficient) {
+            this.mIsThroughputPredictorDownstreamSufficient =
+                    isThroughputPredictorDownstreamSufficient;
+            return this;
+        }
+
+        /**
+         * Sets whether the throughput predictor indicates sufficient upstream throughput.
+         *
+         * @param isThroughputPredictorUpstreamSufficient The status.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsThroughputPredictorUpstreamSufficient(
+                int isThroughputPredictorUpstreamSufficient) {
+            this.mIsThroughputPredictorUpstreamSufficient =
+                    isThroughputPredictorUpstreamSufficient;
+            return this;
+        }
+
+        /**
+         * Sets whether Bluetooth is connected.
+         *
+         * @param isBluetoothConnected True if connected, false otherwise.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsBluetoothConnected(boolean isBluetoothConnected) {
+            this.mIsBluetoothConnected = isBluetoothConnected;
+            return this;
+        }
+
+        /**
+         * Sets the UWB adapter state.
+         *
+         * @param uwbAdapterState The adapter state.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setUwbAdapterState(int uwbAdapterState) {
+            this.mUwbAdapterState = uwbAdapterState;
+            return this;
+        }
+
+        /**
+         * Sets whether low latency mode is activated.
+         *
+         * @param isLowLatencyActivated True if activated, false otherwise.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setIsLowLatencyActivated(boolean isLowLatencyActivated) {
+            this.mIsLowLatencyActivated = isLowLatencyActivated;
+            return this;
+        }
+
+        /**
+         * Sets the maximum supported TX link speed.
+         *
+         * @param maxSupportedTxLinkSpeed The maximum TX link speed.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setMaxSupportedTxLinkSpeed(int maxSupportedTxLinkSpeed) {
+            this.mMaxSupportedTxLinkSpeed = maxSupportedTxLinkSpeed;
+            return this;
+        }
+
+        /**
+         * Sets the maximum supported RX link speed.
+         *
+         * @param maxSupportedRxLinkSpeed The maximum RX link speed.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setMaxSupportedRxLinkSpeed(int maxSupportedRxLinkSpeed) {
+            this.mMaxSupportedRxLinkSpeed = maxSupportedRxLinkSpeed;
+            return this;
+        }
+
+        /**
+         * Sets the VoIP mode.
+         *
+         * @param voipMode The VoIP mode.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setVoipMode(int voipMode) {
+
+            this.mVoipMode = voipMode;
+            return this;
+        }
+
+        /**
+         * Sets the Thread device role.
+         *
+         * @param threadDeviceRole The Thread device role.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setThreadDeviceRole(int threadDeviceRole) {
+            this.mThreadDeviceRole = threadDeviceRole;
+            return this;
+        }
+
+        /**
+         * Sets the data stall status.
+         *
+         * @param statusDataStall The data stall status.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setStatusDataStall(int statusDataStall) {
+            this.mStatusDataStall = statusDataStall;
+            return this;
+        }
+
+        /**
+         * Sets the internal score.
+         *
+         * @param internalScore The internal score, ranging from 0 to 100.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setInternalScore(int internalScore) {
+            this.mInternalScore = internalScore;
+            return this;
+        }
+
+        /**
+         * Sets the internal scorer type.
+         *
+         * @param internalScorerType The type of the internal scorer.
+         * @return The Builder object.
+         */
+        @NonNull
+        public Builder setInternalScorerType(int internalScorerType) {
+            this.mInternalScorerType = internalScorerType;
+            return this;
+        }
+
+        /**
+         * Builds and returns a new WifiUsabilityStatsEntry object with the configured
+         * parameters.
+         *
+         * @return A new WifiUsabilityStatsEntry object.
+         */
+        @NonNull
+        public WifiUsabilityStatsEntry build() {
+            return new WifiUsabilityStatsEntry(mTimeStampMillis, mRssi, mLinkSpeedMbps,
+                    mTotalTxSuccess, mTotalTxRetries, mTotalTxBad, mTotalRxSuccess,
+                    mTotalRadioOnTimeMillis, mTotalRadioTxTimeMillis, mTotalRadioRxTimeMillis,
+                    mTotalScanTimeMillis, mTotalNanScanTimeMillis,
+                    mTotalBackgroundScanTimeMillis,
+                    mTotalRoamScanTimeMillis, mTotalPnoScanTimeMillis,
+                    mTotalHotspot2ScanTimeMillis,
+                    mTotalCcaBusyFreqTimeMillis, mTotalRadioOnFreqTimeMillis, mTotalBeaconRx,
+                    mProbeStatusSinceLastUpdate, mProbeElapsedTimeSinceLastUpdateMillis,
+                    mProbeMcsRateSinceLastUpdate, mRxLinkSpeedMbps,
+                    mTimeSliceDutyCycleInPercent,
+                    mContentionTimeStats, mRateStats, mRadioStats, mChannelUtilizationRatio,
+                    mIsThroughputSufficient, mIsWifiScoringEnabled, mIsCellularDataAvailable,
+                    mCellularDataNetworkType, mCellularSignalStrengthDbm,
+                    mCellularSignalStrengthDb,
+                    mIsSameRegisteredCell, mLinkStats, mWifiLinkCount, mMloMode,
+                    mTxTransmittedBytes, mRxTransmittedBytes, mLabelBadEventCount,
+                    mWifiFrameworkState, mIsNetworkCapabilitiesDownstreamSufficient,
+                    mIsNetworkCapabilitiesUpstreamSufficient,
+                    mIsThroughputPredictorDownstreamSufficient,
+                    mIsThroughputPredictorUpstreamSufficient, mIsBluetoothConnected,
+                    mUwbAdapterState, mIsLowLatencyActivated, mMaxSupportedTxLinkSpeed,
+                    mMaxSupportedRxLinkSpeed, mVoipMode, mThreadDeviceRole, mStatusDataStall,
+                    mInternalScore, mInternalScorerType);
+        }
     }
 }

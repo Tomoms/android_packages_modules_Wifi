@@ -36,6 +36,7 @@ import com.google.android.mobly.snippet.rpc.Rpc;
 import com.google.android.mobly.snippet.util.Log;
 
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,6 +56,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public class ConnectivityManagerSnippet implements Snippet {
+
     private static final String EVENT_KEY_CB_NAME = "callbackName";
     private static final String EVENT_KEY_NETWORK = "network";
     private static final String EVENT_KEY_NETWORK_CAP = "networkCapabilities";
@@ -70,9 +72,9 @@ public class ConnectivityManagerSnippet implements Snippet {
     private final ConnectivityManager mConnectivityManager;
 
     private final ConcurrentHashMap<String, ServerSocket> mServerSockets =
-                  new ConcurrentHashMap<>();
+            new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, NetworkCallback> mNetworkCallBacks =
-                  new ConcurrentHashMap<>();
+            new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Socket> mSockets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, OutputStream> mOutputStreams =
             new ConcurrentHashMap<>();
@@ -84,6 +86,7 @@ public class ConnectivityManagerSnippet implements Snippet {
      * operations.
      */
     class ConnectivityManagerSnippetException extends Exception {
+
         ConnectivityManagerSnippetException(String msg) {
             super(msg);
         }
@@ -94,19 +97,32 @@ public class ConnectivityManagerSnippet implements Snippet {
         mConnectivityManager = mContext.getSystemService(ConnectivityManager.class);
         if (mConnectivityManager == null) {
             throw new ConnectivityManagerSnippetException(
-                "ConnectivityManager not "
-                + "available.");
+                "ConnectivityManager not available.");
         }
     }
 
     public class NetworkCallback extends ConnectivityManager.NetworkCallback {
-
         String mCallBackId;
         Network mNetWork;
         NetworkCapabilities mNetworkCapabilities;
+        long mCurrentTimestamp;
+        long mCreateTimestamp;
+
 
         NetworkCallback(String callBackId) {
             mCallBackId = callBackId;
+            mCreateTimestamp = System.currentTimeMillis();
+        }
+
+        @Override
+        public void onAvailable(Network network) {
+            SnippetEvent event = new SnippetEvent(mCallBackId, "NetworkCallback");
+            event.getData().putString(EVENT_KEY_CB_NAME, "onAvailable");
+            mCurrentTimestamp = System.currentTimeMillis();
+            event.getData().putLong("current_timestamp", System.currentTimeMillis());
+            event.getData().putLong("creation_timestamp", mCreateTimestamp);
+            mNetWork = network;
+            EventCache.getInstance().postEvent(event);
         }
 
         @Override
@@ -169,6 +185,8 @@ public class ConnectivityManagerSnippet implements Snippet {
             event.getData().putParcelable(EVENT_KEY_NETWORK, network);
             event.getData().putString(EVENT_KEY_NETWORK_INTERFACE,
                     linkProperties.getInterfaceName());
+            event.getData().putLong("current_timestamp", System.currentTimeMillis());
+            event.getData().putLong("creation_timestamp", mCreateTimestamp);
             EventCache.getInstance().postEvent(event);
         }
 
@@ -179,6 +197,10 @@ public class ConnectivityManagerSnippet implements Snippet {
             event.getData().putString(EVENT_KEY_CB_NAME, "Lost");
             event.getData().putParcelable(EVENT_KEY_NETWORK, network);
             EventCache.getInstance().postEvent(event);
+        }
+
+        public NetworkCapabilities getNetworkCapabilities() {
+            return mNetworkCapabilities;
         }
     }
 
@@ -194,6 +216,7 @@ public class ConnectivityManagerSnippet implements Snippet {
             return null;
         return iface.getInetAddresses();
     }
+
     /**
      * Returns the link local IPv6 address of the interface.
      *
@@ -250,17 +273,62 @@ public class ConnectivityManagerSnippet implements Snippet {
     }
 
     /**
-     * Requests a network with the specified network request and sets a callback for network
-     * events.
+     * Retrieves the NetworkCapabilities object from a specific NetworkCallback
      *
-     * @param callBackId              A unique identifier assigned automatically by Mobly. This is
-     *                                used as the request ID for further operations and event
-     *                                handling.
-     * @param request                 The NetworkRequest object that specifies the desired network
-     *                                characteristics.
-     * @param requestNetWorkId        A unique ID to support managing multiple network sessions.
+     * @param callbackId A unique identifierof the network request.
+     * @return A JsonObject caontaining the serialized NetworkCapabilities.
+     * @throws ConnectivityManagerSnippetException
+     */
+    @Rpc(description = "Retrieves the NetworkCapabilities for a given NetworkCallback")
+    public JSONObject connectivityGetNetworkCapabilities(String callbackId)
+            throws ConnectivityManagerSnippetException, JSONException {
+        NetworkCallback callback = mNetworkCallBacks.get(callbackId);
+        if (callback == null) {
+            throw new ConnectivityManagerSnippetException("Not Fund NetworkCallback:" + callbackId);
+        }
+        NetworkCapabilities networkCapabilities = callback.getNetworkCapabilities();
+        if (networkCapabilities == null) {
+            throw new ConnectivityManagerSnippetException(
+                    "NetworkCapabilities is null for NetworkCallback:" + callbackId);
+        }
+        return WifiAwareSnippetConverter.serializeNetworkCapabilities(networkCapabilities);
+    }
+
+    /**
+     * Checks if a specific capability exists in a NetworkCallback's NetworkCapabilities.
+     *
+     * @param callbackId A unique identifier of the network request.
+     * @param capability The integer value of the capability to check
+     * @return True if the Network has the specified capability, false otherwise.
+     * @throws ConnectivityManagerSnippetException If the NetworkCallback or NetworkCapabilities are
+     * not found.
+     */
+    @Rpc(description = "Checks if a specific capability exists in a NetworkCallback")
+    public boolean connectivityHasCapability(String callbackId, int capability)
+            throws ConnectivityManagerSnippetException {
+        NetworkCallback callback = mNetworkCallBacks.get(callbackId);
+        if (callback == null) {
+            throw new ConnectivityManagerSnippetException("NetworkCallback not found for ID:"
+                    + callbackId);
+        }
+        NetworkCapabilities networkCapabilities = callback.getNetworkCapabilities();
+        if (networkCapabilities == null) {
+            throw new ConnectivityManagerSnippetException(
+                    "NetworkCapabilities is null for NetworkCallback:" + callbackId);
+        }
+        return networkCapabilities.hasCapability(capability);
+    }
+
+    /**
+     * Requests a network with the specified network request and sets a callback for network events.
+     *
+     * @param callBackId A unique identifier assigned automatically by Mobly. This is used as the
+     *     request ID for further operations and event handling.
+     * @param request The NetworkRequest object that specifies the desired network
+     *     characteristics.
+     * @param requestNetWorkId A unique ID to support managing multiple network sessions.
      * @param requestNetworkTimeoutMs The timeout period (in milliseconds) after which the network
-     *                                request will expire if no suitable network is found.
+     *     request will expire if no suitable network is found.
      */
     @AsyncRpc(description = "Request a network.")
     public void connectivityRequestNetwork(String callBackId, String requestNetWorkId,
@@ -269,6 +337,21 @@ public class ConnectivityManagerSnippet implements Snippet {
         NetworkCallback callback = new NetworkCallback(callBackId);
         mNetworkCallBacks.put(requestNetWorkId, callback);
         mConnectivityManager.requestNetwork(request, callback, requestNetworkTimeoutMs);
+    }
+
+    /**
+     * Registers a Connectivity.NetworkCallback to listen for network events.
+     *
+     * @param callbackId A unique identifier of the network request.
+     * @param request The NetworkRequest object that specifies the desired network
+     *     characteristics.
+     */
+    @AsyncRpc(description = "Registers a network callback")
+    public void connectivityRegisterNetworkCallback(String callbackId, NetworkRequest request) {
+        Log.v("Register network with request: " + request.toString());
+        NetworkCallback callback = new NetworkCallback(callbackId);
+        mConnectivityManager.registerNetworkCallback(request, callback);
+        mNetworkCallBacks.put(callbackId, callback);
     }
 
     /**
@@ -293,8 +376,8 @@ public class ConnectivityManagerSnippet implements Snippet {
      * separate thread is started to handle the socket accept operation asynchronously. The accepted
      * socket is stored and used for further communication (read/write).
      *
-     * @param callbackId A unique identifier assigned automatically by Mobly to track the event and
-     *                   response.
+     * @param callbackId A unique identifier assigned automatically by Mobly to track the event
+     *     and response.
      * @return The port number assigned by the local system.
      */
     @AsyncRpc(description = "Start a server socket to accept incoming connections.")
@@ -382,7 +465,7 @@ public class ConnectivityManagerSnippet implements Snippet {
      * Reads from a socket.
      *
      * @param sessionId To support multiple network requests happening simultaneously
-     * @param len       The number of bytes to read.
+     * @param len The number of bytes to read.
      */
     @Rpc(description = "Reads from a socket.")
     public String connectivityReadSocket(String sessionId, int len)
@@ -405,7 +488,7 @@ public class ConnectivityManagerSnippet implements Snippet {
      * Writes to a socket.
      *
      * @param sessionId To support multiple network requests happening simultaneously
-     * @param message   The message to send.
+     * @param message The message to send.
      * @throws ConnectivityManagerSnippetException
      */
     @Rpc(description = "Writes to a socket.")
@@ -500,7 +583,7 @@ public class ConnectivityManagerSnippet implements Snippet {
      * Creates a socket using Wi-Fi Aware's peer-to-peer connection capabilities. Only TCP transport
      * protocol is supported. The method uses the session ID to track and manage the socket.
      *
-     * @param sessionId     A unique ID to manage multiple network requests simultaneously.
+     * @param sessionId A unique ID to manage multiple network requests simultaneously.
      * @param peerLocalPort The port number of the peer device.
      */
     @Rpc(description = "Create to a socket.")

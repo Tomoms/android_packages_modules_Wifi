@@ -23,6 +23,7 @@ import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
+import android.annotation.UserIdInt;
 import android.compat.annotation.UnsupportedAppUsage;
 import android.content.pm.PackageManager;
 import android.net.IpConfiguration;
@@ -87,25 +88,25 @@ public class WifiConfiguration implements Parcelable {
      * Current Version of the Backup Serializer.
     */
     private static final int BACKUP_VERSION = 3;
-    /** {@hide} */
+    /** @hide */
     public static final String ssidVarName = "ssid";
-    /** {@hide} */
+    /** @hide */
     public static final String bssidVarName = "bssid";
-    /** {@hide} */
+    /** @hide */
     public static final String pskVarName = "psk";
-    /** {@hide} */
+    /** @hide */
     @Deprecated @UnsupportedAppUsage
     public static final String[] wepKeyVarNames = {"wep_key0", "wep_key1", "wep_key2", "wep_key3"};
-    /** {@hide} */
+    /** @hide */
     @Deprecated
     public static final String wepTxKeyIdxVarName = "wep_tx_keyidx";
-    /** {@hide} */
+    /** @hide */
     public static final String priorityVarName = "priority";
-    /** {@hide} */
+    /** @hide */
     public static final String hiddenSSIDVarName = "scan_ssid";
-    /** {@hide} */
+    /** @hide */
     public static final String pmfVarName = "ieee80211w";
-    /** {@hide} */
+    /** @hide */
     public static final String updateIdentiferVarName = "update_identifier";
     /**
      * The network ID for an invalid network.
@@ -114,12 +115,12 @@ public class WifiConfiguration implements Parcelable {
      */
     @SystemApi
     public static final int INVALID_NETWORK_ID = -1;
-    /** {@hide} */
+    /** @hide */
     public static final int LOCAL_ONLY_NETWORK_ID = -2;
 
-    /** {@hide} */
+    /** @hide */
     private String mPasspointManagementObjectTree;
-    /** {@hide} */
+    /** @hide */
     private static final int MAXIMUM_RANDOM_MAC_GENERATION_RETRY = 3;
 
     /**
@@ -1370,10 +1371,9 @@ public class WifiConfiguration implements Parcelable {
     /**
      * True if this network configuration is visible to and usable by other users on the
      * same device, false otherwise.
-     *
-     * @hide
      */
-    @SystemApi
+    @SuppressLint("MutableBareField")
+    @FlaggedApi(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
     public boolean shared;
 
     /**
@@ -1381,6 +1381,12 @@ public class WifiConfiguration implements Parcelable {
      * on the same device, false otherwise.
      */
     private boolean mIsAllowedToUpdateByOtherUsers;
+
+    /**
+     * User Id of creating the configuration
+     * @hide
+     */
+    private int mCreatorUserId;
 
     /**
      * @hide
@@ -1484,9 +1490,9 @@ public class WifiConfiguration implements Parcelable {
     /**
      * Auto-join is allowed by user for this network.
      * Default true.
-     * @hide
      */
-    @SystemApi
+    @SuppressLint("MutableBareField")
+    @FlaggedApi(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
     public boolean allowAutojoin = true;
 
     /**
@@ -1956,6 +1962,12 @@ public class WifiConfiguration implements Parcelable {
      * @hide
      */
     public long randomizedMacLastModifiedTimeMs = 0;
+
+    /**
+     * Updatable seed value for persistent random MAC generation. This value is persisted to disk.
+     * @hide
+     */
+    public int persistentMacRandomizationSeed = 0;
 
     /**
      * Checks if the given MAC address can be used for Connected Mac Randomization
@@ -3398,6 +3410,7 @@ public class WifiConfiguration implements Parcelable {
         mIpProvisioningTimedOut = false;
         mVendorData = Collections.emptyList();
         mIsAllowedToUpdateByOtherUsers = true;
+        mCreatorUserId = -2; // Same as UserHandle.USER_CURRENT
     }
 
     /**
@@ -3556,6 +3569,8 @@ public class WifiConfiguration implements Parcelable {
         sbuf.append(" randomizedMacLastModifiedTimeMs: ")
                 .append(randomizedMacLastModifiedTimeMs == 0 ? "<none>"
                         : logTimeOfDay(randomizedMacLastModifiedTimeMs)).append("\n");
+        sbuf.append(" persistentMacRandomizationSeed: ").append(persistentMacRandomizationSeed)
+                .append("\n");
         sbuf.append(" mIsSendDhcpHostnameEnabled: ").append(mIsSendDhcpHostnameEnabled)
                 .append("\n");
         sbuf.append(" deletionPriority: ").append(mDeletionPriority).append("\n");
@@ -3736,6 +3751,8 @@ public class WifiConfiguration implements Parcelable {
         sbuf.append(" setWifi7Enabled=").append(mWifi7Enabled).append("\n");
         sbuf.append(" mIsAllowedToUpdateByOtherUsers=")
                 .append(mIsAllowedToUpdateByOtherUsers).append("\n");
+        sbuf.append(" mCreatorUserId=")
+                .append(mCreatorUserId).append("\n");
         return sbuf.toString();
     }
 
@@ -4060,7 +4077,10 @@ public class WifiConfiguration implements Parcelable {
         mIpConfiguration.setHttpProxy(proxy);
     }
 
-    /** Implement the Parcelable interface {@hide} */
+    /**
+     * Implement the Parcelable interface
+     * @hide
+     */
     public int describeContents() {
         return 0;
     }
@@ -4161,6 +4181,7 @@ public class WifiConfiguration implements Parcelable {
             macRandomizationSetting = source.macRandomizationSetting;
             randomizedMacExpirationTimeMs = source.randomizedMacExpirationTimeMs;
             randomizedMacLastModifiedTimeMs = source.randomizedMacLastModifiedTimeMs;
+            persistentMacRandomizationSeed = source.persistentMacRandomizationSeed;
             mIsSendDhcpHostnameEnabled = source.mIsSendDhcpHostnameEnabled;
             requirePmf = source.requirePmf;
             updateIdentifier = source.updateIdentifier;
@@ -4189,10 +4210,14 @@ public class WifiConfiguration implements Parcelable {
             mVendorData = new ArrayList<>(source.mVendorData);
             mWifi7Enabled = source.mWifi7Enabled;
             mIsAllowedToUpdateByOtherUsers = source.mIsAllowedToUpdateByOtherUsers;
+            mCreatorUserId = source.mCreatorUserId;
         }
     }
 
-    /** Implement the Parcelable interface {@hide} */
+    /**
+     * Implement the Parcelable interface
+     * @hide
+     */
     @Override
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeInt(networkId);
@@ -4290,9 +4315,14 @@ public class WifiConfiguration implements Parcelable {
         dest.writeList(mVendorData);
         dest.writeBoolean(mWifi7Enabled);
         dest.writeBoolean(mIsAllowedToUpdateByOtherUsers);
+        dest.writeInt(persistentMacRandomizationSeed);
+        dest.writeInt(mCreatorUserId);
     }
 
-    /** Implement the Parcelable interface {@hide} */
+    /**
+     * Implement the Parcelable interface
+     * @hide
+     */
     @SystemApi
     public static final @android.annotation.NonNull Creator<WifiConfiguration> CREATOR =
             new Creator<WifiConfiguration>() {
@@ -4417,6 +4447,8 @@ public class WifiConfiguration implements Parcelable {
                     config.mVendorData = ParcelUtil.readOuiKeyedDataList(in);
                     config.mWifi7Enabled = in.readBoolean();
                     config.mIsAllowedToUpdateByOtherUsers = in.readBoolean();
+                    config.persistentMacRandomizationSeed = in.readInt();
+                    config.mCreatorUserId = in.readInt();
                     return config;
                 }
 
@@ -4826,5 +4858,51 @@ public class WifiConfiguration implements Parcelable {
             throw new UnsupportedOperationException();
         }
         return shared && mIsAllowedToUpdateByOtherUsers;
+    }
+
+    /**
+     * Set user id of the user that created the configuration.
+     *
+     * @hide
+     */
+    public void setCreatorUserId(int creatorUserId) {
+        mCreatorUserId = creatorUserId;
+    }
+
+    /**
+     * Get user id of the user creating the configuration
+     *
+     * @hide
+     */
+    public int getCreatorUserIdInternal() {
+        // To make sure backward compatibility, return mCreatorUserId only
+        // when we can't identify it from creator uid
+        int userIdFromUid = UserHandle.getUserHandleForUid(creatorUid).getIdentifier();
+        if (Flags.multiUserWifiEnhancement()) {
+            return userIdFromUid == UserHandle.SYSTEM.getIdentifier()
+                    ? mCreatorUserId : userIdFromUid;
+        }
+        return userIdFromUid;
+    }
+
+    /**
+     * @hide
+     */
+    public int getStoredCreatorUserId() {
+        return mCreatorUserId;
+    }
+
+    /**
+     * Returns user id of the user creating the configuration
+     * @hide
+     */
+    @SystemApi
+    @RequiresApi(37)
+    @FlaggedApi(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
+    public @UserIdInt int getCreatorUserId() {
+        if (!Environment.isSdkNewerThanB()) {
+            throw new UnsupportedOperationException();
+        }
+        return getCreatorUserIdInternal();
     }
 }

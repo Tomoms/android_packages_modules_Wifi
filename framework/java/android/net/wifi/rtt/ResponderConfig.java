@@ -312,9 +312,12 @@ public final class ResponderConfig implements Parcelable {
      *                        MHz).
      * @param preamble        The preamble used by the Responder, specified using
      *                        {@link PreambleType}.
+     * @deprecated            Use {@link Builder#build()} instead
      * @hide
      */
+    @Deprecated
     @SystemApi
+    @FlaggedApi(Flags.FLAG_IMPROVE_RANGING_API)
     public ResponderConfig(@NonNull MacAddress macAddress, @ResponderType int responderType,
             boolean supports80211mc, @ChannelWidth int channelWidth, int frequency, int centerFreq0,
             int centerFreq1, @PreambleType int preamble) {
@@ -357,9 +360,12 @@ public final class ResponderConfig implements Parcelable {
      *                        MHz).
      * @param preamble        The preamble used by the Responder, specified using
      *                        {@link PreambleType}.
+     * @deprecated            Use {@link Builder#build()} instead
      * @hide
      */
+    @Deprecated
     @SystemApi
+    @FlaggedApi(Flags.FLAG_IMPROVE_RANGING_API)
     public ResponderConfig(@NonNull PeerHandle peerHandle, @ResponderType int responderType,
             boolean supports80211mc, @ChannelWidth int channelWidth, int frequency, int centerFreq0,
             int centerFreq1, @PreambleType int preamble) {
@@ -402,8 +408,10 @@ public final class ResponderConfig implements Parcelable {
      * @param preamble        The preamble used by the Responder, specified using
      *                        {@link PreambleType}.
      *
+     * @deprecated            Use {@link Builder#build()} instead
      * @hide
      */
+    @Deprecated
     public ResponderConfig(@NonNull MacAddress macAddress, @NonNull PeerHandle peerHandle,
             @ResponderType int responderType, boolean supports80211mc,
             @ChannelWidth int channelWidth, int frequency, int centerFreq0, int centerFreq1,
@@ -607,11 +615,25 @@ public final class ResponderConfig implements Parcelable {
     }
 
     /**
-     * @return the peer handle of the responder
+     * Returns the Wi-Fi Aware peer identifier of the responder.
+     * <p>
+     * This value is non-null if the responder is a Wi-Fi Aware peer and was configured
+     * using a {@link PeerHandle} (via {@link ResponderConfig.Builder#setPeerHandle(PeerHandle)}).
+     * The {@link PeerHandle} is an opaque identifier for a specific Aware peer discovered
+     * during Wi-Fi Aware operations, such as service discovery.
+     * <p>
+     * If the responder is not an Aware peer, or if it was configured using its
+     * MAC address (via {@link ResponderConfig.Builder#setMacAddress(MacAddress)}),
+     * this method will return {@code null}.
+     * <p>
+     * Only one of {@link #getPeerHandle()} or {@link #getMacAddress()} will return a
+     * non-null value for a valid {@link ResponderConfig}.
      *
-     * @hide
+     * @return The {@link PeerHandle} of the Wi-Fi Aware responder, or {@code null}
+     *         if the responder is not an Aware peer or is identified by its MAC address.
      */
     @Nullable
+    @FlaggedApi(Flags.FLAG_IMPROVE_RANGING_API)
     public PeerHandle getPeerHandle() {
         return peerHandle;
     }
@@ -754,30 +776,86 @@ public final class ResponderConfig implements Parcelable {
         private long mNtbMaxMeasurementTime = DEFAULT_NTB_MAX_TIME_BETWEEN_MEASUREMENTS_MICROS;
         private SecureRangingConfig mSecureRangingConfig = null;
 
+        /**
+         * Default constructor for the Builder.
+         */
+        public Builder() {
+        }
+
+        /**
+         * Creates a new Builder instance, initializing it with the values from an
+         * existing {@link ResponderConfig} object. This allows for easy modification
+         * of an existing configuration.
+         *
+         * @param config The ResponderConfig instance to copy values from.
+         */
+        @FlaggedApi(Flags.FLAG_IMPROVE_RANGING_API)
+        public Builder(@NonNull ResponderConfig config) {
+            Objects.requireNonNull(config);
+            this.mMacAddress = config.macAddress;
+            this.mPeerHandle = config.peerHandle;
+            this.mResponderType = config.responderType;
+            this.mSupports80211Mc = config.supports80211mc;
+            this.mSupports80211azNtb = config.supports80211azNtb;
+            this.mChannelWidth = config.channelWidth;
+            this.mFrequency = config.frequency;
+            this.mCenterFreq0 = config.centerFreq0;
+            this.mCenterFreq1 = config.centerFreq1;
+            this.mPreamble = config.preamble;
+            this.mNtbMinMeasurementTime = config.mNtbMinMeasurementTime;
+            this.mNtbMaxMeasurementTime = config.mNtbMaxMeasurementTime;
+            this.mSecureRangingConfig = config.mSecureRangingConfig;
+        }
 
         /**
          * Sets the Responder MAC Address.
+         * <p>
+         * A responder must be identified by <em>either</em> a {@link MacAddress}
+         * <em>or</em> a {@link PeerHandle} (for Aware peers, set via
+         * {@link #setPeerHandle(PeerHandle)}), but not both.
+         * <p>
+         * Note: This method sets the MAC address. If a {@link PeerHandle} was previously
+         * set using {@link #setPeerHandle(PeerHandle)}, both identifiers might be temporarily
+         * present within the builder. The final validation ensuring that only one of
+         * these identifiers is exclusively set occurs during the {@link #build()} operation.
+         * If {@link #build()} is called when both a MAC address and a PeerHandle are configured
+         * or when neither is set, it will result in an {@link IllegalArgumentException}.
          *
-         * @param macAddress the phyical address of the responder
+         * @param macAddress the physical address of the responder
          * @return the builder to facilitate chaining
          *         {@code builder.setXXX(..).setXXX(..)}.
          */
         @NonNull
-        public Builder setMacAddress(@NonNull MacAddress macAddress) {
+        public Builder setMacAddress(@Nullable MacAddress macAddress) {
             this.mMacAddress = macAddress;
             return this;
         }
 
         /**
-         * Sets the Responder Peer handle.
+         * Sets the Responder Aware Peer handle.
+         * <p>
+         * Use this method to identify the responder when it is a Wi-Fi Aware peer.
+         * The {@link PeerHandle} is a unique identifier for an Aware peer obtained
+         * through Wi-Fi Aware discovery processes.
+         * <p>
+         * A responder must be identified by <em>either</em> a {@link PeerHandle}
+         * (for Aware peers) <em>or</em> a {@link MacAddress} (for non-Aware peers like
+         * Access Points or Wi-Fi Direct devices), but not both.
+         * <p>
+         * Note: This method sets the peer handle. If a MAC address was previously set
+         * using {@link #setMacAddress(MacAddress)}, both identifiers might be temporarily
+         * present within the builder. The final validation ensuring that only one of
+         * these identifiers is exclusively set occurs during the {@link #build()} operation.
+         * If {@link #build()} is called when both a MAC address and a PeerHandle are configured
+         * or when neither is set, it will result in an {@link IllegalArgumentException}.
          *
-         * @param peerHandle Peer handle of the resposnde
+         * @param peerHandle Peer handle of the responder
          * @return the builder to facilitate chaining
          *         {@code builder.setXXX(..).setXXX(..)}.
-         * @hide
          */
+        @FlaggedApi(Flags.FLAG_IMPROVE_RANGING_API)
         @NonNull
-        public Builder setPeerHandle(@NonNull PeerHandle peerHandle) {
+        public Builder setPeerHandle(@Nullable PeerHandle peerHandle) {
             this.mPeerHandle = peerHandle;
             return this;
         }

@@ -50,6 +50,8 @@ DISCOVERY_KEY_MAX_DISTANCE_MM = 'MaxDistanceMm'
 # onServiceLost reason code
 EASON_PEER_NOT_VISIBLE = 1
 
+# throughput unit change
+BITS_TO_MBPS = 1000000
 
 class WifiAwareTestConstants:
     """Constants for Wi-Fi Aware test."""
@@ -133,6 +135,8 @@ class DiscoverySessionCallbackParamsType(enum.StrEnum):
     IS_SESSION_INIT = 'isSessionInitialized'
     MESSAGE_ID = 'messageId'
     RECEIVE_MESSAGE = 'receivedMessage'
+    SESSION_CB_KEY_MESSAGE_AS_STRING = "messageAsString"
+    SESSION_CB_KEY_LATENCY_MS = "latencyMs"
 
 
 @enum.unique
@@ -153,6 +157,8 @@ class NetworkCbEventKey(enum.StrEnum):
     TRANSPORT_INFO_CLASS_NAME = 'transportInfoClassName'
     CHANNEL_IN_MHZ = 'channelInMhz'
     NETWORK_INTERFACE_NAME = 'interfaceName'
+    NETWORK_CB_KEY_CURRENT_TS = "current_timestamp"
+    NETWORK_CB_KEY_CREATE_TS = "creation_timestamp"
 
 
 @enum.unique
@@ -641,3 +647,16 @@ class CountryCode(enum.StrEnum):
     US = 'US'
     UNKNOWN = 'UNKNOWN'
 
+class AwarePowerSettings:
+    """Aware Power Settings."""
+    POWER_DW_24_INTERACTIVE = 1
+    POWER_DW_5_INTERACTIVE = 1
+    POWER_DISC_BEACON_INTERVAL_INTERACTIVE = 0
+    POWER_NUM_SS_IN_DISC_INTERACTIVE = 0
+    POWER_ENABLE_DW_EARLY_TERM_INTERACTIVE = 0
+
+    POWER_DW_24_NON_INTERACTIVE = 4
+    POWER_DW_5_NON_INTERACTIVE = 0
+    POWER_DISC_BEACON_INTERVAL_NON_INTERACTIVE = 0
+    POWER_NUM_SS_IN_DISC_NON_INTERACTIVE = 0
+    POWER_ENABLE_DW_EARLY_TERM_NON_INTERACTIVE = 0

@@ -595,18 +595,23 @@ public class WifiAwareNativeApi implements WifiAwareShellCommand.DelegatedShellC
      * @param appInfo            Arbitrary binary blob transmitted to the peer.
      * @param capabilities       The capabilities of the firmware.
      * @param securityConfig     Security config to encrypt the data-path
+     * @param pubSubId           The pubSubId of the discovery session.
+     * @param frameProtectionEnabled Whether frame protection is enabled.
      */
     public boolean initiateDataPath(short transactionId, int peerId, int channelRequestType,
             int channel, byte[] peer, String interfaceName,
             boolean isOutOfBand, byte[] appInfo, Capabilities capabilities,
-            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId) {
+            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId,
+        boolean frameProtectionEnabled) {
         if (mVerboseLoggingEnabled) {
             Log.v(TAG, "initiateDataPath: transactionId=" + transactionId + ", peerId=" + peerId
                     + ", channelRequestType=" + channelRequestType + ", channel=" + channel
                     + ", peer=" + String.valueOf(HexEncoding.encode(peer)) + ", interfaceName="
                     + interfaceName + ", securityConfig=" + securityConfig
                     + ", isOutOfBand=" + isOutOfBand + ", appInfo.length="
-                    + ((appInfo == null) ? 0 : appInfo.length) + ", capabilities=" + capabilities);
+                    + ((appInfo == null) ? 0 : appInfo.length) + ", capabilities=" + capabilities
+                    + ", pubSubId=" + pubSubId + ", frameProtectionEnabled="
+                    + frameProtectionEnabled);
         }
         recordTransactionId(transactionId);
 
@@ -620,7 +625,7 @@ public class WifiAwareNativeApi implements WifiAwareShellCommand.DelegatedShellC
             MacAddress peerMac = MacAddress.fromBytes(peer);
             return iface.initiateDataPath(transactionId, peerId, channelRequestType, channel,
                     peerMac, interfaceName, isOutOfBand, appInfo, capabilities, securityConfig,
-                    pubSubId);
+                    pubSubId, frameProtectionEnabled);
         } catch (IllegalArgumentException e) {
             Log.e(TAG, "Invalid peer mac received: " + Arrays.toString(peer));
             return false;
@@ -643,16 +648,21 @@ public class WifiAwareNativeApi implements WifiAwareShellCommand.DelegatedShellC
      *                       session).
      * @param capabilities   The capabilities of the firmware.
      * @param securityConfig Security config to encrypt the data-path
+     * @param pubSubId       The pubSubId of the discovery session.
+     * @param frameProtectionEnabled Whether frame protection is enabled.
      */
     public boolean respondToDataPathRequest(short transactionId, boolean accept, int ndpId,
             String interfaceName, byte[] appInfo,
             boolean isOutOfBand, Capabilities capabilities,
-            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId) {
+            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId,
+        boolean frameProtectionEnabled) {
         if (mVerboseLoggingEnabled) {
             Log.v(TAG, "respondToDataPathRequest: transactionId=" + transactionId + ", accept="
                     + accept + ", int ndpId=" + ndpId + ", interfaceName=" + interfaceName
                     + ", appInfo.length=" + ((appInfo == null) ? 0 : appInfo.length)
-                    + ", securityConfig" + securityConfig);
+                    + ", securityConfig" + securityConfig + ", isOutOfBand=" + isOutOfBand
+                    + ", capabilities=" + capabilities + ", pubSubId=" + pubSubId
+                    + ", frameProtectionEnabled=" + frameProtectionEnabled);
         }
         recordTransactionId(transactionId);
 
@@ -662,7 +672,7 @@ public class WifiAwareNativeApi implements WifiAwareShellCommand.DelegatedShellC
             return false;
         }
         return iface.respondToDataPathRequest(transactionId, accept, ndpId, interfaceName, appInfo,
-                isOutOfBand, capabilities, securityConfig, pubSubId);
+                isOutOfBand, capabilities, securityConfig, pubSubId, frameProtectionEnabled);
     }
 
     /**
@@ -836,10 +846,11 @@ public class WifiAwareNativeApi implements WifiAwareShellCommand.DelegatedShellC
      * @param accept          True is proposed method is accepte
      * @param pubSubId        ID of the publish/subscribe session - obtained when creating a
      *                        session.
+     * @param method          proposed bootstrapping method
      * @return True if the request send success
      */
     public boolean respondToBootstrappingRequest(short transactionId, int bootstrappingId,
-            boolean accept, byte pubSubId) {
+            boolean accept, byte pubSubId, int method) {
         if (mVerboseLoggingEnabled) {
             Log.v(TAG, "respondToBootstrappingRequest: transactionId=" + transactionId);
         }
@@ -852,7 +863,7 @@ public class WifiAwareNativeApi implements WifiAwareShellCommand.DelegatedShellC
         }
 
         return iface.respondToBootstrappingRequest(transactionId, bootstrappingId, accept,
-                pubSubId);
+                pubSubId, method);
     }
 
     /**

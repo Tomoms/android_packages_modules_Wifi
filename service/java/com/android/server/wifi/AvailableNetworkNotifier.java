@@ -35,6 +35,7 @@ import android.net.wifi.IActionListener;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiContext;
+import android.net.wifi.util.Environment;
 import android.net.wifi.util.ScanResultUtil;
 import android.os.Handler;
 import android.os.Looper;
@@ -51,6 +52,7 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.proto.nano.WifiMetricsProto.ConnectToNetworkNotificationAndActionCount;
 import com.android.server.wifi.util.ActionListenerWrapper;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -134,6 +136,8 @@ public class AvailableNetworkNotifier {
     private final MakeBeforeBreakManager mMakeBeforeBreakManager;
     private final WifiNotificationManager mWifiNotificationManager;
     private final WifiPermissionsUtil mWifiPermissionsUtil;
+    private final WifiSettingsConfigStore mWifiSettingsConfigStore;
+    private final FeatureFlags mFeatureFlags;
 
     @VisibleForTesting
     ScanResult mRecommendedNetwork;
@@ -144,6 +148,8 @@ public class AvailableNetworkNotifier {
     private final String mStoreDataIdentifier;
     /** Identifier for the settings toggle, used for registering ContentObserver */
     private final String mToggleSettingsName;
+    /** Identifier for the WifiSettingsConfigStore key, used for Wifi internal setting storage */
+    private final WifiSettingsConfigStore.Key<Boolean> mToggleSettingsKey;
 
     /** System wide identifier for notification in Notification Manager */
     private final int mSystemMessageNotificationId;
@@ -159,6 +165,7 @@ public class AvailableNetworkNotifier {
             String tag,
             String storeDataIdentifier,
             String toggleSettingsName,
+            WifiSettingsConfigStore.Key<Boolean> toggleSettingsKey,
             int notificationIdentifier,
             int nominatorId,
             WifiContext context,
@@ -172,10 +179,13 @@ public class AvailableNetworkNotifier {
             ConnectToNetworkNotificationBuilder connectToNetworkNotificationBuilder,
             MakeBeforeBreakManager makeBeforeBreakManager,
             WifiNotificationManager wifiNotificationManager,
-            WifiPermissionsUtil wifiPermissionsUtil) {
+            WifiPermissionsUtil wifiPermissionsUtil,
+            WifiSettingsConfigStore wifiSettingsConfigStore,
+            FeatureFlags featureFlags) {
         mTag = tag;
         mStoreDataIdentifier = storeDataIdentifier;
         mToggleSettingsName = toggleSettingsName;
+        mToggleSettingsKey = toggleSettingsKey;
         mSystemMessageNotificationId = notificationIdentifier;
         mNominatorId = nominatorId;
         mContext = context;
@@ -189,6 +199,8 @@ public class AvailableNetworkNotifier {
         mMakeBeforeBreakManager = makeBeforeBreakManager;
         mWifiNotificationManager = wifiNotificationManager;
         mWifiPermissionsUtil = wifiPermissionsUtil;
+        mWifiSettingsConfigStore = wifiSettingsConfigStore;
+        mFeatureFlags = featureFlags;
         mScreenOn = false;
         wifiConfigStore.registerStoreData(new SsidSetStoreData(mStoreDataIdentifier,
                 new AvailableNetworkNotifierStoreData()));
@@ -206,8 +218,33 @@ public class AvailableNetworkNotifier {
         filter.addAction(ACTION_CONNECT_TO_NETWORK);
         filter.addAction(ACTION_PICK_WIFI_NETWORK);
         filter.addAction(ACTION_PICK_WIFI_NETWORK_AFTER_CONNECT_FAILURE);
-        mContext.registerReceiver(
-                mBroadcastReceiver, filter, null /* broadcastPermission */, mHandler);
+        if (mFeatureFlags.monitorIntentForAllUsers()) {
+            mContext.registerReceiverForAllUsers(
+                    mBroadcastReceiver, filter, null /* broadcastPermission */, mHandler);
+        } else {
+            mContext.registerReceiver(
+                    mBroadcastReceiver, filter, null /* broadcastPermission */, mHandler);
+        }
+        if (mFeatureFlags.multiUserWifiEnhancement() && Environment.isSdkNewerThanB()) {
+            mWifiSettingsConfigStore.registerChangeListener(mToggleSettingsKey, (key, value) -> {
+                if (mSettingEnabled != value) {
+                    mSettingEnabled = value;
+                    clearPendingNotification(true /* resetRepeatTime */);
+                }
+                // Sync change to the Settings.Global value.
+                try {
+                    // No-op if the Settings.Global value is the same as the to-be-set value.
+                    if (mFrameworkFacade.getIntegerSetting(mContext.getContentResolver(),
+                            mToggleSettingsName) == (value ? 1 : 0)) {
+                        return;
+                    }
+                } catch (Settings.SettingNotFoundException e) {
+                    // If the Settings.Global value is not found, proceed to configure the value.
+                }
+                // Update the Settings.Global value only if the value is not found or different.
+                mFrameworkFacade.setIntegerSetting(mContext, mToggleSettingsName, value ? 1 : 0);
+            }, mHandler);
+        }
     }
 
     private final BroadcastReceiver mBroadcastReceiver =
@@ -278,6 +315,19 @@ public class AvailableNetworkNotifier {
 
     public boolean isSettingEnabled() {
         return mSettingEnabled;
+    }
+
+    /**
+     * Setter for the network availability notifier toggle. Called from {@code WifiManager} APIs.
+     * For example, for open networks, called from
+     * {@link WifiServiceImpl#setOpenNetworkNotifierEnabled(boolean)}.
+     *
+     * @param enable Whether the user has set the setting to enabled.
+     */
+    public void setSettingsEnabled(boolean enable) {
+        mSettingEnabled = enable;
+        mWifiSettingsConfigStore.put(mToggleSettingsKey, enable);
+        mFrameworkFacade.setIntegerSetting(mContext, mToggleSettingsName, enable ? 1 : 0);
     }
 
     private boolean isControllerEnabled() {
@@ -589,6 +639,10 @@ public class AvailableNetworkNotifier {
         public void onChange(boolean selfChange) {
             super.onChange(selfChange);
             mSettingEnabled = getValue();
+            if (mFeatureFlags.multiUserWifiEnhancement() && Environment.isSdkNewerThanB()
+                    && mSettingEnabled != mWifiSettingsConfigStore.get(mToggleSettingsKey)) {
+                mWifiSettingsConfigStore.put(mToggleSettingsKey, mSettingEnabled);
+            }
             clearPendingNotification(true /* resetRepeatTime */);
         }
 

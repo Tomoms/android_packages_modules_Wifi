@@ -31,6 +31,7 @@ import android.util.Log;
 import android.util.StatsEvent;
 
 import com.android.server.wifi.proto.WifiStatsLog;
+import com.android.wifi.resources.R;
 
 import java.util.List;
 import java.util.Set;
@@ -154,6 +155,18 @@ public class WifiPulledAtomLogger {
                 WifiStatsLog.WIFI_SETTING_INFO__SETTING_NAME__EXTERNAL_SCORER_DRY_RUN,
                 !TextUtils.isEmpty(
                         mWifiInjector.getDeviceConfigFacade().getDryRunScorerPkgName())));
+        data.add(WifiStatsLog.buildStatsEvent(atomTag,
+                WifiStatsLog.WIFI_SETTING_INFO__SETTING_NAME__QOS_NETWORK_CENTRIC,
+                mContext.getResources().getBoolean(
+                        R.bool.config_wifiNetworkCentricQosPolicyFeatureEnabled)));
+        data.add(WifiStatsLog.buildStatsEvent(atomTag,
+                WifiStatsLog.WIFI_SETTING_INFO__SETTING_NAME__QOS_APPLICATION_CENTRIC,
+                mContext.getResources().getBoolean(
+                        R.bool.config_wifiApplicationCentricQosPolicyFeatureEnabled)));
+        data.add(WifiStatsLog.buildStatsEvent(atomTag,
+                WifiStatsLog.WIFI_SETTING_INFO__SETTING_NAME__MOBILITY_STATE_AVAILABLE,
+                mWifiInjector.getActiveModeWarden()
+                        .getDeviceMobilityState() != WifiManager.DEVICE_MOBILITY_STATE_UNKNOWN));
         return StatsManager.PULL_SUCCESS;
     }
 

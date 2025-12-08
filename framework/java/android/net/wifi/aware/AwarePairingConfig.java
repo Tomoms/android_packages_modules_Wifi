@@ -133,7 +133,7 @@ public final class AwarePairingConfig implements Parcelable {
 
     /**
      * Get the supported bootstrapping methods in this config. Set of the
-     * STATUS_NETWORK_SUGGESTIONS_ values.
+     * PAIRING_BOOTSTRAPPING_ values.
      */
     @BootstrappingMethod
     public int getBootstrappingMethods() {

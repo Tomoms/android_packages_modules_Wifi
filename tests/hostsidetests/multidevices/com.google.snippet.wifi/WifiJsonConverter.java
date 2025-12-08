@@ -16,21 +16,24 @@
 
 package com.google.snippet.wifi;
 
+import android.net.MacAddress;
 import android.net.wifi.SoftApConfiguration;
 import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiNetworkSuggestion;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import androidx.annotation.NonNull;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.List;
 
 /**
  * The converter class that allows users to use custom type as snippet RPC arguments and return
  * values.
  */
 public final class WifiJsonConverter {
-    private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     /**
      * Remove the extra quotation marks from the beginning and the end of a string.
@@ -63,16 +66,64 @@ public final class WifiJsonConverter {
         if (object instanceof WifiConfiguration) {
             return serializeWifiConfiguration((WifiConfiguration) object);
         }
-
-        // By default, depends on Gson to serialize correctly.
-        return new JSONObject(GSON.toJson(object));
+        if (object instanceof WifiNetworkSuggestion) {
+            return serializeWifiNetworkSuggestion((WifiNetworkSuggestion) object);
+        }
+        throw new JSONException(
+            "Unsupported object type: " + object.getClass().getName());
     }
 
     private static JSONObject serializeSoftApConfiguration(SoftApConfiguration data)
             throws JSONException {
-        JSONObject result = new JSONObject(GSON.toJson(data));
+        JSONObject result = new JSONObject();
         result.put("SSID", trimQuotationMarks(data.getWifiSsid().toString()));
+        result.put("Passphrase", data.getPassphrase());
+        result.put("hiddenSSID", data.isHiddenSsid());
+        result.put("mSecurityType", data.getSecurityType());
+        result.put("apBand", data.getBand());
+        int channel = data.getChannel();
+        result.put("apChannel", channel);
         return result;
+    }
+
+    /**
+     * Helper to convert a List of MacAddress objects to a JSONArray of strings.
+     */
+    private static JSONArray macAddressListToJsonArray(List<MacAddress> macAddresses) {
+        JSONArray jsonArray = new JSONArray();
+        if (macAddresses != null) {
+            for (MacAddress mac : macAddresses) {
+                if (mac != null) {
+                    jsonArray.put(mac.toString());
+                }
+            }
+        }
+        return jsonArray;
+    }
+
+    /**
+     * {@link WifiNetworkSuggestion} covert to JSONObject.
+     *
+     * @param suggestion WifiNetworkSuggestion object to serialize.
+     * @return JSONObject of the input object.
+     * @throws JSONException if there is an error serializing the object.
+     */
+    public static JSONObject serializeWifiNetworkSuggestion(
+            @NonNull WifiNetworkSuggestion suggestion) throws JSONException {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("ssid", suggestion.getSsid());
+        MacAddress bssidMacAddress = suggestion.getBssid();
+        if (bssidMacAddress != null) {
+            jsonObject.put("bssid", bssidMacAddress.toString());
+        } else {
+            jsonObject.put("bssid", null);
+        }
+
+        jsonObject.put("is_hidden_ssid", suggestion.isHiddenSsid());
+        jsonObject.put("is_metered", suggestion.isMetered());
+        jsonObject.put("is_app_interaction_required", suggestion.isAppInteractionRequired());
+
+        return jsonObject;
     }
 
     private static JSONObject serializeWifiConfiguration(WifiConfiguration data)

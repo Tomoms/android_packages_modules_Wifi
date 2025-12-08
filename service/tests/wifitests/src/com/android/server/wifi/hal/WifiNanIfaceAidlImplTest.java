@@ -53,6 +53,7 @@ import android.hardware.wifi.NanPublishRequest;
 import android.hardware.wifi.NanRangingIndication;
 import android.hardware.wifi.NanRespondToPairingIndicationRequest;
 import android.hardware.wifi.NanSubscribeRequest;
+import android.hardware.wifi.NanBootstrappingMethod;
 import android.net.MacAddress;
 import android.net.wifi.OuiKeyedData;
 import android.net.wifi.aware.AwarePairingConfig;
@@ -288,7 +289,7 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
     }
 
     @Test
-    public void testPairingSettings() throws RemoteException {
+    public void testPublishWithPairingSettings() throws RemoteException {
         assumeTrue(SdkLevel.isAtLeastU());
         short tid = 250;
         byte pid = 34;
@@ -313,7 +314,54 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 halPubReq.baseConfigs.securityConfig.securityType);
         assertEquals(NanCipherSuiteType.PUBLIC_KEY_PASN_128_MASK,
                 halPubReq.baseConfigs.securityConfig.cipherType);
+        assertTrue(halPubReq.pairingConfig.enablePairingSetup);
+        assertTrue(halPubReq.pairingConfig.enablePairingCache);
+        assertTrue(halPubReq.pairingConfig.enablePairingVerification);
+        assertEquals(NanBootstrappingMethod.BOOTSTRAPPING_OPPORTUNISTIC_MASK,
+                halPubReq.pairingConfig.supportedBootstrappingMethods);
+        assertEquals(NanCipherSuiteType.PUBLIC_KEY_PASN_128_MASK,
+                halPubReq.baseConfigs.securityConfig.cipherType);
+        assertTrue(halPubReq.baseConfigs.securityConfig.requiresEnhancedFrameProtection);
+        assertTrue(halPubReq.baseConfigs.securityConfig.supportBigtksa);
+        assertTrue(halPubReq.baseConfigs.securityConfig.supportGtkAndIgtk);
     }
+
+    @Test
+    public void testSubScribeWithPairingSettings() throws RemoteException {
+        assumeTrue(SdkLevel.isAtLeastU());
+        short tid = 250;
+        byte pid = 34;
+        AwarePairingConfig awarePairingConfig = new AwarePairingConfig.Builder()
+                .setPairingCacheEnabled(true)
+                .setPairingSetupEnabled(true)
+                .setPairingVerificationEnabled(true)
+                .setBootstrappingMethods(PAIRING_BOOTSTRAPPING_OPPORTUNISTIC)
+                .setSupportedCipherSuites(WIFI_AWARE_CIPHER_SUITE_NCS_PK_PASN_128)
+                .build();
+        SubscribeConfig config = new SubscribeConfig.Builder()
+                .setServiceName("XXX")
+                .setPairingConfig(awarePairingConfig)
+                .build();
+        ArgumentCaptor<NanSubscribeRequest> subCaptor = ArgumentCaptor.forClass(
+                NanSubscribeRequest.class);
+        assertTrue(mDut.subscribe(tid, pid, config, null));
+        verify(mIWifiNanIfaceMock)
+                .startSubscribeRequest(eq((char) tid), subCaptor.capture());
+        NanSubscribeRequest halSubReq = subCaptor.getValue();
+        assertEquals(NanCipherSuiteType.PUBLIC_KEY_PASN_128_MASK,
+                halSubReq.baseConfigs.securityConfig.cipherType);
+        assertTrue(halSubReq.pairingConfig.enablePairingSetup);
+        assertTrue(halSubReq.pairingConfig.enablePairingCache);
+        assertTrue(halSubReq.pairingConfig.enablePairingVerification);
+        assertEquals(NanBootstrappingMethod.BOOTSTRAPPING_OPPORTUNISTIC_MASK,
+                halSubReq.pairingConfig.supportedBootstrappingMethods);
+        assertEquals(NanCipherSuiteType.PUBLIC_KEY_PASN_128_MASK,
+                halSubReq.baseConfigs.securityConfig.cipherType);
+        assertTrue(halSubReq.baseConfigs.securityConfig.requiresEnhancedFrameProtection);
+        assertTrue(halSubReq.baseConfigs.securityConfig.supportBigtksa);
+        assertTrue(halSubReq.baseConfigs.securityConfig.supportGtkAndIgtk);
+    }
+
 
     /**
      * Validate that the configuration parameters used to manage power state behavior are
@@ -426,7 +474,22 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* usePassphrase */ false,
                 /* isOutOfBand */ false,
                 /* publicCipherSuites */ 0,
-                /* halCipherSuite */ 0);
+                /* halCipherSuite */ 0,
+                /* frameProtectionEnabled */ false);
+    }
+
+    /**
+     * Validate the initiation of NDP for an open link with frame protection enabled.
+     */
+    @Test
+    public void testInitiateDataPathOpenFrameProtectionEnabled() throws Exception {
+        validateInitiateDataPath(
+                /* usePmk */ false,
+                /* usePassphrase */ false,
+                /* isOutOfBand */ false,
+                /* publicCipherSuites */ 0,
+                /* halCipherSuite */ 0,
+                /* frameProtectionEnabled */ true);
     }
 
     /**
@@ -439,7 +502,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* usePassphrase */ false,
                 /* isOutOfBand */ false,
                 /* publicCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_256,
-                /* halCipherSuite */ SHARED_KEY_256_MASK);
+                /* halCipherSuite */ SHARED_KEY_256_MASK,
+                /* frameProtectionEnabled */ false);
 
     }
 
@@ -453,7 +517,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* usePassphrase */ true,
                 /* isOutOfBand */ false,
                 /* publicCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_128,
-                /* halCipherSuite */ SHARED_KEY_128_MASK);
+                /* halCipherSuite */ SHARED_KEY_128_MASK,
+                /* frameProtectionEnabled */ false);
     }
 
     /**
@@ -466,7 +531,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* usePassphrase */ false,
                 /* isOutOfBand */ true,
                 /* supportedCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_128,
-                /* expectedCipherSuite */ SHARED_KEY_128_MASK);
+                /* expectedCipherSuite */ SHARED_KEY_128_MASK,
+                /* frameProtectionEnabled */ false);
     }
 
     /**
@@ -480,7 +546,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* accept */ true,
                 /* isOutOfBand */ false,
                 /* publicCipherSuites */  WIFI_AWARE_CIPHER_SUITE_NCS_SK_256,
-                /* halCipherSuite */ SHARED_KEY_256_MASK);
+                /* halCipherSuite */ SHARED_KEY_256_MASK,
+                /* frameProtectionEnabled */ false);
     }
 
     /**
@@ -494,7 +561,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* accept */ true,
                 /* isOutOfBand */ false,
                 /* publicCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_128,
-                /* halCipherSuite */ SHARED_KEY_128_MASK);
+                /* halCipherSuite */ SHARED_KEY_128_MASK,
+                /* frameProtectionEnabled */ false);
     }
 
     /**
@@ -509,7 +577,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* accept */ true,
                 /* isOutOfBand */ false,
                 /* publicCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_256,
-                /* halCipherSuite */ SHARED_KEY_256_MASK);
+                /* halCipherSuite */ SHARED_KEY_256_MASK,
+                /* frameProtectionEnabled */ false);
     }
 
     /**
@@ -523,7 +592,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* accept */ true,
                 /* isOutOfBand */ true,
                 /* publicCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_128,
-                /* halCipherSuite */ SHARED_KEY_128_MASK);
+                /* halCipherSuite */ SHARED_KEY_128_MASK,
+                /* frameProtectionEnabled */ false);
     }
 
     /**
@@ -537,7 +607,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
                 /* accept */ false,
                 /* isOutOfBand */ true,
                 /* publicCipherSuites */ WIFI_AWARE_CIPHER_SUITE_NCS_SK_128,
-                /* halCipherSuite */ 0);
+                /* halCipherSuite */ 0,
+                /* frameProtectionEnabled */ false);
     }
 
     @Test
@@ -642,7 +713,7 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
         byte pid = 34;
         ArgumentCaptor<NanBootstrappingResponse> reqCaptor = ArgumentCaptor.forClass(
                 NanBootstrappingResponse.class);
-        assertTrue(mDut.respondToNanBootstrappingRequest(tid, 1, true, pid));
+        assertTrue(mDut.respondToNanBootstrappingRequest(tid, 1, true, pid, 2));
         verify(mIWifiNanIfaceMock).respondToBootstrappingIndicationRequest(eq((char) tid),
                 reqCaptor.capture());
         NanBootstrappingResponse request = reqCaptor.getValue();
@@ -712,7 +783,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
     }
 
     private void validateInitiateDataPath(boolean usePmk, boolean usePassphrase,
-            boolean isOutOfBand, int publicCipherSuites, int halCipherSuite)
+            boolean isOutOfBand, int publicCipherSuites, int halCipherSuite,
+        boolean frameProtectionEnabled)
             throws Exception {
         short tid = 44;
         int peerId = 555;
@@ -743,7 +815,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
         }
 
         assertTrue(mDut.initiateDataPath(tid, peerId, channelRequestType, channel, peer,
-                interfaceName, isOutOfBand, appInfo, TEST_CAPABILITIES, securityConfig, pubSubId));
+                interfaceName, isOutOfBand, appInfo, TEST_CAPABILITIES, securityConfig, pubSubId,
+                       frameProtectionEnabled));
 
         verify(mIWifiNanIfaceMock).initiateDataPathRequest(eq((char) tid), captor.capture());
 
@@ -788,10 +861,18 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
             collector.checkThat("serviceNameOutOfBand", new byte[0],
                     equalTo(nidpr.serviceNameOutOfBand));
         }
+        collector.checkThat("frameProtectionEnabled", frameProtectionEnabled,
+                equalTo(nidpr.securityConfig.requiresEnhancedFrameProtection));
+        collector.checkThat("frameProtectionEnabled", frameProtectionEnabled,
+                equalTo(nidpr.securityConfig.supportBigtksa));
+        collector.checkThat("frameProtectionEnabled", frameProtectionEnabled,
+                equalTo(nidpr.securityConfig.supportGtkAndIgtk));
+
     }
 
     private void validateRespondToDataPathRequest(boolean usePmk, boolean usePassphrase,
-            boolean accept, boolean isOutOfBand, int publicCipherSuites, int halCipherSuite)
+            boolean accept, boolean isOutOfBand, int publicCipherSuites, int halCipherSuite,
+        boolean frameProtectionEnabled)
             throws Exception {
         short tid = 33;
         int ndpId = 44;
@@ -818,7 +899,8 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
         }
 
         assertTrue(mDut.respondToDataPathRequest(tid, accept, ndpId, interfaceName,
-                appInfo, isOutOfBand, TEST_CAPABILITIES, securityConfig, pubSubId));
+                appInfo, isOutOfBand, TEST_CAPABILITIES, securityConfig, pubSubId,
+                frameProtectionEnabled));
 
         verify(mIWifiNanIfaceMock)
                 .respondToDataPathIndicationRequest(eq((char) tid), captor.capture());
@@ -829,6 +911,12 @@ public class WifiNanIfaceAidlImplTest extends WifiBaseTest {
         collector.checkThat("ndpInstanceId", ndpId, equalTo(nrtdpir.ndpInstanceId));
         collector.checkThat("ifaceName", interfaceName, equalTo(nrtdpir.ifaceName));
         collector.checkThat("pubSubId", pubSubId, equalTo(nrtdpir.discoverySessionId));
+        collector.checkThat("frameProtectionEnabled", frameProtectionEnabled,
+                equalTo(nrtdpir.securityConfig.requiresEnhancedFrameProtection));
+        collector.checkThat("frameProtectionEnabled", frameProtectionEnabled,
+                equalTo(nrtdpir.securityConfig.supportBigtksa));
+        collector.checkThat("frameProtectionEnabled", frameProtectionEnabled,
+                equalTo(nrtdpir.securityConfig.supportGtkAndIgtk));
 
         if (accept) {
             if (usePmk) {

@@ -191,8 +191,7 @@ public class WifiAwareServiceImpl extends IWifiAwareManager.Stub {
         enforceAccessPermission();
 
         return mStateManager.getCapabilities() == null ? null
-                : mStateManager.getCapabilities().toPublicCharacteristics(
-                        WifiInjector.getInstance().getDeviceConfigFacade());
+                : mStateManager.getCapabilities().toPublicCharacteristics();
     }
 
     @Override

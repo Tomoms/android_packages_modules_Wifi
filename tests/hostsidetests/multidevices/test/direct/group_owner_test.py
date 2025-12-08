@@ -19,6 +19,7 @@ from collections.abc import Sequence
 import dataclasses
 import datetime
 import logging
+import time
 
 from android.platform.test.annotations import ApiTest
 from mobly import asserts
@@ -27,11 +28,13 @@ from mobly import records
 from mobly import test_runner
 from mobly import utils
 from mobly.controllers import android_device
+from snippet_uiautomator import uiautomator
 
 from direct import constants
 from direct import p2p_utils
 import wifi_test_utils
 
+_SERVICE_DISCOVER_RETRY = 3
 
 class GroupOwnerTest(base_test.BaseTestClass):
     """Test cases for p2p service discovery and group connection."""
@@ -50,12 +53,16 @@ class GroupOwnerTest(base_test.BaseTestClass):
         )
         self.group_owner_ad, self.client_ad, *_ = self.ads
         self.group_owner_ad.debug_tag = (
-            f'{self.group_owner_ad.serial}(Group Owner)'
+            f'{self.group_owner_ad.serial}-GroupOwner'
         )
-        self.client_ad.debug_tag = f'{self.client_ad.serial}(Client)'
+        self.client_ad.debug_tag = f'{self.client_ad.serial}-Client'
 
     def _setup_device(self, ad: android_device.AndroidDevice) -> None:
         ad.load_snippet('wifi', constants.WIFI_SNIPPET_PACKAGE_NAME)
+        # set the wifi snippet to foreground
+        ad.wifi.utilityBringToForeground()
+        # Load Snippet UiAutomator
+        ad.ui = uiautomator.UiDevice(ui=ad.wifi)
         wifi_test_utils.enable_wifi_verbose_logging(ad)
         wifi_test_utils.set_screen_on_and_unlock(ad)
         wifi_test_utils.restart_wifi_and_disable_connection_scan(ad)
@@ -100,16 +107,22 @@ class GroupOwnerTest(base_test.BaseTestClass):
         client.ad.wifi.wifiP2pAddUpnpServiceRequest()
         p2p_utils.set_upnp_response_listener(client)
         p2p_utils.set_dns_sd_response_listeners(client)
-        client.ad.wifi.wifiP2pDiscoverServices()
+        service_discovered = False
+        for _ in range(_SERVICE_DISCOVER_RETRY):
+            # Discover services on the main channel.
+            client.ad.wifi.wifiP2pDiscoverServices()
 
-        # Client should only discover Upnp services, but not Bonjour services.
-        p2p_utils.check_discovered_services(
-            client,
-            expected_src_device_address=group_owner.p2p_device.device_address,
-            expected_dns_sd_sequence=(),
-            expected_dns_txt_sequence=(),
-            expected_upnp_sequence=constants.ServiceData.ALL_UPNP_SERVICES,
-        )
+            # Client should only discover Upnp services, but not Bonjour services.
+            service_discovered = p2p_utils.check_discovered_services(
+                client,
+                expected_src_device_address=group_owner.p2p_device.device_address,
+                expected_dns_sd_sequence=(),
+                expected_dns_txt_sequence=(),
+                expected_upnp_sequence=constants.ServiceData.ALL_UPNP_SERVICES,
+            )
+            if service_discovered:
+                break
+        asserts.assert_true(service_discovered, f'{client.ad} Timed out waiting for services.')
 
         # Step 5 - 7. Verify that the client can join the group with WPS PBC.
         self._test_join_group(
@@ -165,18 +178,23 @@ class GroupOwnerTest(base_test.BaseTestClass):
         )
         p2p_utils.set_upnp_response_listener(client, sub_channel_id)
         p2p_utils.set_dns_sd_response_listeners(client, sub_channel_id)
-        # Discover services on the main channel.
-        client.ad.wifi.wifiP2pDiscoverServices(main_channel_id)
+        discovered_services = False
+        for _ in range(3):
+            # Discover services on the main channel.
+            client.ad.wifi.wifiP2pDiscoverServices(main_channel_id)
 
-        # Client should only discover Bonjour services, but not UPnP services.
-        p2p_utils.check_discovered_services(
-            client,
-            expected_src_device_address=group_owner.p2p_device.device_address,
-            expected_dns_sd_sequence=constants.ServiceData.ALL_DNS_SD,
-            expected_dns_txt_sequence=constants.ServiceData.ALL_DNS_TXT,
-            expected_upnp_sequence=(),
-            channel_id=sub_channel_id,
-        )
+            # Client should only discover Bonjour services, but not UPnP services.
+            discovered_services = p2p_utils.check_discovered_services(
+                client,
+                expected_src_device_address=group_owner.p2p_device.device_address,
+                expected_dns_sd_sequence=constants.ServiceData.ALL_DNS_SD,
+                expected_dns_txt_sequence=constants.ServiceData.ALL_DNS_TXT,
+                expected_upnp_sequence=(),
+                channel_id=sub_channel_id,
+            )
+            if discovered_services:
+                break
+        asserts.assert_true(discovered_services, f'{client.ad} Timed out waiting for services.')
 
         # Step 5 - 7. Verify that the client can join the group with WPS PIN.
         self._test_join_group(
@@ -222,7 +240,12 @@ class GroupOwnerTest(base_test.BaseTestClass):
             wps_setup=wps_config,
         )
         client.ad.log.info('Trying to connect the group owner with p2p config: %s', p2p_config)
-        p2p_utils.p2p_connect(client, group_owner, p2p_config)
+        p2p_utils.p2p_connect(
+            client,
+            group_owner,
+            p2p_config,
+            hsv_output_path=self.current_test_info.output_path,
+        )
 
         # Step 7. Remove the p2p group on the requester.
         client.ad.log.info('Disconnecting with the group owner.')
@@ -242,6 +265,7 @@ class GroupOwnerTest(base_test.BaseTestClass):
             param_list=[[ad] for ad in self.ads],
             raise_on_exception=True,
         )
+        time.sleep(5)
 
     def teardown_class(self):
         utils.concurrent_exec(

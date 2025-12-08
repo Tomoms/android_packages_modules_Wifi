@@ -30,6 +30,7 @@ import android.net.wifi.WifiConfiguration.NetworkSelectionStatus;
 import android.net.wifi.WifiEnterpriseConfig;
 import android.net.wifi.WifiSsid;
 import android.net.wifi.util.Environment;
+import android.os.UserHandle;
 import android.text.TextUtils;
 
 import com.android.modules.utils.build.SdkLevel;
@@ -73,6 +74,7 @@ public class WifiConfigurationTestUtil {
      */
     public static final int TEST_NETWORK_ID = -1;
     public static final int TEST_UID = 5;
+    public static final UserHandle TEST_USER_HANDLE = UserHandle.getUserHandleForUid(TEST_UID);
     public static final String TEST_SSID = "WifiConfigurationTestSSID";
     public static final String TEST_PSK = "\"WifiConfigurationTestUtilPsk\"";
     public static final String[] TEST_WEP_KEYS =

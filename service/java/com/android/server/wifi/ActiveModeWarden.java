@@ -187,7 +187,8 @@ public class ActiveModeWarden {
     private WifiInfo mCurrentConnectionInfo = new WifiInfo();
     @GuardedBy("mServiceApiLock")
     private BitSet mSupportedFeatureSet = new BitSet();
-
+    @GuardedBy("mServiceApiLock")
+    private Set<Integer> mCurrentSoftApModesRestartingForCcChange = new ArraySet<>();
     @GuardedBy("mServiceApiLock")
     private final ArraySet<WorkSource> mRequestWs = new ArraySet<>();
 
@@ -904,6 +905,37 @@ public class ActiveModeWarden {
     /** Stop SoftAp. */
     public void stopSoftAp(int mode) {
         mWifiController.sendMessage(WifiController.CMD_SET_AP, 0, mode);
+    }
+
+    /**
+     * Stops and restarts SoftAp for CC change. The current restart state will be provided via
+     * {@link #isSoftApRestartingForCcChange(int)}
+     */
+    public void restartSoftApForCcChange(SoftApModeConfiguration newModeConfig,
+            WorkSource requestorWs) {
+        // Service API lock is used here since the flag we set here blocks new Soft AP requests.
+        int mode = newModeConfig.getTargetMode();
+        synchronized (mServiceApiLock) {
+            mCurrentSoftApModesRestartingForCcChange.add(mode);
+            mWifiController.sendMessage(WifiController.CMD_SET_AP, 0, mode);
+            mWifiController.sendMessage(WifiController.CMD_SET_AP, 1, 0,
+                    Pair.create(newModeConfig, requestorWs));
+        }
+    }
+
+    /**
+     * Returns true if the given Soft AP mode is currently restarting for CC change.
+     */
+    public boolean isSoftApRestartingForCcChange(int mode) {
+        synchronized (mServiceApiLock) {
+            return mCurrentSoftApModesRestartingForCcChange.contains(mode);
+        }
+    }
+
+    private void clearSoftApRestartingForCcChangeFlag(int mode) {
+        synchronized (mServiceApiLock) {
+            mCurrentSoftApModesRestartingForCcChange.remove(mode);
+        }
     }
 
     /** Update SoftAp Capability. */
@@ -1635,6 +1667,8 @@ public class ActiveModeWarden {
         public void onStarted(SoftApManager softApManager) {
             updateBatteryStats();
             invokeOnAddedCallbacks(softApManager);
+            int mode = softApManager.getSoftApModeConfiguration().getTargetMode();
+            clearSoftApRestartingForCcChangeFlag(mode);
         }
 
         @Override
@@ -1661,6 +1695,8 @@ public class ActiveModeWarden {
             // update listeners.
             Log.e(TAG, "SoftApManager start failed!" + softApManager);
             invokeOnRemovedCallbacks(softApManager);
+            int mode = softApManager.getSoftApModeConfiguration().getTargetMode();
+            clearSoftApRestartingForCcChangeFlag(mode);
         }
     }
 
@@ -2150,13 +2186,15 @@ public class ActiveModeWarden {
                             Pair<SoftApModeConfiguration, WorkSource> softApConfigAndWs =
                                     (Pair<SoftApModeConfiguration, WorkSource>) msg.obj;
                             SoftApModeConfiguration softApConfig = softApConfigAndWs.first;
+                            int mode = softApConfig.getTargetMode();
                             WifiServiceImpl.SoftApCallbackInternal callback =
-                                    softApConfig.getTargetMode() == IFACE_IP_MODE_LOCAL_ONLY
+                                    mode == IFACE_IP_MODE_LOCAL_ONLY
                                             ? mLohsCallback : mSoftApCallback;
                             // need to notify SoftApCallback that start/stop AP failed
                             callback.onStateChanged(new SoftApState(
                                     WIFI_AP_STATE_FAILED, SAP_START_FAILURE_GENERAL,
                                     softApConfig.getTetheringRequest(), null /* iface */));
+                            clearSoftApRestartingForCcChangeFlag(mode);
                         }
                         break;
                     default:
@@ -2439,6 +2477,7 @@ public class ActiveModeWarden {
                                         // Assumes user toggled it on from settings before.
                                         mFacade.getSettingsWorkSource(mContext));
                                 transitionTo(mEnabledState);
+                                mWifiInjector.getSelfRecovery().onRecoveryCompleted();
                             }
                             break;
                         }

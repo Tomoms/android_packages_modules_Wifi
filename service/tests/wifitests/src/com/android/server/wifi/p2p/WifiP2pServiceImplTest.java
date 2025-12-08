@@ -1494,9 +1494,10 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         when(mWifiInjector.getLastCallerInfoManager()).thenReturn(mLastCallerInfoManager);
         when(mWifiInjector.getWifiP2pConnection()).thenReturn(mWifiP2pConnection);
 
-        when(mWifiDialogManager.createP2pInvitationReceivedDialog(any(), anyBoolean(), any(),
-                anyInt(), anyInt(), any(), any())).thenReturn(mDialogHandle);
-        when(mWifiDialogManager.createP2pInvitationSentDialog(any(), any(), anyInt()))
+        when(mWifiDialogManager.createP2pInvitationReceivedDialog(any(), anyBoolean(),
+                anyBoolean(), any(), any(), anyInt(), anyInt(), any(), any()))
+                .thenReturn(mDialogHandle);
+        when(mWifiDialogManager.createP2pInvitationSentDialog(any(), any(), any(), anyInt()))
                 .thenReturn(mDialogHandle);
         when(mWifiInjector.getClock()).thenReturn(mClock);
         when(mWifiInjector.getInterfaceConflictManager()).thenReturn(mInterfaceConflictManager);
@@ -1641,11 +1642,17 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                     WifiP2pManager.FEATURE_WIFI_DIRECT_R2);
             when(mFeatureFlags.wifiDirectR2()).thenReturn(true);
         }
+        if (Environment.isSdkNewerThanB()) {
+            when(mFeatureFlags.externalApproverSupportForWfdr2PasswordBasedBootstrapping())
+                    .thenReturn(true);
+        }
     }
 
     @After
     public void cleanUp() throws Exception {
-        mStaticMockSession.finishMocking();
+        if (mStaticMockSession != null) {
+            mStaticMockSession.finishMocking();
+        }
     }
 
     /**
@@ -1684,6 +1691,17 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
     private void mockEnterProvisionDiscoveryState(WifiP2pConfig p2pConfig) throws Exception {
         mockPeersList();
         sendConnectMsg(mClientMessenger, p2pConfig);
+    }
+
+    /**
+     * Mock enter provision discovery state for V2 connection.
+     */
+    private void mockEnterProvisionDiscoveryStateForV2Connection(
+            @WifiP2pPairingBootstrappingConfig.PairingBootstrappingMethod int method,
+            @Nullable String pairingPinOrPassphrase, boolean authorize)
+            throws Exception {
+        createTestP2pV2PeerConfig(method, pairingPinOrPassphrase, authorize);
+        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
     }
 
     /**
@@ -6453,7 +6471,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
             verify(mAlertDialog).show();
         } else {
             verify(mWifiDialogManager).createP2pInvitationSentDialog(
-                    pdEvent.device.deviceName, pdEvent.wpsPin, Display.DEFAULT_DISPLAY);
+                    pdEvent.device.deviceName, pdEvent.wpsPin, null,
+                    Display.DEFAULT_DISPLAY);
             verify(mDialogHandle).launchDialog();
         }
     }
@@ -6482,8 +6501,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
             verify(mAlertDialog).show();
         } else {
             verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                    eq(pdEvent.device.deviceName), eq(false), eq(pdEvent.wpsPin),
-                    anyInt(), anyInt(), any(), any());
+                    eq(pdEvent.device.deviceName), eq(false), eq(false), eq(pdEvent.wpsPin),
+                    any(), anyInt(), anyInt(), any(), any());
             verify(mDialogHandle).launchDialog();
         }
     }
@@ -7007,8 +7026,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
             verify(mAlertDialog).show();
         } else {
             verify(mWifiDialogManager).createP2pInvitationReceivedDialog(anyString(), anyBoolean(),
-                    any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS), eq(Display.DEFAULT_DISPLAY),
-                    any(), any());
+                    anyBoolean(), any(), any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS),
+                    eq(Display.DEFAULT_DISPLAY), any(), any());
             verify(mDialogHandle).launchDialog();
         }
     }
@@ -7036,7 +7055,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
 
         sendNegotiationRequestEvent(config);
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(anyString(),
-                anyBoolean(), any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS),
+                anyBoolean(), anyBoolean(), any(), any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS),
                 eq(someNonDefaultDisplayId), any(), any());
         verify(mDialogHandle).launchDialog();
     }
@@ -7065,8 +7084,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         // "simple" client connect (no display ID)
         sendNegotiationRequestEvent(config);
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(anyString(), anyBoolean(),
-                any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS), eq(Display.DEFAULT_DISPLAY), any(),
-                any());
+                anyBoolean(), any(), any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS),
+                eq(Display.DEFAULT_DISPLAY), any(), any());
         verify(mDialogHandle).launchDialog();
     }
 
@@ -7302,6 +7321,97 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
             List<Message> messages = messageCaptor.getAllValues();
             assertEquals(WifiP2pManager.SET_CONNECTION_REQUEST_RESULT_FAILED,
                     messages.get(expectedMessageCount - 1).what);
+        }
+    }
+
+    private void verifyExternalApproverConnectionRequestMessageOnResponder(MacAddress addr,
+            int wpsType, int pdEventId,  @WifiP2pPairingBootstrappingConfig
+                    .PairingBootstrappingMethod int expectedBootstrappingMethod)
+            throws Exception {
+        Binder binder = new Binder();
+
+        when(mWifiPermissionsUtil.checkManageWifiNetworkSelectionPermission(anyInt()))
+                .thenReturn(true);
+        when(mWifiPermissionsUtil.checkNearbyDevicesPermission(any(), anyBoolean(), any()))
+                .thenReturn(true);
+
+        forceP2pEnabled(mClient1);
+        mockPeersList();
+
+        verifyAddExternalApprover(binder, true, true, addr);
+
+        if (wpsType != WpsInfo.INVALID) {
+            mockEnterUserAuthorizingNegotiationRequestState(wpsType);
+        } else if (pdEventId != 0) {
+            mockProvisioningDiscoveryEventForV2Connection(pdEventId);
+        } else {
+            fail("wpsType and pdEventId cannot both be INVALID.");
+            return;
+        }
+
+        // There are 2 replies:
+        // * EXTERNAL_APPROVER_ATTACH
+        // * EXTERNAL_APPROVER_CONNECTION_REQUESTED
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(mClientHandler, times(2)).sendMessage(messageCaptor.capture());
+        List<Message> messages = messageCaptor.getAllValues();
+        assertEquals(WifiP2pManager.EXTERNAL_APPROVER_CONNECTION_REQUESTED, messages.get(1).what);
+        Bundle bundle = (Bundle) messages.get(1).obj;
+        WifiP2pConfig config = bundle.getParcelable(WifiP2pManager.EXTRA_PARAM_KEY_CONFIG);
+        assertNotNull(config);
+        if (wpsType != WpsInfo.INVALID) {
+            assertEquals(wpsType, config.wps.setup);
+        } else {
+            assertNotNull(config.getPairingBootstrappingConfig());
+            assertEquals(expectedBootstrappingMethod, config.getPairingBootstrappingConfig()
+                    .getPairingBootstrappingMethod());
+        }
+    }
+
+    private void verifyExternalApproverConnectionRequestMessageOnInitiator(Binder binder,
+            MacAddress addr,
+            int pdEventId,
+            @WifiP2pPairingBootstrappingConfig.PairingBootstrappingMethod int method,
+            @Nullable String pairingPinOrPassphrase, int expectedMessage,
+            int expectedCredentialType)
+            throws Exception {
+        when(mWifiPermissionsUtil.checkManageWifiNetworkSelectionPermission(anyInt()))
+                .thenReturn(true);
+        when(mWifiPermissionsUtil.checkNearbyDevicesPermission(any(), anyBoolean(), any()))
+                .thenReturn(true);
+
+        forceP2pEnabled(mClient1);
+        mockPeersList();
+
+        verifyAddExternalApprover(binder, true, true, addr);
+
+        mockEnterProvisionDiscoveryStateForV2Connection(method, pairingPinOrPassphrase, false);
+        // Send a provision discovery response event with comeback = true
+        WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(pdEventId, true);
+        sendSimpleMsg(null,
+                convertPdEventIdToWifiP2pMonitorEventForV2Connection(pdEventId),
+                pdEvent);
+
+        // There are 3 replies:
+        // * EXTERNAL_APPROVER_ATTACH
+        // * CONNECT_SUCCEEDED
+        // * EXTERNAL_APPROVER_CONNECTION_REQUESTED
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(mClientHandler, times(3)).sendMessage(messageCaptor.capture());
+        List<Message> messages = messageCaptor.getAllValues();
+        assertEquals(expectedMessage, messages.get(2).what);
+        Bundle bundle = (Bundle) messages.get(2).obj;
+        if (WifiP2pManager.EXTERNAL_APPROVER_CONNECTION_REQUESTED == expectedMessage) {
+            WifiP2pConfig config = bundle.getParcelable(WifiP2pManager.EXTRA_PARAM_KEY_CONFIG);
+            assertNotNull(config);
+            assertNotNull(config.getPairingBootstrappingConfig());
+            assertEquals(method, config.getPairingBootstrappingConfig()
+                    .getPairingBootstrappingMethod());
+        } else if (WifiP2pManager.EXTERNAL_APPROVER_PIN_OR_PASSWORD_GENERATED == expectedMessage) {
+            assertEquals(expectedCredentialType,
+                    bundle.getInt(WifiP2pManager.EXTRA_PARAM_KEY_CREDENTIAL_TYPE));
+            assertFalse(TextUtils.isEmpty(bundle.getString(
+                    WifiP2pManager.EXTRA_PARAM_KEY_PIN_OR_PASSWORD)));
         }
     }
 
@@ -7872,8 +7982,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(mTestWifiP2pDevice.deviceAddress), anyBoolean(),
-                any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS), anyInt(), any(), any());
+                eq(mTestWifiP2pDevice.deviceAddress), anyBoolean(), anyBoolean(),
+                any(), any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
 
         // Handle it programmatically.
@@ -7887,11 +7997,12 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         reset(mWifiDialogManager);
         reset(mDialogHandle);
         verify(mWifiDialogManager, never()).createP2pInvitationReceivedDialog(
-                any(), anyBoolean(), any(), anyInt(), anyInt(), any(), any());
+                any(), anyBoolean(), anyBoolean(), any(), any(), anyInt(), anyInt(), any(), any());
 
-        when(mWifiDialogManager.createP2pInvitationReceivedDialog(any(), anyBoolean(), any(),
-                anyInt(), anyInt(), any(), any())).thenReturn(mDialogHandle);
-        when(mWifiDialogManager.createP2pInvitationSentDialog(any(), any(), anyInt()))
+        when(mWifiDialogManager.createP2pInvitationReceivedDialog(any(), anyBoolean(),
+                anyBoolean(), any(), any(), anyInt(), anyInt(), any(), any()))
+                .thenReturn(mDialogHandle);
+        when(mWifiDialogManager.createP2pInvitationSentDialog(any(), any(), any(), anyInt()))
                 .thenReturn(mDialogHandle);
         when(mClock.getElapsedSinceBootMillis()).thenReturn(P2P_PEER_AUTH_TIMEOUT_MS + 1L);
 
@@ -7901,13 +8012,13 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
 
         // Another dialog should be triggered.
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(mTestWifiP2pDevice.deviceAddress), anyBoolean(),
-                any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS), anyInt(), any(), any());
+                eq(mTestWifiP2pDevice.deviceAddress), anyBoolean(), anyBoolean(),
+                any(), any(), eq(P2P_INVITATION_RECEIVED_TIMEOUT_MS), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
     }
 
     @Test
-    public void testP2pInfoIsClearedWhenP2pIsDisabledDurningNegotiation() throws Exception {
+    public void testP2pInfoIsClearedWhenP2pIsDisabledDuringNegotiation() throws Exception {
         forceP2pEnabled(mClient1);
         WifiP2pGroup group = new WifiP2pGroup();
         group.setNetworkId(WifiP2pGroup.NETWORK_ID_PERSISTENT);
@@ -7916,6 +8027,16 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         group.setIsGroupOwner(true);
         group.setInterface(IFACE_NAME_P2P);
         sendGroupStartedMsg(group);
+
+        // 2 connection changed events:
+        // * Enter Enabled state
+        // * Enter Group Connecting state
+        if (SdkLevel.isAtLeastT()) {
+            verify(mContext, times(2)).sendBroadcastWithMultiplePermissions(
+                    argThat(new WifiP2pServiceImplTest
+                            .P2pConnectionChangedIntentMatcherForNetworkState(CONNECTING)), any());
+            verify(mP2pListener).onGroupCreating();
+        }
 
         // P2P group is formed, the internal group data are filled.
         // The tether request is not done yet, so it stays at GroupNegotiationState.
@@ -7929,11 +8050,31 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         sendP2pStateMachineMessage(WifiP2pMonitor.SUP_DISCONNECTION_EVENT);
         mLooper.dispatchAll();
 
+        verify(mContext).sendBroadcastWithMultiplePermissions(
+                argThat(new WifiP2pServiceImplTest
+                        .P2pConnectionChangedIntentMatcherForNetworkState(FAILED)), any());
+        if (SdkLevel.isAtLeastT()) {
+            verify(mContext, atLeastOnce()).sendBroadcast(
+                    argThat(new WifiP2pServiceImplTest
+                            .P2pConnectionChangedIntentMatcherForNetworkState(FAILED)), any(),
+                    any());
+            verify(mP2pListener).onGroupCreationFailed(
+                    eq(WifiP2pManager.GROUP_CREATION_FAILURE_REASON_GROUP_REMOVED));
+        }
+
         // p2p info should be cleared.
         sendSimpleMsg(mClientMessenger, WifiP2pManager.REQUEST_CONNECTION_INFO);
         verify(mClientHandler, times(2)).sendMessage(mMessageCaptor.capture());
         assertEquals(WifiP2pManager.RESPONSE_CONNECTION_INFO, mMessageCaptor.getValue().what);
         assertFalse(((WifiP2pInfo) mMessageCaptor.getValue().obj).groupFormed);
+
+        // The state of network should be set to IDLE
+        sendSimpleMsg(mClientMessenger, WifiP2pManager.REQUEST_NETWORK_INFO);
+        verify(mClientHandler, times(3)).sendMessage(mMessageCaptor.capture());
+        assertEquals(WifiP2pManager.RESPONSE_NETWORK_INFO, mMessageCaptor.getValue().what);
+        assertEquals(NetworkInfo.DetailedState.IDLE,
+                ((NetworkInfo) mMessageCaptor.getValue().obj).getDetailedState());
+
     }
 
     @Test
@@ -8454,9 +8595,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
 
         forceP2pEnabled(mClient1);
 
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                 .PAIRING_BOOTSTRAPPING_METHOD_OPPORTUNISTIC, "", false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         // Send a provision discovery response event with comeback = true
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
@@ -8503,10 +8643,9 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         // create a config without passing the pairing pincode.
         // Framework is expected to generate a random pincode on receiving the provision discovery
         // response.
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                 .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE, "",
                 false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         // Send a provision discovery response event with comeback = true
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
@@ -8517,7 +8656,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         // Framework doesn't send connect to supplicant if comeback is set to true
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager).createP2pInvitationSentDialog(
-                eq(mTestWifiP2pV2Device.deviceName), pincodeCaptor.capture(),
+                eq(mTestWifiP2pV2Device.deviceName), pincodeCaptor.capture(), eq(null),
                 eq(Display.DEFAULT_DISPLAY));
         String pincode = pincodeCaptor.getValue();
         assertTrue(pincode.matches("\\d{8}"));
@@ -8561,10 +8700,9 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         // create a config without passing the pairing passphrase
         // Framework is expected to generate a random passphrase on receiving the provision
         // discovery response.
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                 .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE, "",
                 false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         // Send a provision discovery response event with comeback = true
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
@@ -8575,7 +8713,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         // Framework doesn't send connect to supplicant if comeback is set to true
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager).createP2pInvitationSentDialog(
-                eq(mTestWifiP2pV2Device.deviceName), passphraseCaptor.capture(),
+                eq(mTestWifiP2pV2Device.deviceName), eq(null), passphraseCaptor.capture(),
                 eq(Display.DEFAULT_DISPLAY));
         String passphrase = passphraseCaptor.getValue();
         assertTrue(passphrase.matches(".*[\\x00-\\x7F]{8}.*"));
@@ -8618,10 +8756,9 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         forceP2pEnabled(mClient1);
 
         // create a config
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                 .PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PINCODE, "",
                 false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         // Send a provision discovery response event with comeback = true
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
@@ -8633,8 +8770,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(true),
-                displayPinOrPassphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(true), eq(false),
+                displayPinOrPassphraseCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         assertTrue(TextUtils.isEmpty(displayPinOrPassphraseCaptor.getValue()));
 
@@ -8667,10 +8804,9 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         forceP2pEnabled(mClient1);
 
         // create a config
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                         .PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PASSPHRASE, "",
                 false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         // Send a provision discovery response event with comeback = true
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
@@ -8682,8 +8818,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(true),
-                displayPinOrPassphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(true),
+                displayPinOrPassphraseCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         assertTrue(TextUtils.isEmpty(displayPinOrPassphraseCaptor.getValue()));
 
@@ -8720,7 +8856,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(false), any(),
+                eq(pdEvent.device.deviceName), eq(false), eq(false), any(), any(),
                 anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
@@ -8761,8 +8897,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(true),
-                displayPinOrPassphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(true), eq(false),
+                displayPinOrPassphraseCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         assertTrue(TextUtils.isEmpty(displayPinOrPassphraseCaptor.getValue()));
 
@@ -8804,8 +8940,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(true),
-                displayPinOrPassphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(true),
+                displayPinOrPassphraseCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         assertTrue(TextUtils.isEmpty(displayPinOrPassphraseCaptor.getValue()));
 
@@ -8849,8 +8985,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(false), pincodeCaptor.capture(),
-                anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(false),
+                pincodeCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         String pincode = pincodeCaptor.getValue();
         assertTrue(pincode.matches("\\d{8}"));
         verify(mDialogHandle).launchDialog();
@@ -8895,8 +9031,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(false), passphraseCaptor.capture(),
-                anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(false),
+                any(), passphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
         String passphrase = passphraseCaptor.getValue();
         assertTrue(passphrase.matches(".*[\\x00-\\x7F]{8}.*"));
         verify(mDialogHandle).launchDialog();
@@ -8940,7 +9076,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(false), any(),
+                eq(pdEvent.device.deviceName), eq(false), eq(false), any(), any(),
                 anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         verify(mWifiNative, never()).authorizeConnectRequestOnGroupOwner(any(), anyString());
@@ -8980,8 +9116,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(true),
-                displayPinOrPassphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(true), eq(false),
+                displayPinOrPassphraseCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         assertTrue(TextUtils.isEmpty(displayPinOrPassphraseCaptor.getValue()));
 
@@ -9021,8 +9157,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(true),
-                displayPinOrPassphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(true),
+                displayPinOrPassphraseCaptor.capture(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         assertTrue(TextUtils.isEmpty(displayPinOrPassphraseCaptor.getValue()));
 
@@ -9062,14 +9198,15 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(false), pincodeCaptor.capture(),
-                anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(false), pincodeCaptor.capture(),
+                any(), anyInt(), anyInt(), any(), any());
         String pincode = pincodeCaptor.getValue();
         assertTrue(pincode.matches("\\d{8}"));
         verify(mDialogHandle).launchDialog();
 
 
-        // Framework is expected to send authorize as soon as the PIN is Displayed
+        // Framework is expected to send authorize if user accepts the connection request.
+        sendSimpleMsg(null, WifiP2pServiceImpl.PEER_CONNECTION_USER_ACCEPT);
         verify(mWifiNative, times(1)).authorizeConnectRequestOnGroupOwner(
                 configCaptor.capture(),
                 eq(IFACE_NAME_P2P));
@@ -9077,7 +9214,6 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         assertEquals(WifiP2pPairingBootstrappingConfig
                         .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE,
                 config.getPairingBootstrappingConfig().getPairingBootstrappingMethod());
-        assertEquals(config.deviceAddress, mTestWifiP2pV2Device.deviceAddress);
         assertEquals(pincode,
                 config.getPairingBootstrappingConfig().getPairingBootstrappingPassword());
         assertTrue(config.isAuthorizeConnectionFromPeerEnabled());
@@ -9107,14 +9243,15 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 pdEvent);
 
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                eq(pdEvent.device.deviceName), eq(false), passphraseCaptor.capture(),
-                anyInt(), anyInt(), any(), any());
+                eq(pdEvent.device.deviceName), eq(false), eq(false),
+                any(), passphraseCaptor.capture(), anyInt(), anyInt(), any(), any());
         String passphrase = passphraseCaptor.getValue();
         assertTrue(passphrase.matches(".*[\\x00-\\x7F]{8}.*"));
         verify(mDialogHandle).launchDialog();
 
 
-        // Framework is expected to send authorize as soon as the PIN is Displayed
+        // Framework is expected to send authorize if user accepts the connection request.
+        sendSimpleMsg(null, WifiP2pServiceImpl.PEER_CONNECTION_USER_ACCEPT);
         verify(mWifiNative, times(1)).authorizeConnectRequestOnGroupOwner(
                 configCaptor.capture(),
                 eq(IFACE_NAME_P2P));
@@ -9122,7 +9259,6 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         assertEquals(WifiP2pPairingBootstrappingConfig
                         .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE,
                 config.getPairingBootstrappingConfig().getPairingBootstrappingMethod());
-        assertEquals(config.deviceAddress, mTestWifiP2pV2Device.deviceAddress);
         assertEquals(passphrase,
                 config.getPairingBootstrappingConfig().getPairingBootstrappingPassword());
         assertTrue(config.isAuthorizeConnectionFromPeerEnabled());
@@ -9401,7 +9537,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE);
         // Expect isPinRequested to false for displaying the pincode
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                any(), eq(false), any(), anyInt(), anyInt(), any(), any());
+                any(), eq(false), eq(false), any(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
     }
@@ -9420,7 +9556,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_DEFER_TO_SERVICE);
         // Expect isPinRequested to true for entering the pincode
         verify(mWifiDialogManager).createP2pInvitationReceivedDialog(
-                any(), eq(true), any(), anyInt(), anyInt(), any(), any());
+                any(), eq(true), eq(false), any(), any(), anyInt(), anyInt(), any(), any());
         verify(mDialogHandle).launchDialog();
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
     }
@@ -9438,10 +9574,9 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         verifyAddExternalApprover(binder, true, true,
                 MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress));
 
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                         .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE, "",
                 false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
                 WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PIN, true);
@@ -9454,7 +9589,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE, binder);
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager).createP2pInvitationSentDialog(
-                any(), any(),
+                any(), any(), eq(null),
                 eq(Display.DEFAULT_DISPLAY));
     }
 
@@ -9472,10 +9607,9 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         verifyAddExternalApprover(binder, true, true,
                 MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress));
 
-        createTestP2pV2PeerConfig(WifiP2pPairingBootstrappingConfig
+        mockEnterProvisionDiscoveryStateForV2Connection(WifiP2pPairingBootstrappingConfig
                         .PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE, "",
                 false);
-        mockEnterProvisionDiscoveryState(mTestWifiP2pV2PeerConfig);
 
         WifiP2pProvDiscEvent pdEvent = createWifiP2pProvDiscEventForV2Connection(
                 WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PIN, true);
@@ -9488,7 +9622,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_ACCEPT, binder);
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager, never()).createP2pInvitationSentDialog(
-                any(), any(),
+                any(), any(), any(),
                 eq(Display.DEFAULT_DISPLAY));
 
         sendSetConnectionRequestResultMsg(mClientMessenger,
@@ -9496,7 +9630,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_REJECT, binder);
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager, never()).createP2pInvitationSentDialog(
-                any(), any(),
+                any(), any(), any(),
                 eq(Display.DEFAULT_DISPLAY));
 
         sendSetConnectionRequestResultMsg(mClientMessenger,
@@ -9504,7 +9638,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_DEFER_TO_SERVICE, binder);
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager, never()).createP2pInvitationSentDialog(
-                any(), any(),
+                any(), any(), any(),
                 eq(Display.DEFAULT_DISPLAY));
     }
 
@@ -9529,7 +9663,197 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
                 WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE, binder);
         verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
         verify(mWifiDialogManager, never()).createP2pInvitationSentDialog(
-                any(), any(),
+                any(), any(), any(),
                 eq(Display.DEFAULT_DISPLAY));
+    }
+
+    /**
+     * Verifies that setConnectionRequestResult on an initiating device correctly handles a
+     * "defer show PIN" response. This ensures the "Display Passphrase" pairing method
+     * works and maintains backward compatibility with older applications.
+     */
+    @Test
+    public void testDeferShowPinToFrameworkOnInitiatorSuccessWorksForPasswordBootstrapping()
+            throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        Binder binder = new Binder();
+
+        verifyExternalApproverConnectionRequestMessageOnInitiator(binder,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PASSPHRASE,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE,
+                null, WifiP2pManager.EXTERNAL_APPROVER_PIN_OR_PASSWORD_GENERATED,
+                WifiP2pManager.CREDENTIAL_TYPE_PASSWORD);
+
+        /*
+         * If the app defers showing the password to the `WifiP2pService`, the service is expected
+         * to display a dialog with the sent invitation and the required password.
+         */
+        sendSetConnectionRequestResultMsg(mClientMessenger,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE, binder);
+        verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
+        verify(mWifiDialogManager).createP2pInvitationSentDialog(
+                any(), eq(null), any(),
+                eq(Display.DEFAULT_DISPLAY));
+    }
+
+    /**
+     * Test connection request message to external approver for pairing.
+     * Pairing bootstrapping method: Display pin code on responder device.
+     */
+    @Test
+    public void testExternalApproverConnectionRequestMessageShowPinV2ConnectionOnResponder()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        verifyExternalApproverConnectionRequestMessageOnResponder(
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WpsInfo.INVALID,
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PIN,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE);
+    }
+
+    /**
+     * Test connection request message to external approver for pairing.
+     * Pairing bootstrapping method: Display passphrase on responder device.
+     */
+    @Test
+    public void testExternalApproverConnectionRequestMessageShowPasswordV2ConnectionOnResponder()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        verifyExternalApproverConnectionRequestMessageOnResponder(
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WpsInfo.INVALID,
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PASSPHRASE,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE);
+    }
+
+    /**
+     * Test connection request message to external approver for pairing.
+     * Pairing bootstrapping method: Keypad pin code on responder device.
+     */
+    @Test
+    public void testExternalApproverConnectionRequestMessageEnterPinV2ConnectionOnResponder()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        verifyExternalApproverConnectionRequestMessageOnResponder(
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WpsInfo.INVALID,
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_ENTER_PIN,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PINCODE);
+    }
+
+    /**
+     * Test connection request message to external approver for pairing.
+     * Pairing bootstrapping method: Keypad passphrase on responder device.
+     */
+    @Test
+    public void testExternalApproverConnectionRequestMessageEnterPasswordV2ConnectionOnResponder()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        verifyExternalApproverConnectionRequestMessageOnResponder(
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WpsInfo.INVALID,
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_ENTER_PASSPHRASE,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PASSPHRASE);
+    }
+
+    /**
+     * Test connection request message to external approver for pairing.
+     * Pairing bootstrapping method: Keypad pin code on initiator device.
+     */
+    @Test
+    public void testExternalApproverConnectionRequestMessageEnterPinV2ConnectionOnInitiator()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        Binder binder = new Binder();
+        verifyExternalApproverConnectionRequestMessageOnInitiator(binder,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_ENTER_PIN,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PINCODE,
+                null, WifiP2pManager.EXTERNAL_APPROVER_CONNECTION_REQUESTED, 0);
+    }
+
+    /**
+     * Test connection request message to external approver for pairing.
+     * Pairing bootstrapping method: Keypad passphrase on initiator device.
+     */
+    @Test
+    public void testExternalApproverConnectionRequestMessageEnterPasswordV2ConnectionOnInitiator()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        Binder binder = new Binder();
+        verifyExternalApproverConnectionRequestMessageOnInitiator(binder,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_ENTER_PASSPHRASE,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PASSPHRASE,
+                null, WifiP2pManager.EXTERNAL_APPROVER_CONNECTION_REQUESTED, 0);
+    }
+
+    /**
+     * Test PIN generated message to external approver for pairing.
+     * Pairing bootstrapping method: Display pin code on initiator device.
+     */
+    @Test
+    public void testExternalApproverShowPinMessageV2ConnectionOnInitiator()
+            throws Exception {
+        assumeTrue(Environment.isSdkAtLeastB());
+        Binder binder = new Binder();
+        verifyExternalApproverConnectionRequestMessageOnInitiator(binder,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PIN,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE,
+                "12345678", WifiP2pManager.EXTERNAL_APPROVER_PIN_OR_PASSWORD_GENERATED,
+                WifiP2pManager.CREDENTIAL_TYPE_PIN);
+    }
+
+    /**
+     * Test password generated message to external approver built on SDK level newer than B.
+     * Pairing bootstrapping method: Display passphrase on initiator device.
+     */
+    @Test
+    public void testExternalApproverShowPasswordMessageV2ConnectionOnInitiatorOnSdkLevelNewerThanB()
+            throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        Binder binder = new Binder();
+        when(mWifiPermissionsUtil.isTargetSdkLessThan(anyString(), eq(37),
+                anyInt())).thenReturn(false);
+        verifyExternalApproverConnectionRequestMessageOnInitiator(binder,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PASSPHRASE,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE,
+                "password", WifiP2pManager.EXTERNAL_APPROVER_PIN_OR_PASSWORD_GENERATED,
+                WifiP2pManager.CREDENTIAL_TYPE_PASSWORD);
+
+        /*
+         * If the app defers showing the password to the `WifiP2pService`, the service is expected
+         * to display a dialog with the sent invitation and the required password.
+         */
+        sendSetConnectionRequestResultMsg(mClientMessenger,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pManager.CONNECTION_REQUEST_DEFER_SHOW_PASSWORD_TO_SERVICE, binder);
+        verify(mWifiNative, never()).p2pConnect(any(), anyBoolean());
+        verify(mWifiDialogManager).createP2pInvitationSentDialog(
+                any(), eq(null), any(),
+                eq(Display.DEFAULT_DISPLAY));
+    }
+
+    /**
+     * Test PIN generated message to external approver built on SDK level older than B.
+     * Pairing bootstrapping method: Display passphrase on initiator device.
+     */
+    @Test
+    public void testExternalApproverShowPasswordMessageV2ConnectionOnInitiatorOnSdkLevelLessThanB()
+            throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        Binder binder = new Binder();
+        when(mWifiPermissionsUtil.isTargetSdkLessThan(anyString(), eq(37),
+                anyInt())).thenReturn(true);
+        verifyExternalApproverConnectionRequestMessageOnInitiator(binder,
+                MacAddress.fromString(mTestWifiP2pV2Device.deviceAddress),
+                WifiP2pProvDiscEvent.PAIRING_BOOTSTRAPPING_SHOW_PASSPHRASE,
+                WifiP2pPairingBootstrappingConfig.PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE,
+                "password", WifiP2pManager.EXTERNAL_APPROVER_PIN_OR_PASSWORD_GENERATED,
+                WifiP2pManager.CREDENTIAL_TYPE_PIN);
     }
 }

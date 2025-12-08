@@ -1998,12 +1998,14 @@ public class WifiScanningServiceImpl extends IWifiScanner.Stub {
                     case WifiScanner.CMD_STOP_SINGLE_SCAN:
                     case WifiScanner.CMD_GET_SCAN_RESULTS:
                         ScanParams scanParams = (ScanParams) msg.obj;
-                        ClientInfo ci = mClients.get(scanParams.listener);
-                        if (ci == null) {
-                            loge("ClientInfo is null");
-                            break;
+                        if (scanParams != null) {
+                            ClientInfo ci = mClients.get(scanParams.listener);
+                            if (ci == null) {
+                                loge("ClientInfo is null");
+                                break;
+                            }
+                            ci.replyFailed(WifiScanner.REASON_UNSPECIFIED, "not available");
                         }
-                        ci.replyFailed(WifiScanner.REASON_UNSPECIFIED, "not available");
                         break;
 
                     case CMD_SCAN_RESULTS_AVAILABLE:

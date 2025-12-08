@@ -23,6 +23,7 @@ import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.net.wifi.WifiNetworkSuggestion;
 import android.net.wifi.WifiScanner;
+import android.net.wifi.util.Environment;
 import android.os.Handler;
 import android.os.Process;
 import android.provider.Settings;
@@ -33,6 +34,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.HandlerExecutor;
 import com.android.server.wifi.util.LastCallerInfoManager;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -75,6 +77,8 @@ public class WakeupController {
     private final WifiMetrics mWifiMetrics;
     private final WifiPermissionsUtil mWifiPermissionsUtil;
     private final WifiSettingsStore mSettingsStore;
+    private final WifiSettingsConfigStore mWifiSettingsConfigStore;
+    private final FeatureFlags mFeatureFlags;
     private final Object mLock = new Object();
 
     private final WifiScanner.ScanListener mScanListener = new WifiScanner.ScanListener() {
@@ -151,7 +155,8 @@ public class WakeupController {
             WifiInjector wifiInjector,
             FrameworkFacade frameworkFacade,
             Clock clock,
-            ActiveModeWarden activeModeWarden) {
+            ActiveModeWarden activeModeWarden,
+            FeatureFlags featureFlags) {
         mContext = context;
         mHandler = handler;
         mWakeupLock = wakeupLock;
@@ -167,16 +172,39 @@ public class WakeupController {
         mWifiMetrics = wifiInjector.getWifiMetrics();
         mWifiPermissionsUtil = wifiInjector.getWifiPermissionsUtil();
         mSettingsStore = wifiInjector.getWifiSettingsStore();
+        mWifiSettingsConfigStore = wifiInjector.getSettingsConfigStore();
+        mFeatureFlags = featureFlags;
         mContentObserver = new ContentObserver(mHandler) {
             @Override
             public void onChange(boolean selfChange) {
-                readWifiWakeupEnabledFromSettings();
-                mWakeupOnboarding.setOnboarded();
+                if (mFeatureFlags.multiUserWifiEnhancement() && Environment.isSdkNewerThanB()) {
+                    synchronized (mLock) {
+                        boolean oldValue = mWifiWakeupEnabled;
+                        readWifiWakeupEnabledFromSettings();
+                        // In new build and with flag, setEnabled reflects user interaction so the
+                        // user will be onboarded there. Besides, apps may still update the value
+                        // from Settings.Global directly, so whenever there is a value change the
+                        // user should be onboarded.
+                        if (oldValue != mWifiWakeupEnabled) {
+                            mWakeupOnboarding.setOnboarded();
+                        }
+                    }
+                } else {
+                    readWifiWakeupEnabledFromSettings();
+                    mWakeupOnboarding.setOnboarded();
+                }
             }
         };
         mFrameworkFacade.registerContentObserver(mContext, Settings.Global.getUriFor(
                 Settings.Global.WIFI_WAKEUP_ENABLED), true, mContentObserver);
         readWifiWakeupEnabledFromSettings();
+
+        if (mFeatureFlags.multiUserWifiEnhancement() && Environment.isSdkNewerThanB()) {
+            mWifiSettingsConfigStore.registerChangeListener(
+                    WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED, (key, value) -> {
+                        updateWifiWakeupEnabledFromSettingsConfigStore(value);
+                    }, mHandler);
+        }
 
         // registering the store data here has the effect of reading the persisted value of the
         // data sources after system boot finishes
@@ -203,7 +231,34 @@ public class WakeupController {
         synchronized (mLock) {
             mWifiWakeupEnabled = mFrameworkFacade.getIntegerSetting(
                     mContext, Settings.Global.WIFI_WAKEUP_ENABLED, 0) == 1;
-            Log.d(TAG, "WifiWake " + (mWifiWakeupEnabled ? "enabled" : "disabled"));
+            Log.d(TAG, "Settings.Global: WifiWake " + (mWifiWakeupEnabled ? "enabled"
+                    : "disabled"));
+            if (mFeatureFlags.multiUserWifiEnhancement() && Environment.isSdkNewerThanB()
+                    && mWifiWakeupEnabled != mWifiSettingsConfigStore.get(
+                    WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED)) {
+                mWifiSettingsConfigStore.put(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                        mWifiWakeupEnabled);
+            }
+        }
+    }
+
+    private void updateWifiWakeupEnabledFromSettingsConfigStore(boolean enable) {
+        synchronized (mLock) {
+            mWifiWakeupEnabled = enable;
+            Log.d(TAG, "WifiSettingsConfigStore: WifiWake " + (mWifiWakeupEnabled ? "enabled"
+                    : "disabled"));
+            try {
+                // No-op if the Settings.Global value is the same as the to-be-set value.
+                if (mFrameworkFacade.getIntegerSetting(mContext.getContentResolver(),
+                        Settings.Global.WIFI_WAKEUP_ENABLED) == (enable ? 1 : 0)) {
+                    return;
+                }
+            } catch (Settings.SettingNotFoundException e) {
+                // If the Settings.Global value is not found, proceed to configure the value.
+            }
+            // Update the Settings.Global value only if the value is not found or different.
+            mFrameworkFacade.setIntegerSetting(mContext, Settings.Global.WIFI_WAKEUP_ENABLED,
+                    enable ? 1 : 0);
         }
     }
 
@@ -220,6 +275,24 @@ public class WakeupController {
      */
     public void setEnabled(boolean enable) {
         synchronized (mLock) {
+            if (mFeatureFlags.multiUserWifiEnhancement() && Environment.isSdkNewerThanB()
+                    && mWifiWakeupEnabled != enable) {
+                // It is important for new builds to set mWifiWakeupEnabled immediately, instead of
+                // delegating to callbacks (e.g. old build relies on onChange to maintain
+                // mWifiWakeupEnabled). This is for onChange to identify whether the value change is
+                // initiated from API or Settings.Global to avoid calling setOnboarded twice.
+                // For example, if value change is initiated from here (API), the user will be
+                // onboarded and mWifiWakeupEnabled will be set here -- when onChange is invoked
+                // later, it won't onboard user again; if value change is initiated from onChange,
+                // the old and new value of mWifiWakeupEnabled will be different so that onChange
+                // will onboard user there.
+                mWifiWakeupEnabled = enable;
+                // The user will be considered onboarded if they have manually toggled enabled or
+                // disabled from the Settings UI. For the case of user-switch, whether the user has
+                // onboarded or not will be loaded from StoreData.
+                mWakeupOnboarding.setOnboarded();
+                mWifiSettingsConfigStore.put(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED, enable);
+            }
             mFrameworkFacade.setIntegerSetting(
                     mContext, Settings.Global.WIFI_WAKEUP_ENABLED, enable ? 1 : 0);
         }

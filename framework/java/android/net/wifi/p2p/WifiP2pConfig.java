@@ -426,7 +426,10 @@ public class WifiP2pConfig implements Parcelable {
         deviceAddress = "";
     }
 
-    /** P2P-GO-NEG-REQUEST 42:fc:89:a8:96:09 dev_passwd_id=4 {@hide}*/
+    /**
+     * P2P-GO-NEG-REQUEST 42:fc:89:a8:96:09 dev_passwd_id=4
+     * @hide
+     */
     @UnsupportedAppUsage
     public WifiP2pConfig(String supplicantEvent) throws IllegalArgumentException {
         String[] tokens = supplicantEvent.split(" ");

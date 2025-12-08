@@ -27,6 +27,10 @@ WIFI_SCAN_INTERVAL_SEC = datetime.timedelta(seconds=5)
 # WiFi standards
 WIFI_STANDARD_11AX = 6
 
+DEFAULT_SOFTAP_TIMEOUT_S = 600
+
+SOFTAP_RANDOMIZATION_NONE = 0
+
 @enum.unique
 class LocalOnlyHotspotCallbackEventName(enum.StrEnum):
   """Event names for WifiManager#LocalOnlyHotspotCallback."""
@@ -71,7 +75,12 @@ class SoftApCallbackEventName(enum.StrEnum):
 
   ON_CONNECTED_CLIENTS_CHANGED = 'onConnectedClientsChanged'
   ON_CLIENTS_DISCONNECTED = 'onClientsDisconnected'
-
+  SOFTAP_INFO_CHANGED ='onInfoChanged'
+  SOFTAP_CAPABILITY_CHANGED = 'OnCapabilityChanged'
+  SOFTAP_CAPABILITY_FEATURE_CLIENT_CONTROL = "clientForceDisconnectSupported"
+  SOFTAP_BLOCKING_CLIENT_CONNECTING = "OnBlockedClientConnecting"
+  SOFTAP_BLOCKING_CLIENT_REASON_KEY = "BlockedReason"
+  SOFTAP_BLOCKING_CLIENT_WIFICLIENT_KEY = "WifiClient"
 
 @enum.unique
 class SoftApOnConnectedClientsChangedDataKey(enum.StrEnum):
@@ -79,6 +88,8 @@ class SoftApOnConnectedClientsChangedDataKey(enum.StrEnum):
 
   CONNECTED_CLIENTS_COUNT = 'connectedClientsCount'
   CLIENT_MAC_ADDRESS = 'clientMacAddress'
+  SOFTAP_INFO_FREQUENCY_CALLBACK_KEY = "frequency"
+  SOFTAP_INFO_BANDWIDTH_CALLBACK_KEY = "bandwidth"
 
 
 @enum.unique
@@ -158,19 +169,32 @@ class WiFiTethering(enum.StrEnum):
     NETID_KEY = "network_id"
     BSSID_KEY = "BSSID"  # Used for Wifi & SoftAp
     BSSID_PATTERN_KEY = "bssidPattern"
-    PWD_KEY = "password"  # Used for Wifi & SoftAp
+    PWD_KEY = "Passphrase"  # Used for Wifi & SoftAp
     frequency_key = "frequency"
     HIDDEN_KEY = "hiddenSSID"  # Used for Wifi & SoftAp
     IS_APP_INTERACTION_REQUIRED = "isAppInteractionRequired"
     IS_USER_INTERACTION_REQUIRED = "isUserInteractionRequired"
     IS_SUGGESTION_METERED = "isMetered"
     PRIORITY = "priority"
-    SECURITY = "security"  # Used for Wifi & SoftAp
+    SECURITY = "mSecurityType"  # Used for Wifi & SoftAp
+    PWD = "password"
+
 
     # Used for SoftAp
     AP_BAND_KEY = "apBand"
     AP_CHANNEL_KEY = "apChannel"
     AP_BANDS_KEY = "apBands"
+    AP_MAC_RANDOMIZATION_SETTING_KEY = "mMacRandomizationSetting"
+    AP_BRIDGED_OPPORTUNISTIC_SHUTDOWN_ENABLE_KEY = (
+      "mBridgedModeOpportunisticShutdownEnabled")
+    AP_IEEE80211AX_ENABLED_KEY = "mIeee80211axEnabled"
+    AP_MAXCLIENTS_KEY = "mMaxNumberOfClients"
+    AP_SHUTDOWNTIMEOUT_KEY = "mShutdownTimeoutMillis"
+    AP_SHUTDOWNTIMEOUTENABLE_KEY = "mAutoShutdownEnabled"
+    AP_CLIENTCONTROL_KEY = "mClientControlByUser"
+    AP_ALLOWEDLIST_KEY = "mAllowedClientList"
+    AP_BLOCKEDLIST_KEY = "mBlockedClientList"
+    AP_CHANNEL_FREQUENCYS_KEY = "apChannelFrequencies"
     AP_CLIENT_ISOLATION_ENABLE = "mClientIsolationEnabled"
 
 @enum.unique
@@ -184,8 +208,21 @@ class WiFiHotspotBand(enum.IntEnum):
     WIFI_CONFIG_SOFTAP_BAND_5G_6G = 6
     WIFI_CONFIG_SOFTAP_BAND_ANY = 7
 
-class SoftApSecurityType():
-  OPEN = "NONE"
-  WPA2 = "WPA2_PSK"
-  WPA3_SAE_TRANSITION = "WPA3_SAE_TRANSITION"
-  WPA3_SAE = "WPA3_SAE"
+@enum.unique
+class SoftApSecurityType(enum.IntEnum):
+  OPEN = 0
+  WPA2 = 1
+  WPA3_SAE_TRANSITION = 2
+  WPA3_SAE = 3
+  WPA3_OWE_TRANSITION = 4
+  WPA3_OWE = 5
+
+class SoftApSecurityTypeValue():
+  type_to_value = {
+    "NONE":0,
+    "WPA2_PSK":1,
+    "WPA3_SAE_TRANSITION":2,
+    "WPA3_SAE":3,
+    "WPA3_OWE_TRANSITION" : 4,
+    "WPA3_OWE": 5,
+    }

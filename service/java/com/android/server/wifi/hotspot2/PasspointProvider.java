@@ -103,6 +103,7 @@ public class PasspointProvider {
 
     private final long mProviderId;
     private final int mCreatorUid;
+    private final int mCreatorUserId;
     private final String mPackageName;
 
     private final IMSIParameter mImsiParameter;
@@ -145,21 +146,22 @@ public class PasspointProvider {
 
     public PasspointProvider(PasspointConfiguration config, WifiKeyStore keyStore,
             WifiCarrierInfoManager wifiCarrierInfoManager, long providerId, int creatorUid,
-            String packageName, boolean isFromSuggestion, Clock clock) {
+            String packageName, boolean isFromSuggestion, Clock clock, int creatorUserId) {
         this(config, keyStore, wifiCarrierInfoManager, providerId, creatorUid, packageName,
-                isFromSuggestion, null, null, null, false, false, clock);
+                isFromSuggestion, null, null, null, false, false, clock, creatorUserId);
     }
 
     public PasspointProvider(PasspointConfiguration config, WifiKeyStore keyStore,
             WifiCarrierInfoManager wifiCarrierInfoManager, long providerId, int creatorUid,
             String packageName, boolean isFromSuggestion, List<String> caCertificateAliases,
             String clientPrivateKeyAndCertificateAlias, String remediationCaCertificateAlias,
-            boolean hasEverConnected, boolean isShared, Clock clock) {
+            boolean hasEverConnected, boolean isShared, Clock clock, int creatorUserId) {
         // Maintain a copy of the configuration to avoid it being updated by others.
         mConfig = new PasspointConfiguration(config);
         mKeyStore = keyStore;
         mProviderId = providerId;
         mCreatorUid = creatorUid;
+        mCreatorUserId = creatorUserId;
         mPackageName = packageName;
         mCaCertificateAliases = caCertificateAliases;
         mClientPrivateKeyAndCertificateAlias = clientPrivateKeyAndCertificateAlias;
@@ -628,6 +630,7 @@ public class PasspointProvider {
         wifiConfig.ephemeral = mIsFromSuggestion;
         wifiConfig.creatorName = mPackageName;
         wifiConfig.creatorUid = mCreatorUid;
+        wifiConfig.setCreatorUserId(mCreatorUserId);
         wifiConfig.trusted = mIsTrusted;
         wifiConfig.restricted = mIsRestricted;
         if (mConfig.isMacRandomizationEnabled()) {

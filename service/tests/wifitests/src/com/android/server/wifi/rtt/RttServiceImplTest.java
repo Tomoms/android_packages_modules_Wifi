@@ -109,6 +109,8 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
+
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -132,7 +134,7 @@ public class RttServiceImplTest extends WifiBaseTest {
     private BroadcastReceiver mPowerBcastReceiver;
     private BroadcastReceiver mLocationModeReceiver;
     private MockResources mMockResources = new MockResources();
-    private MockitoSession mSession;
+    private MockitoSession mSession = null;
 
     private final String mPackageName = "some.package.name.for.rtt.app";
     private final String mFeatureId = "some.feature.name.for.rtt.app";
@@ -220,6 +222,10 @@ public class RttServiceImplTest extends WifiBaseTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        mSession = ExtendedMockito.mockitoSession().strictness(Strictness.LENIENT)
+                .mockStatic(Flags.class, withSettings().lenient())
+                .startMocking();
+        when(Flags.monitorIntentForAllUsers()).thenReturn(false);
         mDut = new RttServiceImplSpy(mockContext);
         mDut.fakeUid = mDefaultUid;
         mMockLooper = new TestLooper();
@@ -303,15 +309,12 @@ public class RttServiceImplTest extends WifiBaseTest {
 
     @Test
     public void testRegisterReceiverForAllUsersWhenFlagOn() throws Exception {
-        mSession = ExtendedMockito.mockitoSession()
-                .mockStatic(Flags.class, withSettings().lenient())
-                .startMocking();
         when(Flags.monitorIntentForAllUsers()).thenReturn(true);
         mDut.start(mMockLooper.getLooper(), mockClock, mockAwareManager, mockMetrics,
                 mockPermissionUtil, mWifiSettingsConfigStore, mockHalDeviceManager,
                 mWifiConfigManager, mSsidTranslator);
         mMockLooper.dispatchAll();
-        verify(mockContext).registerReceiver(any(BroadcastReceiver.class),
+        verify(mockContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
                 argThat(filter -> filter.hasAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)),
                 eq(null), any(Handler.class));
     }

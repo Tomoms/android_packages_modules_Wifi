@@ -167,6 +167,10 @@ public class NetworkDetail {
     private final boolean mIs11azNtbResponder;
     private final boolean mIs11azTbResponder;
 
+    // Enabled the use of Bss Coloring.
+    private final boolean mBssColorEnabled;
+
+
     // MLO Attributes
     private MacAddress mMldMacAddress = null;
     private int mMloLinkId = MloLink.INVALID_MLO_LINK_ID;
@@ -389,6 +393,7 @@ public class NetworkDetail {
         int centerFreq1 = 0;
         mIsSecureHeLtfSupported = rsnxe.isSecureHeLtfSupported();
         mIsRangingFrameProtectionRequired = rsnxe.isRangingFrameProtectionRequired();
+        mBssColorEnabled = heOperation.isBssColorEnabled();
 
         // Check if EHT Operation Info is present in EHT operation IE.
         if (ehtOperation.isEhtOperationInfoPresent()) {
@@ -580,6 +585,7 @@ public class NetworkDetail {
         mIs11azTbResponder = base.mIs11azTbResponder;
         mIsSecureHeLtfSupported = base.mIsSecureHeLtfSupported;
         mIsRangingFrameProtectionRequired = base.mIsRangingFrameProtectionRequired;
+        mBssColorEnabled = base.mBssColorEnabled;
     }
 
     public NetworkDetail complete(Map<Constants.ANQPElementType, ANQPElement> anqpElements) {
@@ -754,6 +760,7 @@ public class NetworkDetail {
                 && mIs11azTbResponder == that.mIs11azTbResponder && mMloLinkId == that.mMloLinkId
                 && mIsSecureHeLtfSupported == that.mIsSecureHeLtfSupported
                 && mIsRangingFrameProtectionRequired == that.mIsRangingFrameProtectionRequired
+                && mBssColorEnabled == that.mBssColorEnabled
                 && Objects.equals(mSSID, that.mSSID) && mAnt == that.mAnt
                 && mHSRelease == that.mHSRelease && Arrays.equals(mRoamingConsortiums,
                 that.mRoamingConsortiums) && Objects.equals(mCountryCode, that.mCountryCode)
@@ -793,7 +800,8 @@ public class NetworkDetail {
                 + mMloLinkId + ", mAffiliatedMloLinks=" + mAffiliatedMloLinks
                 + ", mDisabledSubchannelBitmap=" + Arrays.toString(mDisabledSubchannelBitmap)
                 + ", mIsSecureHeLtfSupported=" + mIsSecureHeLtfSupported
-                + ", mIsRangingFrameProtectionRequired=" + mIsRangingFrameProtectionRequired + '}';
+                + ", mIsRangingFrameProtectionRequired=" + mIsRangingFrameProtectionRequired
+                + ", mBssColorEnabled=" + mBssColorEnabled + '}';
     }
 
     @Override
@@ -808,7 +816,7 @@ public class NetworkDetail {
                 mBroadcastTwtSupported, mRestrictedTwtSupported, mEpcsPriorityAccessSupported,
                 mFilsCapable, mApType6GHz, mIs11azNtbResponder, mIs11azTbResponder, mMldMacAddress,
                 mMloLinkId, mAffiliatedMloLinks, mIsSecureHeLtfSupported,
-                mIsRangingFrameProtectionRequired);
+                mIsRangingFrameProtectionRequired, mBssColorEnabled);
         result = 31 * result + Arrays.hashCode(mRoamingConsortiums);
         result = 31 * result + Arrays.hashCode(mDisabledSubchannelBitmap);
         return result;
@@ -932,5 +940,10 @@ public class NetworkDetail {
     /** Return whether ranging frame protection is required or not */
     public boolean isRangingFrameProtectionRequired() {
         return mIsRangingFrameProtectionRequired;
+    }
+
+    /** Return whether BSS coloring is enabled or not */
+    public boolean isBssColorEnabled() {
+        return mBssColorEnabled;
     }
 }

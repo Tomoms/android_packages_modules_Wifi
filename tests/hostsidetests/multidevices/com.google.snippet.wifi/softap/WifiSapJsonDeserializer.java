@@ -17,8 +17,9 @@
 package com.google.snippet.wifi.softap;
 
 import android.net.MacAddress;
+import android.net.wifi.ScanResult;
 import android.net.wifi.SoftApConfiguration;
-import android.text.TextUtils;
+import android.util.SparseIntArray;
 
 import com.android.modules.utils.build.SdkLevel;
 
@@ -36,6 +37,23 @@ import java.util.List;
 public class WifiSapJsonDeserializer {
 
     private WifiSapJsonDeserializer() {}
+
+    private static int getApBandFromChannelFrequency(int freq) {
+        int[] testFrequency_2G = {2412, 2437, 2462, 2484};
+        int[] testFrequency_5G = {5180, 5220, 5540, 5745};
+        int[] testFrequency_6G = {5955, 6435, 6535, 7115};
+        int[] testFrequency_60G = {58320, 64800};
+        if (freq >= testFrequency_2G[0]  && freq <=  testFrequency_2G[3]) {
+            return SoftApConfiguration.BAND_2GHZ;
+        } else if (freq >= testFrequency_5G[0]  && freq <=  testFrequency_5G[3]) {
+            return SoftApConfiguration.BAND_5GHZ;
+        } else if (freq >= testFrequency_6G[0]  && freq <=  testFrequency_6G[3]) {
+            return SoftApConfiguration.BAND_6GHZ;
+        } else if (freq >= testFrequency_60G[0]  && freq <=  testFrequency_60G[3]) {
+            return SoftApConfiguration.BAND_60GHZ;
+        }
+        return -1;
+    }
 
     private static int[] convertJSONArrayToIntArray(JSONArray jArray) throws JSONException {
         if (jArray == null) {
@@ -62,18 +80,27 @@ public class WifiSapJsonDeserializer {
         if (configJson.has("SSID")) {
             configBuilder.setSsid(configJson.getString("SSID"));
         }
-        if (configJson.has("password")) {
-            String pwd = configJson.getString("password");
+        if (configJson.has("Passphrase")) {
+            String pwd = configJson.getString("Passphrase");
             // Check if new security type SAE (WPA3) is present. Default to PSK
-            if (configJson.has("security")) {
-                String securityType = configJson.getString("security");
-                if (TextUtils.equals(securityType, "WPA2_PSK")) {
+            if (configJson.has("mSecurityType")) {
+                String securityTypeStr = configJson.getString("mSecurityType");
+                int securityTypeInt = SoftApConfiguration.SECURITY_TYPE_WPA2_PSK;
+                try {
+                    securityTypeInt = Integer.parseInt(securityTypeStr);
+                } catch (NumberFormatException nfe) {
+                    throw new JSONException("Invalid security type: " + securityTypeStr);
+                }
+                if (securityTypeInt == SoftApConfiguration.SECURITY_TYPE_WPA2_PSK) {
                     configBuilder.setPassphrase(pwd, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK);
-                } else if (TextUtils.equals(securityType, "WPA3_SAE_TRANSITION")) {
+                } else if (securityTypeInt
+                        == SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION) {
                     configBuilder.setPassphrase(pwd,
                             SoftApConfiguration.SECURITY_TYPE_WPA3_SAE_TRANSITION);
-                } else if (TextUtils.equals(securityType, "WPA3_SAE")) {
+                } else if (securityTypeInt == SoftApConfiguration.SECURITY_TYPE_WPA3_SAE) {
                     configBuilder.setPassphrase(pwd, SoftApConfiguration.SECURITY_TYPE_WPA3_SAE);
+                } else {
+                    configBuilder.setPassphrase(pwd, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK);
                 }
             } else {
                 configBuilder.setPassphrase(pwd, SoftApConfiguration.SECURITY_TYPE_WPA2_PSK);
@@ -92,34 +119,34 @@ public class WifiSapJsonDeserializer {
             configBuilder.setChannel(configJson.getInt("apChannel"), configJson.getInt("apBand"));
         }
 
-        if (configJson.has("MaxNumberOfClients")) {
-            configBuilder.setMaxNumberOfClients(configJson.getInt("MaxNumberOfClients"));
+        if (configJson.has("mMaxNumberOfClients")) {
+            configBuilder.setMaxNumberOfClients(configJson.getInt("mMaxNumberOfClients"));
         }
 
-        if (configJson.has("ShutdownTimeoutMillis")) {
-            configBuilder.setShutdownTimeoutMillis(configJson.getLong("ShutdownTimeoutMillis"));
+        if (configJson.has("mShutdownTimeoutMillis")) {
+            configBuilder.setShutdownTimeoutMillis(configJson.getLong("mShutdownTimeoutMillis"));
         }
 
-        if (configJson.has("AutoShutdownEnabled")) {
-            configBuilder.setAutoShutdownEnabled(configJson.getBoolean("AutoShutdownEnabled"));
+        if (configJson.has("mAutoShutdownEnabled")) {
+            configBuilder.setAutoShutdownEnabled(configJson.getBoolean("mAutoShutdownEnabled"));
         }
 
-        if (configJson.has("ClientControlByUserEnabled")) {
+        if (configJson.has("mClientControlByUser")) {
             configBuilder.setClientControlByUserEnabled(
-                    configJson.getBoolean("ClientControlByUserEnabled"));
+                    configJson.getBoolean("mClientControlByUser"));
         }
 
         List allowedClientList = new ArrayList<>();
-        if (configJson.has("AllowedClientList")) {
-            JSONArray allowedList = configJson.getJSONArray("AllowedClientList");
+        if (configJson.has("mAllowedClientList")) {
+            JSONArray allowedList = configJson.getJSONArray("mAllowedClientList");
             for (int i = 0; i < allowedList.length(); i++) {
                 allowedClientList.add(MacAddress.fromString(allowedList.getString(i)));
             }
         }
 
         List blockedClientList = new ArrayList<>();
-        if (configJson.has("BlockedClientList")) {
-            JSONArray blockedList = configJson.getJSONArray("BlockedClientList");
+        if (configJson.has("mBlockedClientList")) {
+            JSONArray blockedList = configJson.getJSONArray("mBlockedClientList");
             for (int j = 0; j < blockedList.length(); j++) {
                 blockedClientList.add(MacAddress.fromString(blockedList.getString(j)));
             }
@@ -134,18 +161,34 @@ public class WifiSapJsonDeserializer {
                 int[] bands = convertJSONArrayToIntArray(jBands);
                 configBuilder.setBands(bands);
             }
-            if (configJson.has("MacRandomizationSetting")) {
+            if (configJson.has("mMacRandomizationSetting")) {
                 configBuilder.setMacRandomizationSetting(
-                        configJson.getInt("MacRandomizationSetting"));
+                        configJson.getInt("mMacRandomizationSetting"));
             }
 
-            if (configJson.has("BridgedModeOpportunisticShutdownEnabled")) {
+            if (configJson.has("mBridgedModeOpportunisticShutdownEnabled")) {
                 configBuilder.setBridgedModeOpportunisticShutdownEnabled(
-                        configJson.getBoolean("BridgedModeOpportunisticShutdownEnabled"));
+                        configJson.getBoolean("mBridgedModeOpportunisticShutdownEnabled"));
             }
 
-            if (configJson.has("Ieee80211axEnabled")) {
-                configBuilder.setIeee80211axEnabled(configJson.getBoolean("Ieee80211axEnabled"));
+            if (configJson.has("mIeee80211axEnabled")) {
+                configBuilder.setIeee80211axEnabled(configJson.getBoolean("mIeee80211axEnabled"));
+            }
+
+            if (configJson.has("apChannelFrequencies")) {
+                JSONArray jChannelFrequencys = configJson.getJSONArray("apChannelFrequencies");
+                int[] channelFrequencies = convertJSONArrayToIntArray(jChannelFrequencys);
+                SparseIntArray channels = new SparseIntArray();
+                for (int channelFrequency : channelFrequencies) {
+                    if (channelFrequency != 0) {
+                        channels.put(getApBandFromChannelFrequency(channelFrequency),
+                                ScanResult.convertFrequencyMhzToChannelIfSupported(
+                                        channelFrequency));
+                    }
+                }
+                if (channels.size() != 0) {
+                    configBuilder.setChannels(channels);
+                }
             }
 
             if (configJson.has("mClientIsolationEnabled")) {

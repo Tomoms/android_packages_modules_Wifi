@@ -23,6 +23,7 @@ import android.provider.Settings;
 import com.android.internal.messages.nano.SystemMessageProto.SystemMessage;
 import com.android.server.wifi.proto.nano.WifiMetricsProto;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
 
 /**
  * This class handles the "open wi-fi network available" notification
@@ -47,13 +48,17 @@ public class OpenNetworkNotifier extends AvailableNetworkNotifier {
             ConnectToNetworkNotificationBuilder connectToNetworkNotificationBuilder,
             MakeBeforeBreakManager makeBeforeBreakManager,
             WifiNotificationManager wifiNotificationManager,
-            WifiPermissionsUtil wifiPermissionsUtil) {
+            WifiPermissionsUtil wifiPermissionsUtil,
+            WifiSettingsConfigStore wifiSettingsConfigStore,
+            FeatureFlags featureFlags) {
         super(TAG, STORE_DATA_IDENTIFIER, TOGGLE_SETTINGS_NAME,
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
                 SystemMessage.NOTE_NETWORK_AVAILABLE,
                 WifiMetricsProto.ConnectionEvent.NOMINATOR_OPEN_NETWORK_AVAILABLE,
                 context, looper, framework, clock,
                 wifiMetrics, wifiConfigManager, wifiConfigStore, connectHelper,
                 connectToNetworkNotificationBuilder, makeBeforeBreakManager,
-                wifiNotificationManager, wifiPermissionsUtil);
+                wifiNotificationManager, wifiPermissionsUtil, wifiSettingsConfigStore,
+                featureFlags);
     }
 }

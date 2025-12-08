@@ -284,6 +284,15 @@ flag {
 }
 
 flag {
+    name: "allow_override_max_ndp_session"
+    is_exported: true
+    namespace: "wifi"
+    description: "Allow override the NDP session number to avoid interrupt critical connection"
+    bug: "375552150"
+    is_fixed_read_only: true
+}
+
+flag {
     name: "wifi_lock_activated_by_p2p_or_aware"
     namespace: "wifi"
     description: "Allow some apps to activate a WifiLock if a P2P or Aware connection is active"
@@ -332,11 +341,29 @@ flag {
 }
 
 flag {
+    name: "improve_ranging_api"
+    is_exported: true
+    namespace: "wifi"
+    description: "Improve ranging APIs"
+    bug: "402768126"
+    is_fixed_read_only: true
+}
+
+flag {
     name: "band_optimization_control"
     is_exported: true
     namespace: "wifi"
     description: "Caller can force softap ap band to bypass the frameworks auto appends bands feature."
     bug: "403649308"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "wifi_pno_scan_schedule_api"
+    is_exported: true
+    namespace: "wifi"
+    description: "For new API added to Android B for PNO scan interval modifications"
+    bug: "399014087"
     is_fixed_read_only: true
 }
 
@@ -347,4 +374,75 @@ flag {
     description: "provide a detail when getting configs, not just empty list in error case"
     bug: "404558943"
     is_fixed_read_only: true
+}
+
+flag {
+    name: "refresh_mac_randomization_api"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add new API to refresh random mac address"
+    bug: "395017801"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "external_approver_support_for_wfdr2_password_based_bootstrapping"
+    is_exported: true
+    namespace: "wifi"
+    description: "Enables the use of an external approver mechanism during the WFDR2 password-based pairing bootstrapping process"
+    bug: "409802099"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "feed_internal_score_to_external_scorer"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add new APIs to feed the internal score to external scorer for reference"
+    bug: "427546930"
+}
+
+flag {
+    name: "restrict_autojoin_callback_api"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add new callback API to listen on restrict autojoin to subscription ID state"
+    bug: "201143076"
+    is_fixed_read_only: true
+}
+
+flag {
+    name: "scan_optimization_with_mobility_change"
+    namespace: "wifi"
+    description: "Add new callback API to listen on restrict autojoin to subscription ID state"
+    bug: "422594154"
+}
+
+flag {
+    name: "nl80211_proxy_enabled"
+    namespace: "wifi"
+    description: "Allow the Nl80211 proxy to be initialized"
+    bug: "344891670"
+}
+
+flag {
+    name: "filter_carrier_networks_while_in_motion"
+    namespace: "wifi"
+    description: "Filters carrier networks from the connection candidate list while the device is in motion"
+    bug: "409851656"
+}
+
+flag {
+    name: "get_supported_interface_names"
+    is_exported: true
+    namespace: "wifi"
+    description: "Add new API to get supported interface names"
+    bug: "433370605"
+}
+
+flag {
+    name: "ml_scorer_in_wifi_fw"
+    namespace: "wifi"
+    description: "Add ML scorer into Wi-Fi framework"
+    bug: "412641160"
 }

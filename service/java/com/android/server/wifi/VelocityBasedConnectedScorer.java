@@ -16,10 +16,14 @@
 
 package com.android.server.wifi;
 
+import static com.android.server.wifi.Clock.INVALID_TIMESTAMP_MS;
+
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiUsabilityStatsEntry;
 import android.util.Log;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.server.wifi.util.KalmanFilter;
 import com.android.server.wifi.util.Matrix;
 
@@ -27,19 +31,27 @@ import com.android.server.wifi.util.Matrix;
  * Class used to calculate scores for connected wifi networks and report it to the associated
  * network agent.
  */
-public class VelocityBasedConnectedScore extends ConnectedScore {
+public class VelocityBasedConnectedScorer extends ConnectedScorer {
+    public static final String TAG = "VelocityBasedConnectedScorer";
 
-    public static final String TAG = "WifiVelocityBasedConnectedScore";
     private final ScoringParams mScoringParams;
-
     private int mFrequency = ScanResult.BAND_5_GHZ_START_FREQ_MHZ;
     private double mThresholdAdjustment;
     private final KalmanFilter mFilter;
     private long mLastMillis;
+    private long mLastDownwardBreachTimeMs = INVALID_TIMESTAMP_MS;
+    @VisibleForTesting
+    long mLastNudCheckTimeMs = INVALID_TIMESTAMP_MS;
+    @VisibleForTesting
+    int mLastNudCheckScore;
+    private final WifiGlobals mWifiGlobals;
+    private final ConnectedScorerHelper mConnectedScorerHelper;
 
-    public VelocityBasedConnectedScore(ScoringParams scoringParams, Clock clock) {
-        super(clock);
+    public VelocityBasedConnectedScorer(ScoringParams scoringParams, WifiGlobals wifiGlobals,
+            ConnectedScorerHelper connectedScorerHelper) {
         mScoringParams = scoringParams;
+        mWifiGlobals = wifiGlobals;
+        mConnectedScorerHelper = connectedScorerHelper;
         mFilter = new KalmanFilter();
         mFilter.mH = new Matrix(2, new double[]{1.0, 0.0});
         mFilter.mR = new Matrix(1, new double[]{1.0});
@@ -67,6 +79,7 @@ public class VelocityBasedConnectedScore extends ConnectedScore {
         mLastMillis = 0;
         mThresholdAdjustment = 0;
         mFilter.mx = null;
+        mLastDownwardBreachTimeMs = INVALID_TIMESTAMP_MS;
     }
 
     /**
@@ -79,8 +92,7 @@ public class VelocityBasedConnectedScore extends ConnectedScore {
      * @param millis            millisecond-resolution time.
      * @param standardDeviation of the RSSI.
      */
-    @Override
-    public void updateUsingRssi(int rssi, long millis, double standardDeviation) {
+    private void updateUsingRssi(int rssi, long millis, double standardDeviation) {
         if (millis <= 0) return;
         try {
             if (mLastMillis <= 0 || millis < mLastMillis || mFilter.mx == null) {
@@ -106,8 +118,7 @@ public class VelocityBasedConnectedScore extends ConnectedScore {
     /**
      * Updates the state.
      */
-    @Override
-    public void updateUsingWifiInfo(WifiInfo wifiInfo, long millis) {
+    private void updateUsingWifiInfo(WifiInfo wifiInfo, long millis) {
         int frequency = wifiInfo.getFrequency();
         if (frequency != mFrequency) {
             mLastMillis = 0; // Probably roamed; reset filter but retain threshold adjustment
@@ -172,12 +183,11 @@ public class VelocityBasedConnectedScore extends ConnectedScore {
     }
 
     /**
-     * Velocity scorer - predict the rssi a few seconds from now
+     * Generates a score based on the current state.
      */
-    @Override
-    public int generateScore() {
-        final int transitionScore = isPrimary() ? WIFI_TRANSITION_SCORE
-                : WIFI_SECONDARY_TRANSITION_SCORE;
+    private int generateScore(WifiInfo wifiInfo, long millis, int transitionScore) {
+        updateUsingWifiInfo(wifiInfo, millis);
+
         if (mFilter.mx == null) return transitionScore + 1;
         double badRssi = getAdjustedRssiThreshold();
         double horizonSeconds = mScoringParams.getHorizonSeconds();
@@ -191,5 +201,40 @@ public class VelocityBasedConnectedScore extends ConnectedScore {
         }
         int score = (int) (Math.round(forecastRssi) - badRssi) + transitionScore;
         return score;
+    }
+
+    /**
+     * Generate a {@link ConnectedScoreResult} based on history input data.
+     */
+    @Override
+    public ConnectedScoreResult generateScoreResult(WifiInfo wifiInfo,
+            WifiUsabilityStatsEntry stats, long millis, boolean isPrimary) {
+        final int transitionScore =
+                isPrimary ? WIFI_TRANSITION_SCORE : WIFI_SECONDARY_TRANSITION_SCORE;
+        final int maxScore =
+                isPrimary ? WIFI_MAX_SCORE : WIFI_MAX_SCORE - WIFI_SECONDARY_DELTA_SCORE;
+        int score = generateScore(wifiInfo, millis, transitionScore);
+
+        int adjustedScore = mConnectedScorerHelper.adjustScore(wifiInfo, getFilteredRssi(),
+                mLastDownwardBreachTimeMs, millis, transitionScore, score);
+        if (wifiInfo.getScore() >= transitionScore && adjustedScore < transitionScore) {
+            mLastDownwardBreachTimeMs = millis;
+        }
+
+        boolean shouldCheckNud = mConnectedScorerHelper.shouldCheckNud(mLastNudCheckTimeMs, millis,
+                transitionScore, mLastNudCheckScore, adjustedScore);
+        if (shouldCheckNud) {
+            mLastNudCheckTimeMs = millis;
+            mLastNudCheckScore = adjustedScore;
+        }
+
+        return ConnectedScoreResult.builder()
+            .setScore(score)
+            .setAdjustedScore(adjustedScore)
+            .setIsWifiUsable(adjustedScore >= transitionScore)
+            .setShouldTriggerScan(adjustedScore
+                    < mWifiGlobals.getWifiLowConnectedScoreThresholdToTriggerScanForMbb())
+            .setShouldCheckNud(shouldCheckNud)
+            .build();
     }
 }

@@ -89,6 +89,7 @@ import java.util.Set;
 public class PasspointProviderTest extends WifiBaseTest {
     private static final long PROVIDER_ID = 12L;
     private static final int CREATOR_UID = 1234;
+    private static final int CREATOR_USER_ID = 5678;
     private static final String CREATOR_PACKAGE = "com.android.test";
     private static final String CA_CERTIFICATE_ALIAS = "HS2_12_0";
     private static final String CA_CERTIFICATE_ALIAS_2 = "HS2_12_1";
@@ -186,7 +187,7 @@ public class PasspointProviderTest extends WifiBaseTest {
      */
     private PasspointProvider createProvider(PasspointConfiguration config) {
         return new PasspointProvider(config, mKeyStore, mWifiCarrierInfoManager, PROVIDER_ID,
-                CREATOR_UID, CREATOR_PACKAGE, false, mClock);
+                CREATOR_UID, CREATOR_PACKAGE, false, mClock, CREATOR_USER_ID);
     }
 
     /**

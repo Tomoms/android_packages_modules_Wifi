@@ -318,7 +318,12 @@ class WifiAwareNetworkTest(base_test.BaseTestClass):
         passive subscribe.
 
         See class docstring for the test steps and expected results.
+
+        This test will only run on devices with SDK level >= 31, which support
+        accepting any peer feature.
         """
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.publisher, 31)
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.subscriber, 31)
         self._test_wifi_aware_network(
             pub_config=constants.PublishConfig(
                 service_specific_info=_PUB_SSI,
@@ -349,7 +354,12 @@ class WifiAwareNetworkTest(base_test.BaseTestClass):
         peer), and passive subscribe.
 
         See class docstring for the test steps and expected results.
+
+        This test will only run on devices with SDK level >= 31, which support
+        accepting any peer feature.
         """
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.publisher, 31)
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.subscriber, 31)
         self._test_wifi_aware_network(
             pub_config=constants.PublishConfig(
                 service_specific_info=_PUB_SSI,
@@ -388,7 +398,12 @@ class WifiAwareNetworkTest(base_test.BaseTestClass):
         passive subscribe.
 
         See class docstring for the test steps and expected results.
+
+        This test will only run on devices with SDK level >= 31, which support
+        accepting any peer feature.
         """
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.publisher, 31)
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.subscriber, 31)
         self._test_wifi_aware_network(
             pub_config=constants.PublishConfig(
                 service_specific_info=_PUB_SSI,
@@ -426,7 +441,12 @@ class WifiAwareNetworkTest(base_test.BaseTestClass):
         peer), and active subscribe.
 
         See class docstring for the test steps and expected results.
+
+        This test will only run on devices with SDK level >= 31, which support
+        accepting any peer feature.
         """
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.publisher, 31)
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.subscriber, 31)
         self._test_wifi_aware_network(
             pub_config=constants.PublishConfig(
                 service_specific_info=_PUB_SSI,
@@ -457,7 +477,12 @@ class WifiAwareNetworkTest(base_test.BaseTestClass):
         peer), and active subscribe.
 
         See class docstring for the test steps and expected results.
+
+        This test will only run on devices with SDK level >= 31, which support
+        accepting any peer feature.
         """
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.publisher, 31)
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.subscriber, 31)
         self._test_wifi_aware_network(
             pub_config=constants.PublishConfig(
                 service_specific_info=_PUB_SSI,
@@ -495,7 +520,12 @@ class WifiAwareNetworkTest(base_test.BaseTestClass):
         active subscribe.
 
         See class docstring for the test steps and expected results.
+
+        This test will only run on devices with SDK level >= 31, which support
+        accepting any peer feature.
         """
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.publisher, 31)
+        wifi_test_utils.skip_if_not_meet_min_sdk_level(self.subscriber, 31)
         self._test_wifi_aware_network(
             pub_config=constants.PublishConfig(
                 service_specific_info=_PUB_SSI,

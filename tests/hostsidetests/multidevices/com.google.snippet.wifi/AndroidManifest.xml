@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.google.snippet.wifi">
-  <uses-sdk android:minSdkVersion="31"/>
+  <uses-sdk android:minSdkVersion="30"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
   <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
@@ -14,6 +14,8 @@
   <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
   <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"/>
   <uses-permission android:name="android.permission.LOCAL_MAC_ADDRESS"/>
+  <uses-permission android:name="android.permission.MODIFY_PHONE_STATE"/>
+  <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
   <uses-permission android:name="android.permission.NETWORK_SETTINGS"/>
   <uses-permission android:name="android.permission.NETWORK_STACK"/>
   <uses-permission android:name="android.permission.READ_WIFI_CREDENTIAL"/>
@@ -26,11 +28,29 @@
                        com.google.snippet.wifi.aware.ConnectivityManagerSnippet,
                        com.google.snippet.wifi.direct.WifiP2pManagerSnippet,
                        com.google.snippet.wifi.softap.TetheringManagerSnippet,
+                       com.google.snippet.wifi.UtilitySnippet,
                        com.google.snippet.wifi.WifiManagerSnippet,
-                       com.google.android.mobly.snippet.bundled.WifiManagerSnippet"/>
+                       com.google.android.mobly.snippet.bundled.WifiManagerSnippet,
+                       com.google.android.mobly.snippet.uiautomator.ConfiguratorSnippet,
+                       com.google.android.mobly.snippet.uiautomator.UiAutomationSnippet,
+                       com.google.android.mobly.snippet.uiautomator.UiDeviceSnippet,
+                       com.google.android.mobly.snippet.uiautomator.UiObject2Snippet,
+                       com.google.android.mobly.snippet.uiautomator.UiWatcherSnippet,
+                       com.google.android.mobly.snippet.bundled.TelephonySnippet,
+                       com.google.snippet.wifi.usd.WifiUsdManagerSnippet"/>
     <meta-data
         android:name="mobly-object-converter"
+        tools:replace="android:value"
         android:value="com.google.snippet.wifi.aware.WifiAwareSnippetConverter"/>
+
+    <activity
+        android:name="com.google.snippet.wifi.MainActivity"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
   </application>
   <instrumentation
       android:name="com.google.android.mobly.snippet.SnippetRunner"

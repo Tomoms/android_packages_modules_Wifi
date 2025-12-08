@@ -2225,6 +2225,7 @@ public class InformationElementUtilTest extends WifiBaseTest {
         assertTrue(heOperation.is6GhzInfoPresent());
         assertTrue(heOperation.isTwtRequired());
         assertEquals(ApType6GHz.AP_TYPE_6GHZ_STANDARD_POWER, heOperation.getApType6GHz());
+        assertTrue(heOperation.isBssColorEnabled());
     }
 
     /**

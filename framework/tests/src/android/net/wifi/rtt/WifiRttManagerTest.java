@@ -46,6 +46,7 @@ import androidx.test.filters.SmallTest;
 
 import com.android.modules.utils.build.SdkLevel;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -73,6 +74,23 @@ public class WifiRttManagerTest {
 
     @Mock
     public IWifiRttManager mockRttService;
+
+    // Define some constants for test values
+    private static final MacAddress TEST_MAC_ADDRESS = MacAddress.fromString("00:11:22:33:44:55");
+    private static final int TEST_RESPONDER_TYPE = ResponderConfig.RESPONDER_STA;
+    private static final boolean TEST_SUPPORTS_80211MC = false;
+    private static final boolean TEST_SUPPORTS_80211AZ_NTB = true;
+    private static final int TEST_CHANNEL_WIDTH_SCAN_RESULT = ScanResult.CHANNEL_WIDTH_80MHZ;
+    private static final int TEST_FREQUENCY_MHZ = 5200;
+    private static final int TEST_CENTER_FREQ0_MHZ = 5180;
+    private static final int TEST_CENTER_FREQ1_MHZ = 5220;
+    private static final int TEST_PREAMBLE_SCAN_RESULT = ScanResult.PREAMBLE_HE;
+    private static final long TEST_NTB_MIN_TIME = 15000L;
+    private static final long TEST_NTB_MAX_TIME = 25000L;
+    @Mock
+    private SecureRangingConfig mMockSecureRangingConfig;
+    @Mock
+    private PeerHandle mMockPeerHandle;
 
     @Before
     public void setUp() throws Exception {
@@ -937,4 +955,138 @@ public class WifiRttManagerTest {
         verifyNoMoreInteractions(mockRttService, callbackMock);
     }
 
+    private ResponderConfig createFullTestResponderConfig() {
+        // Build an initial ResponderConfig with all fields set
+        ResponderConfig.Builder initialBuilder = new ResponderConfig.Builder();
+        initialBuilder.setMacAddress(TEST_MAC_ADDRESS)
+                .setResponderType(TEST_RESPONDER_TYPE)
+                .set80211mcSupported(TEST_SUPPORTS_80211MC)
+                .set80211azNtbSupported(TEST_SUPPORTS_80211AZ_NTB)
+                .setChannelWidth(TEST_CHANNEL_WIDTH_SCAN_RESULT) // Builder setter takes
+                // ScanResult constants
+                .setFrequencyMhz(TEST_FREQUENCY_MHZ)
+                .setCenterFreq0Mhz(TEST_CENTER_FREQ0_MHZ)
+                .setCenterFreq1Mhz(TEST_CENTER_FREQ1_MHZ)
+                .setPreamble(TEST_PREAMBLE_SCAN_RESULT) // Builder setter takes ScanResult constants
+                .setNtbMinTimeBetweenMeasurementsMicros(TEST_NTB_MIN_TIME)
+                .setNtbMaxTimeBetweenMeasurementsMicros(TEST_NTB_MAX_TIME)
+                .setSecureRangingConfig(mMockSecureRangingConfig);
+        return initialBuilder.build();
+    }
+
+    /**
+     * Validates that {@link ResponderConfig.Builder#build()} throws an IllegalStateException
+     * if neither a MAC address nor a PeerHandle has been set.
+     */
+    @Test
+    public void testResponderConfigBuilderWithNeitherMacOrPeerHandle() {
+        ResponderConfig originalConfig = createFullTestResponderConfig();
+        ResponderConfig.Builder configBuilder = new ResponderConfig
+                .Builder(originalConfig)
+                .setMacAddress(null)
+                .setPeerHandle(null);
+
+        assertThrows(IllegalArgumentException.class, configBuilder::build);
+    }
+
+    /**
+     * Validates that {@link ResponderConfig.Builder#build()} throws an IllegalStateException
+     * if both MAC address and PeerHandle are set.
+     */
+    @Test
+    public void testResponderConfigBuilderWithBothMacAndPeerHandle() {
+        ResponderConfig originalConfig = createFullTestResponderConfig();
+        ResponderConfig.Builder configBuilder = new ResponderConfig
+                .Builder(originalConfig)
+                .setPeerHandle(new PeerHandle(10));
+
+        assertThrows(IllegalArgumentException.class, configBuilder::build);
+    }
+
+    /**
+     * Validates that the {@link ResponderConfig.Builder} copy constructor
+     * throws a {@link NullPointerException} when a null {@link ResponderConfig}
+     * is passed as an argument, due to an explicit null check (e.g., Objects.requireNonNull).
+     */
+    @Test
+    public void testBuilderCopyConstructorThrowsNullPointerExceptionForNullConfig() {
+        assertThrows(NullPointerException.class, () -> new ResponderConfig.Builder(null));
+    }
+
+    /**
+     * Validate {@code ResponderConfig.Builder constructor} with MAC address
+     */
+    @Test
+    public void testRespondConfigBuilderWithMacAddress() {
+        ResponderConfig originalConfig = createFullTestResponderConfig();
+        // Use the copy constructor
+        ResponderConfig copiedConfig = new ResponderConfig.Builder(originalConfig).build();
+
+        // Assert that all fields from the originalConfig have been copied to the newConfig
+        assertEquals("MAC address should be copied", TEST_MAC_ADDRESS,
+                copiedConfig.getMacAddress());
+        assertNull("PeerHandle should be null if MAC was set", copiedConfig.getPeerHandle());
+        assertEquals("Responder type should be copied", TEST_RESPONDER_TYPE,
+                copiedConfig.getResponderType());
+        assertEquals("802.11mc support should be copied", TEST_SUPPORTS_80211MC,
+                copiedConfig.is80211mcSupported());
+        assertEquals("802.11az NTB support should be copied", TEST_SUPPORTS_80211AZ_NTB,
+                copiedConfig.is80211azNtbSupported());
+        assertEquals("Channel width should be copied", TEST_CHANNEL_WIDTH_SCAN_RESULT,
+                copiedConfig.getChannelWidth());
+        assertEquals("Frequency should be copied", TEST_FREQUENCY_MHZ,
+                copiedConfig.getFrequencyMhz());
+        assertEquals("Center frequency 0 should be copied", TEST_CENTER_FREQ0_MHZ,
+                copiedConfig.getCenterFreq0Mhz());
+        assertEquals("Center frequency 1 should be copied", TEST_CENTER_FREQ1_MHZ,
+                copiedConfig.getCenterFreq1Mhz());
+        assertEquals("Preamble should be copied", TEST_PREAMBLE_SCAN_RESULT,
+                copiedConfig.getPreamble());
+        assertEquals("NTB Min time should be copied", TEST_NTB_MIN_TIME,
+                copiedConfig.getNtbMinTimeBetweenMeasurementsMicros());
+        assertEquals("NTB Max time should be copied", TEST_NTB_MAX_TIME,
+                copiedConfig.getNtbMaxTimeBetweenMeasurementsMicros());
+        Assert.assertEquals("SecureRangingConfig should be copied",
+                mMockSecureRangingConfig, copiedConfig.getSecureRangingConfig());
+    }
+
+    /**
+     * Validate {@code ResponderConfig.Builder constructor} with peer handle.
+     */
+    @Test
+    public void testBuilderCopyConstructorWithPeerHandle() {
+        // Create an original config using PeerHandle
+        ResponderConfig originalConfig = new ResponderConfig.Builder()
+                .setPeerHandle(mMockPeerHandle)
+                .setResponderType(ResponderConfig.RESPONDER_AWARE) // Aware typically uses
+                // PeerHandle
+                .set80211mcSupported(true)
+                .set80211azNtbSupported(false)
+                .setChannelWidth(ScanResult.CHANNEL_WIDTH_20MHZ)
+                .setFrequencyMhz(2412)
+                .setCenterFreq0Mhz(2412)
+                .setCenterFreq1Mhz(0)
+                .setPreamble(ScanResult.PREAMBLE_HT)
+                .setNtbMinTimeBetweenMeasurementsMicros(1000L)
+                .setNtbMaxTimeBetweenMeasurementsMicros(5000L)
+                .setSecureRangingConfig(mMockSecureRangingConfig)
+                .build();
+
+        ResponderConfig.Builder copiedBuilder = new ResponderConfig.Builder(originalConfig);
+        ResponderConfig copiedConfig = copiedBuilder.build();
+
+        assertNull("MAC address should be null if PeerHandle was set",
+                copiedConfig.getMacAddress());
+        Assert.assertEquals("PeerHandle should be copied", mMockPeerHandle,
+                copiedConfig.getPeerHandle());
+        assertEquals("Responder type should be copied", ResponderConfig.RESPONDER_AWARE,
+                copiedConfig.getResponderType());
+        assertTrue("802.11mc support should be copied", copiedConfig.is80211mcSupported());
+        Assert.assertFalse("802.11az NTB support should be copied",
+                copiedConfig.is80211azNtbSupported());
+        assertEquals("Channel width should be copied", ScanResult.CHANNEL_WIDTH_20MHZ,
+                copiedConfig.getChannelWidth());
+        Assert.assertEquals("SecureRangingConfig should be copied",
+                mMockSecureRangingConfig, copiedConfig.getSecureRangingConfig());
+    }
 }

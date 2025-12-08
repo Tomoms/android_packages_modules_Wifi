@@ -25,6 +25,7 @@ import static android.Manifest.permission.NETWORK_SETTINGS;
 import static android.Manifest.permission.NETWORK_SETUP_WIZARD;
 import static android.Manifest.permission.READ_WIFI_CREDENTIAL;
 import static android.Manifest.permission.REQUEST_COMPANION_PROFILE_AUTOMOTIVE_PROJECTION;
+import static android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME;
 
 import android.Manifest;
 import android.annotation.CallbackExecutor;
@@ -34,6 +35,7 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
+import android.annotation.RestrictedForEnvironment;
 import android.annotation.SdkConstant;
 import android.annotation.SdkConstant.SdkConstantType;
 import android.annotation.StringDef;
@@ -83,7 +85,6 @@ import android.os.RemoteException;
 import android.os.WorkSource;
 import android.os.connectivity.WifiActivityEnergyInfo;
 import android.security.advancedprotection.AdvancedProtectionFeature;
-import android.security.advancedprotection.AdvancedProtectionManager;
 import android.telephony.SubscriptionInfo;
 import android.text.TextUtils;
 import android.util.ArraySet;
@@ -150,6 +151,8 @@ import java.util.function.IntConsumer;
  * {@link android.net.ConnectivityManager}.
  * </p>
  */
+@RestrictedForEnvironment(
+        environments = ENVIRONMENT_SDK_RUNTIME, from = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @SystemService(Context.WIFI_SERVICE)
 public class WifiManager {
 
@@ -925,10 +928,20 @@ public class WifiManager {
     public static final int API_P2P_DISCOVER_PEERS_WITH_CONFIG_PARAMS = 37;
 
     /**
+     * A constant used in
+     * {@link WifiManager#getLastCallerInfoForApi(int, Executor, BiConsumer)}
+     * Tracks usage of {@link WifiManager#setScreenOffScanSchedule(ScreenOffScanSchedule)}
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_WIFI_PNO_SCAN_SCHEDULE_API)
+    @SystemApi
+    public static final int API_SET_PNO_SCAN_SCHEDULE = 38;
+
+    /**
      * Used internally to keep track of boundary.
      * @hide
      */
-    public static final int API_MAX = 38;
+    public static final int API_MAX = 39;
 
     /**
      * Broadcast intent action indicating that a Passpoint provider icon has been received.
@@ -2126,6 +2139,8 @@ public class WifiManager {
             sWifiLowLatencyLockListenerMap = new SparseArray<>();
     private static final SparseArray<IWifiStateChangedListener>
             sWifiStateChangedListenerMap = new SparseArray<>();
+    private static final SparseArray<IRestrictAutoJoinToSubIdCallback>
+            sRestrictAutoJoinToSubIdCallbackMap = new SparseArray<>();
 
     /**
      * Multi-link operation (MLO) will allow Wi-Fi devices to operate on multiple links at the same
@@ -2472,6 +2487,149 @@ public class WifiManager {
     }
 
     /**
+     * To be used with {@link #setScreenOffScanSchedule(ScreenOffScanSchedule)}.
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_WIFI_PNO_SCAN_SCHEDULE_API)
+    @SystemApi
+    public static class ScreenOffScanSchedule {
+        private final Duration mMovingScanInterval;
+        private final Duration mStationaryScanInterval;
+        private final int mScanIterations;
+        private final int mScanMultiplier;
+
+        private ScreenOffScanSchedule(@NonNull Builder builder) {
+            this.mMovingScanInterval = builder.mMovingScanInterval;
+            this.mStationaryScanInterval = builder.mStationaryScanInterval;
+            this.mScanIterations = builder.mScanIterations;
+            this.mScanMultiplier = builder.mScanMultiplier;
+        }
+
+        /**
+         * Builder class for {@link ScreenOffScanSchedule}.
+         */
+        public static final class Builder {
+            private Duration mMovingScanInterval;
+            private Duration mStationaryScanInterval;
+            private int mScanIterations;
+            private int mScanMultiplier;
+
+            public Builder() {
+                this.mMovingScanInterval = Duration.ofSeconds(0);
+                this.mStationaryScanInterval = Duration.ofSeconds(0);
+                this.mScanIterations = 0;
+                this.mScanMultiplier = 0;
+            }
+
+            /**
+             * Sets the PNO scan interval when device is moving, overriding
+             * config_wifiMovingPnoScanIntervalMillis
+             * @return The builder.
+             */
+            @NonNull
+            public Builder setMovingScanInterval(@NonNull Duration movingScanInterval) {
+                Objects.requireNonNull(movingScanInterval, "movingScanInterval can't be null");
+                mMovingScanInterval = movingScanInterval;
+                return this;
+            }
+
+            /**
+             * Sets the PNO scan interval when device is stationary, overriding
+             * config_wifiStationaryPnoScanIntervalMillis
+             * @return The builder object.
+             */
+            @NonNull
+            public Builder setStationaryScanInterval(@NonNull Duration stationaryScanInterval) {
+                Objects.requireNonNull(stationaryScanInterval,
+                        "stationaryScanInterval can't be null");
+                mStationaryScanInterval = stationaryScanInterval;
+                return this;
+            }
+
+            /**
+             * Sets the number of scan iterations to perform at the specified scan interval,
+             * overriding config_wifiPnoScanIterations
+             * @return The builder object.
+             */
+            @NonNull
+            public Builder setScanIterations(@IntRange(from = 1) int scanIterations) {
+                if (scanIterations < 1) {
+                    throw new IllegalArgumentException("scanIterations must be greater than 1");
+                }
+                mScanIterations = scanIterations;
+                return this;
+            }
+
+            /**
+             * Sets the scan multiplier to be applied after the specified number of scan iterations,
+             * overriding config_wifiPnoScanIntervalMultiplier
+             * @return The builder object.
+             */
+            @NonNull
+            public Builder setScanMultiplier(@IntRange(from = 1) int scanMultiplier) {
+                if (scanMultiplier < 1) {
+                    throw new IllegalArgumentException("scanMultiplier must be greater than 1");
+                }
+                mScanMultiplier = scanMultiplier;
+                return this;
+            }
+
+            /**
+             * Builds the ScreenOffScanSchedule object.
+             * @return The ScreenOffScanSchedule object.
+             */
+            @NonNull
+            public ScreenOffScanSchedule build() {
+                return new ScreenOffScanSchedule(this);
+            }
+        }
+
+        /**
+         * Gets the interval between framework-initiated connectivity scans when the device is
+         * moving.
+         * @return The interval between framework-initiated connectivity scans when the device is
+         *         moving. If unset, this would return a 0 Duration which will reset the moving
+         *         scan interval to the value specified in config overlay.
+         */
+        @NonNull
+        public Duration getMovingScanInterval() {
+            return mMovingScanInterval;
+        }
+
+        /**
+         * Gets the interval between framework-initiated connectivity scans when the device is
+         * stationary.
+         * @return The interval between framework-initiated connectivity scans when the device is
+         *         stationary. If unset, this would return a 0 Duration which will reset the
+         *         stationary scan interval to the value specified in config overlay.
+         */
+        @NonNull
+        public Duration getStationaryScanInterval() {
+            return mStationaryScanInterval;
+        }
+
+        /**
+         * Gets the number of scan iterations to perform at the specified scan interval.
+         * @return The number of scan iterations to perform at the specified scan interval.
+         *         If unset, this would return 0 which will reset the scan iterations to the value
+         *         specified in config overlay.
+         */
+        public int getScanIterations() {
+            return mScanIterations;
+        }
+
+        /**
+         * Gets the scan multiplier to be applied after the specified number of scan iterations.
+         * @return The scan multiplier to be applied after the specified number of scan iterations.
+         *         If unset, this would return 0 which will reset the scan multiplier to the value
+         *         specified in config overlay.
+         */
+        public int getScanMultiplier() {
+            return mScanMultiplier;
+        }
+    }
+
+    /**
      * This API allows a privileged app to customize the wifi framework's network selection logic.
      * To revert to default behavior, call this API with a {@link WifiNetworkSelectionConfig}
      * created from a default {@link WifiNetworkSelectionConfig.Builder}.
@@ -2657,6 +2815,62 @@ public class WifiManager {
                 scanType[i] = screenOnScanSchedule.get(i).getScanType();
             }
             mService.setScreenOnScanSchedule(scanSchedule, scanType);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Allows a privileged app to customize the screen-off scan behavior at run-time by overriding
+     * scan parameters specified by overlay.
+     * <p>
+     * When a non-null schedule is set via this API, it will always get used instead of the scan
+     * schedules defined in the overlay. When a null schedule is set via this API, the wifi
+     * subsystem will go back to using the scan schedules defined in the overlay. Also note,
+     * the scan schedule will be truncated (rounded down) to the nearest whole second.
+     * <p>
+     * Example usage:
+     *
+     * <pre>
+     * ScreenOffScanSchedule screenOffScanSchedule = new ScreenOffScanSchedule.Builder()
+     *      .setMovingScanInterval(Duration.ofSeconds(20))
+     *      .setScanIterations(2)
+     *      .setScanMultiplier(2)
+     *      .build();
+     * // Note, the stationary scan interval is set in the ScreenOffScanSchedule, which means this
+     * // value will not be overridden
+     * wifiManager.setScreenOffScanSchedule(screenOffScanSchedule);
+     * </pre>
+     * @param screenOffScanSchedule defines the screen-off PNO scan schedule and the corresponding
+     *                              values. Set to null to clear any previously set value.
+     *
+     * @throws IllegalStateException if input is invalid
+     * @throws UnsupportedOperationException if the API is not supported on this SDK version.
+     * @throws SecurityException if the caller does not have permission.
+     * @hide
+     */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            MANAGE_WIFI_NETWORK_SELECTION
+    })
+    @FlaggedApi(Flags.FLAG_WIFI_PNO_SCAN_SCHEDULE_API)
+    @SystemApi
+    public void setScreenOffScanSchedule(@Nullable ScreenOffScanSchedule screenOffScanSchedule) {
+        try {
+            if (screenOffScanSchedule == null) {
+                mService.setScreenOffScanSchedule(
+                    /*movingScanInterval*/ 0,
+                    /*stationaryScanInterval*/ 0,
+                    /*scanIterations*/ 0,
+                    /*scanMultiplier*/ 0);
+                return;
+            }
+            mService.setScreenOffScanSchedule(
+                    (int) screenOffScanSchedule.getMovingScanInterval().toMillis(),
+                    (int) screenOffScanSchedule.getStationaryScanInterval().toMillis(),
+                    screenOffScanSchedule.getScanIterations(),
+                    screenOffScanSchedule.getScanMultiplier());
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -7701,6 +7915,158 @@ public class WifiManager {
     }
 
     /**
+     * Register a callback for Wi-Fi auto-join restriction state.
+     * Caller will receive the event when the autojoin restriction state changes.
+     * Caller can remove a previously registered callback using
+     * {@link #removeRestrictAutoJoinToSubIdCallback(RestrictAutoJoinToSubIdCallback)}
+     *
+     * @see WifiManager#startRestrictingAutoJoinToSubscriptionId(int)
+     * @see WifiManager#stopRestrictingAutoJoinToSubscriptionId()
+     * @see WifiManager#removeRestrictAutoJoinToSubIdCallback(RestrictAutoJoinToSubIdCallback)
+     *
+     * @param executor Executor to execute listener callback on
+     * @param callback Listener to register
+     * @throws UnsupportedOperationException if this API is not supported on this SDK version.
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_RESTRICT_AUTOJOIN_CALLBACK_API)
+    @SystemApi
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            android.Manifest.permission.NETWORK_SETUP_WIZARD})
+    @RequiresApi(Build.VERSION_CODES.S)
+    public void addRestrictAutoJoinToSubIdCallback(
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull RestrictAutoJoinToSubIdCallback callback) {
+        Objects.requireNonNull(executor);
+        Objects.requireNonNull(callback);
+        if (mVerboseLoggingEnabled) {
+            Log.d(TAG, "addRestrictAutoJoinToSubIdCallback: callback=" + callback
+                    + ", executor=" + executor);
+        }
+        if (!SdkLevel.isAtLeastS()) {
+            throw new UnsupportedOperationException();
+        }
+        final int callbackIdentifier = System.identityHashCode(callback);
+        synchronized (sRestrictAutoJoinToSubIdCallbackMap) {
+            try {
+                if (sRestrictAutoJoinToSubIdCallbackMap.contains(callbackIdentifier)) {
+                    Log.w(TAG, "Same listener already registered");
+                    return;
+                }
+                IRestrictAutoJoinToSubIdCallback.Stub callbackProxy =
+                        new RestrictAutoJoinToSubIdCallbackProxy(executor, callback);
+                sRestrictAutoJoinToSubIdCallbackMap.put(callbackIdentifier, callbackProxy);
+                mService.addRestrictAutoJoinToSubIdCallback(callbackProxy);
+            } catch (RemoteException e) {
+                sRestrictAutoJoinToSubIdCallbackMap.remove(callbackIdentifier);
+                throw e.rethrowFromSystemServer();
+            }
+        }
+    }
+
+    /**
+     * Unregisters a RestrictAutoJoinToSubIdCallback from listening on the current Wi-Fi
+     * state.
+     *
+     * @param callback RestrictAutoJoinToSubIdCallback to unregister
+     * @throws UnsupportedOperationException if this API is not supported on this SDK version.
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_RESTRICT_AUTOJOIN_CALLBACK_API)
+    @SystemApi
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            android.Manifest.permission.NETWORK_SETUP_WIZARD})
+    @RequiresApi(Build.VERSION_CODES.S)
+    public void removeRestrictAutoJoinToSubIdCallback(
+            @NonNull RestrictAutoJoinToSubIdCallback callback) {
+        Objects.requireNonNull(callback);
+        if (mVerboseLoggingEnabled) {
+            Log.d(TAG, "removeRestrictAutoJoinToSubIdCallback: callback=" + callback);
+        }
+        if (!SdkLevel.isAtLeastS()) {
+            throw new UnsupportedOperationException();
+        }
+        final int callbackIdentifier = System.identityHashCode(callback);
+        synchronized (sRestrictAutoJoinToSubIdCallbackMap) {
+            try {
+                if (!sRestrictAutoJoinToSubIdCallbackMap.contains(callbackIdentifier)) {
+                    Log.w(TAG, "Unknown external listener " + callbackIdentifier);
+                    return;
+                }
+                mService.removeRestrictAutoJoinToSubIdCallback(
+                        sRestrictAutoJoinToSubIdCallbackMap.get(callbackIdentifier));
+            } catch (RemoteException e) {
+                throw e.rethrowFromSystemServer();
+            } finally {
+                sRestrictAutoJoinToSubIdCallbackMap.remove(callbackIdentifier);
+            }
+        }
+    }
+
+    /**
+     * Callback interface for applications to be notified when the Wi-Fi auto-join restriction to
+     * subscription ID state changes.
+     *
+     * @see #startRestrictingAutoJoinToSubscriptionId(int)
+     * @see #stopRestrictingAutoJoinToSubscriptionId()
+     *
+     * @hide
+     */
+    @FlaggedApi(Flags.FLAG_RESTRICT_AUTOJOIN_CALLBACK_API)
+    @SystemApi
+    @RequiresApi(Build.VERSION_CODES.S)
+    public interface RestrictAutoJoinToSubIdCallback {
+        /**
+         * Called when the Wi-Fi auto-join restriction to a subscription ID starts.
+         *
+         * @param subscriptionId the subscriptionId of carrier-merged networks that auto-join is
+         * restricted to.
+         */
+        void onRestrictionStarted(int subscriptionId);
+
+        /**
+         * Called when the Wi-Fi auto-join restriction to subscription ID has stopped.
+         */
+        void onRestrictionStopped();
+    }
+
+    /**
+     * Listener proxy for AutoJoinRestrictionSubIdChangedListener objects.
+     */
+    @RequiresApi(Build.VERSION_CODES.S)
+    private static class RestrictAutoJoinToSubIdCallbackProxy
+            extends IRestrictAutoJoinToSubIdCallback.Stub {
+        private Executor mExecutor;
+        private RestrictAutoJoinToSubIdCallback mCallback;
+
+        RestrictAutoJoinToSubIdCallbackProxy(@NonNull Executor executor,
+                @NonNull RestrictAutoJoinToSubIdCallback callback) {
+            Objects.requireNonNull(executor);
+            Objects.requireNonNull(callback);
+            mExecutor = executor;
+            mCallback = callback;
+        }
+
+        @Override
+        public void onRestrictionStarted(int subscriptionId) {
+            Log.i(TAG, "RestrictAutoJoinToSubIdCallbackProxy:"
+                    + " onRestrictionStarted: subId=" + subscriptionId);
+            Binder.clearCallingIdentity();
+            mExecutor.execute(() -> mCallback.onRestrictionStarted(subscriptionId));
+        }
+
+        @Override
+        public void onRestrictionStopped() {
+            Log.i(TAG, "RestrictAutoJoinToSubIdCallbackProxy:"
+                    + " onRestrictionStopped");
+            Binder.clearCallingIdentity();
+            mExecutor.execute(() -> mCallback.onRestrictionStopped());
+        }
+    }
+
+    /**
      * Save the given network to the list of configured networks for the
      * foreground user. If the network already exists, the configuration
      * is updated. Any new network is enabled by default.
@@ -11807,10 +12173,25 @@ public class WifiManager {
     public static final String EXTRA_P2P_PIN_REQUESTED = "android.net.wifi.extra.P2P_PIN_REQUESTED";
 
     /**
+     * Extra boolean indicating that a Password is requested for a P2P Invitation Received dialog.
+     * @hide
+     */
+    public static final String EXTRA_P2P_PASSWORD_REQUESTED =
+            "android.net.wifi.extra.P2P_PASSWORD_REQUESTED";
+
+    /**
      * Extra String indicating the PIN to be displayed for a P2P Invitation Sent/Received dialog.
      * @hide
      */
     public static final String EXTRA_P2P_DISPLAY_PIN = "android.net.wifi.extra.P2P_DISPLAY_PIN";
+
+    /**
+     * Extra String indicating the Password to be displayed for a P2P Invitation
+     * Sent/Received dialog.
+     * @hide
+     */
+    public static final String EXTRA_P2P_DISPLAY_PASSWORD =
+            "android.net.wifi.extra.P2P_DISPLAY_PASSWORD";
 
     /**
      * Extra boolean indicating ACTION_CLOSE_SYSTEM_DIALOGS should not close the Wi-Fi dialogs.
@@ -13250,19 +13631,13 @@ public class WifiManager {
      * @hide
      */
     @SystemApi
-    @FlaggedApi(android.security.Flags.FLAG_AAPM_API)
     @RequiresApi(Build.VERSION_CODES.BAKLAVA)
     @NonNull
-    @SuppressLint("NewApi")
     public List<AdvancedProtectionFeature> getAvailableAdvancedProtectionFeatures() {
         if (!Environment.isSdkAtLeastB()) {
             throw new UnsupportedOperationException();
         }
         List<AdvancedProtectionFeature> features = new ArrayList<>();
-        if (Flags.wepDisabledInApm() && android.security.Flags.aapmApi()) {
-            features.add(new AdvancedProtectionFeature(
-                    AdvancedProtectionManager.FEATURE_ID_DISALLOW_WEP));
-        }
         return features;
     }
 
@@ -13334,7 +13709,7 @@ public class WifiManager {
     }
 
     /**
-     * Query the list of {@link WifiConfiguration} with credentials.
+     * Returns the list of {@link WifiConfiguration} with credentials.
      *
      * <p> This API is similar to {@link #getPrivilegedConfiguredNetworks()}, but this new API
      * is the async version of it.
@@ -13349,12 +13724,12 @@ public class WifiManager {
      * @hide
      */
     @FlaggedApi(Flags.FLAG_GET_CONFIG_EMPTY_REASON)
-    @RequiresApi(Build.VERSION_CODES.S)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @SystemApi
     @RequiresPermission(allOf = {NEARBY_WIFI_DEVICES, READ_WIFI_CREDENTIAL})
     public void queryPrivilegedConfiguredNetworks(@NonNull @CallbackExecutor Executor executor,
-            @NonNull OutcomeReceiver<List<WifiConfiguration>, Error> resultsCallback) {
-        if (!SdkLevel.isAtLeastS()) {
+            @NonNull OutcomeReceiver<List<WifiConfiguration>, Exception> resultsCallback) {
+        if (!SdkLevel.isAtLeastT()) {
             throw new UnsupportedOperationException();
         }
         Objects.requireNonNull(executor, "executor cannot be null");
@@ -13374,11 +13749,150 @@ public class WifiManager {
                                         if (result != null) {
                                             resultsCallback.onResult(result.getList());
                                         } else {
-                                            resultsCallback.onError(new Error(errorMsg));
+                                            resultsCallback.onError(new Exception(errorMsg));
                                         }
                                     });
                         }
                     }, extras);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /** Replace the persistently generated random MAC address for the specified Wi-Fi network with a
+     * newly generated random MAC address. The new randomized MAC will be used the next time the
+     * device connects to the network. If the specified Wi-Fi network is already connected when
+     * this API is called, the MAC address won't change until the next time that network is
+     * connected.
+     * <p>
+     * This does not change device's factory MAC.
+     * @param networkId the ID of the network as returned by {@link #addNetwork} or {@link
+     *        #getConfiguredNetworks}.
+     *
+     * @throws SecurityException if the caller has no permission
+     * @throws IllegalArgumentException if networkId is invalid
+     * @hide
+     */
+    @SystemApi
+    @FlaggedApi(Flags.FLAG_REFRESH_MAC_RANDOMIZATION_API)
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            android.Manifest.permission.NETWORK_SETUP_WIZARD
+    })
+    public void refreshMacRandomization(@IntRange(from = 0) int networkId) {
+        try {
+            mService.refreshMacRandomization(networkId);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Set if the foreground user allows to notify when a high-quality public network is available.
+     *
+     * @param enable Whether or not the foreground user allows to notify when a high-quality public
+     *               network is available.
+     * @throws SecurityException if the caller does not have permission.
+     * @hide
+     */
+    @SystemApi
+    @RequiresApi(37)
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            android.Manifest.permission.NETWORK_SETUP_WIZARD
+    })
+    @FlaggedApi(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
+    public void setOpenNetworkNotifierEnabled(boolean enable) {
+        try {
+            mService.setOpenNetworkNotifierEnabled(enable);
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Get if the foreground user allows to notify when a high-quality public network is available.
+     * Default to {@code true}, unless changed by privileged applications via
+     * {@link #setOpenNetworkNotifierEnabled(boolean)}.
+     *
+     * @param executor        The executor on which callback will be invoked.
+     * @param resultsCallback An asynchronous callback that will return {@code Boolean} indicating
+     *                        whether the open network notifier is enabled or disabled.
+     * @throws SecurityException if the caller does not have permission.
+     * @hide
+     */
+    @SystemApi
+    @RequiresApi(37)
+    @RequiresPermission(anyOf = {
+            android.Manifest.permission.NETWORK_SETTINGS,
+            android.Manifest.permission.NETWORK_SETUP_WIZARD
+    })
+    @FlaggedApi(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
+    public void isOpenNetworkNotifierEnabled(@NonNull @CallbackExecutor Executor executor,
+            @NonNull Consumer<Boolean> resultsCallback) {
+        Objects.requireNonNull(executor, "executor cannot be null");
+        Objects.requireNonNull(resultsCallback, "resultsCallback cannot be null");
+        try {
+            mService.isOpenNetworkNotifierEnabled(
+                    new IBooleanListener.Stub() {
+                        @Override
+                        public void onResult(boolean value) {
+                            Binder.clearCallingIdentity();
+                            executor.execute(() -> {
+                                resultsCallback.accept(value);
+                            });
+                        }
+                    });
+        } catch (RemoteException e) {
+            throw e.rethrowFromSystemServer();
+        }
+    }
+
+    /**
+     * Get the names of all Wi-Fi interfaces supported by the device.
+     *
+     * @param executor The executor on which callback will be invoked.
+     * @param resultsCallback An asynchronous callback that will return {@code List<String>}
+     *     indicating the list of device wifi interface names via {@link
+     *     OutcomeReceiver#onResult(Object)}.
+     *     <p>If an unexpected error occurs in the lower layers, {@link
+     *     OutcomeReceiver#onError(Exception)} will be invoked with a {@link IllegalStateException}.
+     *     Callers may try calling this again after some delay. Unrecoverable errors will be thrown
+     *     as exceptions directly.
+     * @throws UnsupportedOperationException if the API is not supported on this SDK version.
+     * @throws SecurityException if the caller does not have permission.
+     * @hide
+     */
+    @SystemApi
+    @RequiresApi(37)
+    @FlaggedApi(Flags.FLAG_GET_SUPPORTED_INTERFACE_NAMES)
+    @RequiresPermission(android.Manifest.permission.MANAGE_WIFI_INTERFACES)
+    public void getSupportedInterfaceNames(
+            @NonNull @CallbackExecutor Executor executor,
+            @NonNull OutcomeReceiver<List<String>, Exception> resultsCallback) {
+        if (!Environment.isSdkNewerThanB()) {
+            throw new UnsupportedOperationException();
+        }
+        Objects.requireNonNull(executor, "executor cannot be null");
+        Objects.requireNonNull(resultsCallback, "resultsCallback cannot be null");
+        try {
+            mService.getSupportedInterfaceNames(
+                    new IListListener.Stub() {
+                        @Override
+                        public void onResult(List value) {
+                            Binder.clearCallingIdentity();
+                            executor.execute(
+                                    () -> {
+                                        if (value != null) {
+                                            resultsCallback.onResult(value);
+                                        } else {
+                                            resultsCallback.onError(
+                                                    new IllegalStateException(
+                                                            "Failed to get interface names"));
+                                        }
+                                    });
+                        }
+                    });
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }

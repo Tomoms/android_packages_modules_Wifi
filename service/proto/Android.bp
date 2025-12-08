@@ -24,7 +24,10 @@ java_library {
     },
     sdk_version: "system_current",
     min_sdk_version: "30",
-    srcs: ["src/scorecard.proto"],
+    srcs: [
+        "src/scorecard.proto",
+        "src/ml_model_params.proto",
+    ],
     apex_available: ["com.android.wifi"],
 }
 

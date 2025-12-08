@@ -1716,6 +1716,11 @@ public class ConcreteClientModeManager implements ClientModeManager {
     }
 
     @Override
+    public void setRestrictedNetworkDebug(boolean restricted) {
+        getClientMode().setRestrictedNetworkDebug(restricted);
+    }
+
+    @Override
     public String toString() {
         return "ConcreteClientModeManager{id=" + getId()
                 + " iface=" + getInterfaceName()

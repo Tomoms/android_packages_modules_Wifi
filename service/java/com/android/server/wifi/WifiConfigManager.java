@@ -24,6 +24,7 @@ import static android.net.wifi.WifiManager.AddNetworkResult.STATUS_INVALID_CONFI
 import static android.net.wifi.WifiManager.AddNetworkResult.STATUS_NO_PERMISSION_MODIFY_CONFIG;
 import static android.net.wifi.WifiManager.AddNetworkResult.STATUS_SUCCESS;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_TRUST_ON_FIRST_USE;
+import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA3_SAE;
 
 import static com.android.server.wifi.WifiConfigurationUtil.validatePassword;
 
@@ -212,6 +213,25 @@ public class WifiConfigManager {
         default void onSecurityParamsUpdate(@NonNull WifiConfiguration oldConfig,
                 List<SecurityParams> securityParams) { }
     }
+
+    /**
+     * Interface for other modules to listen to autojoin restriction changes.
+     */
+    public interface OnRestrictAutoJoinToSubIdCallback {
+        /**
+         * Called when the Wi-Fi auto-join restriction to a subscription ID starts.
+         *
+         * @param subscriptionId the subscriptionId of carrier-merged networks that auto-join is
+         * restricted to.
+         */
+        void onRestrictionStarted(int subscriptionId);
+
+        /**
+         * Called when the Wi-Fi auto-join restriction to a subscription ID stops.
+         */
+        void onRestrictionStopped();
+    }
+
     /**
      * Max size of scan details to cache in {@link #mScanDetailCaches}.
      */
@@ -355,6 +375,7 @@ public class WifiConfigManager {
      * Store the network update listeners.
      */
     private final Set<OnNetworkUpdateListener> mListeners;
+    private OnRestrictAutoJoinToSubIdCallback mOnRestrictAutoJoinToSubIdCallback;
 
     private final FrameworkFacade mFrameworkFacade;
     private final DeviceConfigFacade mDeviceConfigFacade;
@@ -372,7 +393,7 @@ public class WifiConfigManager {
     /**
      * Whether the forground user is an admin user.
      */
-    private boolean mIsForegroundUserAdmin = false;
+    private boolean mIsCurrentUserAdmin = false;
     /**
      * Flag to indicate that the new user's store has not yet been read since user switch.
      * Initialize this flag to |true| to trigger a read on the first user unlock after
@@ -471,9 +492,25 @@ public class WifiConfigManager {
         mScanDetailCaches = new HashMap<>(16, 0.75f);
         mUserTemporarilyDisabledList =
                 new MissingCounterTimerLockList<>(SCAN_RESULT_MISSING_COUNT_THRESHOLD, mClock);
-        mNonCarrierMergedNetworksStatusTracker = new NonCarrierMergedNetworksStatusTracker(mClock);
         mRandomizedMacAddressMapping = new HashMap<>();
         mListeners = new ArraySet<>();
+        mNonCarrierMergedNetworksStatusTracker = new NonCarrierMergedNetworksStatusTracker(mClock);
+        mNonCarrierMergedNetworksStatusTracker.setListener(
+                new NonCarrierMergedNetworksStatusTracker.Callback() {
+                    @Override
+                    public void onRestrictionStarted(int subscriptionId) {
+                        if (mOnRestrictAutoJoinToSubIdCallback != null) {
+                            mOnRestrictAutoJoinToSubIdCallback.onRestrictionStarted(subscriptionId);
+                        }
+                    }
+
+                    @Override
+                    public void onRestrictionStopped() {
+                        if (mOnRestrictAutoJoinToSubIdCallback != null) {
+                            mOnRestrictAutoJoinToSubIdCallback.onRestrictionStopped();
+                        }
+                    }
+                });
 
         // Register store data for network list and deleted ephemeral SSIDs.
         mNetworkListSharedStoreData = networkListSharedStoreData;
@@ -603,7 +640,11 @@ public class WifiConfigManager {
                 mRandomizedMacAddressMapping.remove(config.getNetworkKey());
             }
         }
-        MacAddress result = mMacAddressUtil.calculatePersistentMacForSta(config.getNetworkKey(),
+        String key = config.getNetworkKey();
+        if (config.persistentMacRandomizationSeed != 0) {
+            key += "-" + Integer.toString(config.persistentMacRandomizationSeed);
+        }
+        MacAddress result = mMacAddressUtil.calculatePersistentMacForSta(key,
                 Process.WIFI_UID);
         if (result == null) {
             Log.wtf(TAG, "Failed to generate MAC address from KeyStore even after retrying. "
@@ -1428,6 +1469,10 @@ public class WifiConfigManager {
 
         // Add debug information for network addition.
         newInternalConfig.creatorUid = newInternalConfig.lastUpdateUid = uid;
+        if (Environment.isSdkNewerThanB()
+                && mFeatureFlags.multiUserWifiEnhancement()) {
+            newInternalConfig.setCreatorUserId(mCurrentUserId);
+        }
         newInternalConfig.creatorName = newInternalConfig.lastUpdateName =
                 packageName != null ? packageName : mContext.getPackageManager().getNameForUid(uid);
         newInternalConfig.lastUpdated = mClock.getWallClockMillis();
@@ -1464,6 +1509,10 @@ public class WifiConfigManager {
         if (overrideCreator) {
             newInternalConfig.creatorName = newInternalConfig.lastUpdateName;
             newInternalConfig.creatorUid = uid;
+            if (Environment.isSdkNewerThanB()
+                    && mFeatureFlags.multiUserWifiEnhancement()) {
+                newInternalConfig.setCreatorUserId(mCurrentUserId);
+            }
         }
         return newInternalConfig;
     }
@@ -2049,7 +2098,7 @@ public class WifiConfigManager {
         }
 
         if (!canModifyNetwork(config, uid, packageName,
-                !mIsForegroundUserAdmin /* requireUserCheck */)) {
+                !mIsCurrentUserAdmin /* requireUserCheck */)) {
             Log.e(TAG, "UID " + uid + " does not have permission to delete configuration "
                     + config.getProfileKey());
             return false;
@@ -3340,6 +3389,22 @@ public class WifiConfigManager {
     }
 
     /**
+     * Gets the current subscription ID set by startRestrictingAutoJoinToSubscriptionId that
+     * autojoin is restricted to. This is only valid if isAutoJoinRestrictedToSubId() is true.
+     */
+    public int getAutoJoinRestrictionSubId() {
+        return mNonCarrierMergedNetworksStatusTracker.getRestrictionSubId();
+    }
+
+    /**
+     * Returns true if auto-join is currently restricted to carrier networks set by
+     * startRestrictingAutoJoinToSubscriptionId.
+     */
+    public boolean isAutoJoinRestrictedToSubId() {
+        return mNonCarrierMergedNetworksStatusTracker.isRestrictionActive();
+    }
+
+    /**
      * Update the user temporarily disabled network list with networks in range.
      * @param networks networks in range in String format, FQDN or SSID. And caller must ensure
      *                 that the SSID passed thru this API matched the WifiConfiguration.SSID rules,
@@ -3511,9 +3576,11 @@ public class WifiConfigManager {
         Set<Integer> removedNetworkIds = clearInternalDataForUser(mCurrentUserId);
         mConfiguredNetworks.setNewUser(userId);
         mCurrentUserId = userId;
-        // New API in Android V
-        mIsForegroundUserAdmin = SdkLevel.isAtLeastV() && mUserManager.isForegroundUserAdmin();
-
+        if (Environment.isSdkNewerThanB() && mFeatureFlags.multiUserWifiEnhancement()) {
+            Context userContext = mContext.createContextAsUser(UserHandle.of(userId), 0);
+            UserManager userManager = userContext.getSystemService(UserManager.class);
+            mIsCurrentUserAdmin = userManager.isAdminUser();
+        }
         if (mUserManager.isUserUnlockingOrUnlocked(UserHandle.of(mCurrentUserId))) {
             handleUserUnlockOrSwitch(mCurrentUserId);
             // only handle the switching of unlocked users in {@link WifiCarrierInfoManager}.
@@ -3542,8 +3609,11 @@ public class WifiConfigManager {
             Log.e(TAG, "Ignore user unlock for non current user " + userId);
             return;
         }
-        // New API in Android V
-        mIsForegroundUserAdmin = SdkLevel.isAtLeastV() && mUserManager.isForegroundUserAdmin();
+        if (Environment.isSdkNewerThanB() && mFeatureFlags.multiUserWifiEnhancement()) {
+            Context userContext = mContext.createContextAsUser(UserHandle.of(userId), 0);
+            UserManager userManager = userContext.getSystemService(UserManager.class);
+            mIsCurrentUserAdmin = userManager.isAdminUser();
+        }
         if (mPendingStoreRead) {
             Log.w(TAG, "Ignore user unlock until store is read!");
             mDeferredUserUnlockRead = true;
@@ -3902,7 +3972,7 @@ public class WifiConfigManager {
         }
     }
 
-    private boolean writeBufferedData() {
+    private synchronized boolean writeBufferedData() {
         stopBufferedWriteAlarm();
         ArrayList<WifiConfiguration> sharedConfigurations = new ArrayList<>();
         ArrayList<WifiConfiguration> userConfigurations = new ArrayList<>();
@@ -3986,7 +4056,7 @@ public class WifiConfigManager {
         pw.println("WifiConfigManager - Log Begin ----");
         mLocalLog.dump(fd, pw, args);
         pw.println("WifiConfigManager - Log End ----");
-        pw.println("WifiConfigManager - mIsForegroundUserAdmin:" + mIsForegroundUserAdmin);
+        pw.println("WifiConfigManager - mIsCurrentUserAdmin:" + mIsCurrentUserAdmin);
         pw.println("WifiConfigManager - Configured networks Begin ----");
         for (WifiConfiguration network : getInternalConfiguredNetworks()) {
             pw.println(network);
@@ -4052,6 +4122,14 @@ public class WifiConfigManager {
             return;
         }
         mListeners.remove(listener);
+    }
+
+    /**
+     * Add the autojoin restriction changed callback
+     */
+    public void setRestrictAutoJoinToSubIdCallback(
+            @Nullable OnRestrictAutoJoinToSubIdCallback callback) {
+        mOnRestrictAutoJoinToSubIdCallback = callback;
     }
 
     /**
@@ -4273,9 +4351,15 @@ public class WifiConfigManager {
             Log.e(TAG, "Cannot find network for " + networkId);
             return false;
         }
+        boolean isSaeTransitionSupported = mWifiInjector.getActiveModeWarden()
+                .getPrimaryClientModeManager().getSupportedFeaturesBitSet()
+                .get(WIFI_FEATURE_WPA3_SAE)
+                && mWifiInjector.getWifiGlobals().isWpa3SaeUpgradeEnabled();
+
         WifiConfiguration copy = new WifiConfiguration(config);
         boolean changed = false;
         if (0 != (indicationBit & WifiMonitor.TDI_USE_WPA3_PERSONAL)
+                && isSaeTransitionSupported
                 && config.isSecurityType(WifiConfiguration.SECURITY_TYPE_SAE)) {
             config.setSecurityParamsEnabled(WifiConfiguration.SECURITY_TYPE_PSK, false);
             changed = true;
@@ -4284,13 +4368,20 @@ public class WifiConfigManager {
             config.enableSaePkOnlyMode(true);
             changed = true;
         }
+        SecurityParams params = config.getNetworkSelectionStatus()
+                .getLastUsedSecurityParams();
+        if (params == null) {
+            Log.e(TAG, "Cannot find network connection security parameters for " + networkId);
+            return false;
+        }
         if (0 != (indicationBit & WifiMonitor.TDI_USE_WPA3_ENTERPRISE)
-                && config.isSecurityType(WifiConfiguration.SECURITY_TYPE_EAP_WPA3_ENTERPRISE)) {
+                && params.getSecurityType()
+                == WifiConfiguration.SECURITY_TYPE_EAP_WPA3_ENTERPRISE) {
             config.setSecurityParamsEnabled(WifiConfiguration.SECURITY_TYPE_EAP, false);
             changed = true;
         }
         if (0 != (indicationBit & WifiMonitor.TDI_USE_ENHANCED_OPEN)
-                && config.isSecurityType(WifiConfiguration.SECURITY_TYPE_OWE)) {
+                && params.getSecurityType() == WifiConfiguration.SECURITY_TYPE_OWE) {
             config.setSecurityParamsEnabled(WifiConfiguration.SECURITY_TYPE_OPEN, false);
             changed = true;
         }
@@ -4669,5 +4760,22 @@ public class WifiConfigManager {
             return;
         }
         writeBufferedData();
+    }
+
+    /**
+     * Refreshes random MAC address on next connection to the Wi-Fi network.
+     * This does not change phone MAC.
+     *
+     * @param networkId networkId of the requested network.
+     */
+    public void refreshMacRandomization(int networkId) {
+        WifiConfiguration config = getInternalConfiguredNetwork(networkId);
+        if (config == null) {
+            Log.e(TAG, "refreshMacRandomization networkId " + networkId + " not found");
+            return;
+        }
+        config.randomizedMacExpirationTimeMs = 0;
+        config.randomizedMacLastModifiedTimeMs = 0;
+        config.persistentMacRandomizationSeed++;
     }
 }

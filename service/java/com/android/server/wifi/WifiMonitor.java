@@ -159,6 +159,7 @@ public class WifiMonitor {
         UNKNOWN,
         TID_TO_LINK_MAP,
         MULTI_LINK_RECONFIG_AP_REMOVAL,
+        MULTI_LINK_DYNAMIC_RECONFIG,
     }
 
     /**

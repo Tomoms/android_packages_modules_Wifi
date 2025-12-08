@@ -65,7 +65,13 @@ public final class RangingRequest implements Parcelable {
     private static final String TAG = "RangingRequest";
     private static final int MAX_PEERS = 10;
     private static final int DEFAULT_RTT_BURST_SIZE = 8;
-    private static final int MIN_RTT_BURST_SIZE = 2;
+    /**
+     * Minimum RTT burst size that can be used to determine a average range. For IEEE 802.11mc the
+     * minimum burst size is 2 and for IEEE 802.11az NTB measurement the minimum burst size is 1.
+     * See {@link Builder#setRttBurstSize(int)} for more details on the usage of burst size for
+     * IEEE 802.11mc and IEEE 802.11az NTB measurement.
+     */
+    private static final int MIN_RTT_BURST_SIZE = 1;
     private static final int MAX_RTT_BURST_SIZE = 31;
 
     /**

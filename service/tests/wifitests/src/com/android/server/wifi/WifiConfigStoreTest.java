@@ -171,6 +171,7 @@ public class WifiConfigStoreTest extends WifiBaseTest {
                     + "<byte-array name=\"EncryptedData\" num=\"0\"></byte-array>\n"
                     + "<byte-array name=\"IV\" num=\"0\"></byte-array>\n"
                     + "</DppNetAccessKey>\n"
+                    + "<int name=\"PersistentMacRandomizationSeed\" value=\"0\" />\n"
                     + "</WifiConfiguration>\n"
                     + "<NetworkStatus>\n"
                     + "<string name=\"SelectionStatus\">NETWORK_SELECTION_ENABLED</string>\n"

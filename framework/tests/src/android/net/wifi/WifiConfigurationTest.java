@@ -42,7 +42,12 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeTrue;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
+import static org.mockito.MockitoAnnotations.initMocks;
 
 import android.net.MacAddress;
 import android.net.ProxyInfo;
@@ -54,17 +59,23 @@ import android.net.wifi.WifiConfiguration.Protocol;
 import android.net.wifi.util.Environment;
 import android.os.Parcel;
 import android.os.ParcelUuid;
+import android.os.UserHandle;
 import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.util.Pair;
 
 import androidx.test.filters.SmallTest;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.MacAddressUtils;
 import com.android.wifi.flags.Flags;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -93,8 +104,28 @@ public class WifiConfigurationTest {
             SECURITY_TYPE_EAP_WPA3_ENTERPRISE,
             SECURITY_TYPE_EAP_WPA3_ENTERPRISE_192_BIT};
 
+    private MockitoSession mSession;
+
+    @Mock UserHandle mMockUserHandle;
+
     @Before
     public void setUp() {
+        initMocks(this);
+        // static mocking
+        mSession = ExtendedMockito.mockitoSession()
+                .mockStatic(UserHandle.class, withSettings().lenient())
+                .mockStatic(Flags.class, withSettings().lenient())
+                .strictness(Strictness.LENIENT)
+                .startMocking();
+        when(UserHandle.getUserHandleForUid(anyInt())).thenReturn(mMockUserHandle);
+    }
+
+    @After
+    public void cleanUp() throws Exception {
+        validateMockitoUsage();
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     /**
@@ -1471,5 +1502,35 @@ public class WifiConfigurationTest {
         // IllegalArgumentException when setting true to a private configuration.
         assertThrows(IllegalArgumentException.class,
                 () -> config.setAllowedToUpdateByOtherUsers(true));
+    }
+
+    /**
+     * Verifies that mCreatorUserId can be set and retrieved successfully.
+     */
+    @Test
+    @RequiresFlagsEnabled(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
+    public void testSetAndGetCreatorUserId() {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mMockUserHandle.getIdentifier()).thenReturn(UserHandle.SYSTEM.getIdentifier());
+        when(Flags.multiUserWifiEnhancement()).thenReturn(true);
+        WifiConfiguration config = new WifiConfiguration();
+        int testUserId = 10;
+        config.setCreatorUserId(testUserId);
+        assertEquals(config.getStoredCreatorUserId(), testUserId);
+        int testUserIdFromUid = 999;
+        when(mMockUserHandle.getIdentifier()).thenReturn(testUserIdFromUid);
+        assertEquals(config.getCreatorUserId(), testUserIdFromUid);
+
+        // test parcel
+        Parcel parcelW = Parcel.obtain();
+        config.writeToParcel(parcelW, 0);
+        byte[] bytes = parcelW.marshall();
+        parcelW.recycle();
+
+        Parcel parcelR = Parcel.obtain();
+        parcelR.unmarshall(bytes, 0, bytes.length);
+        parcelR.setDataPosition(0);
+        WifiConfiguration reconfig = WifiConfiguration.CREATOR.createFromParcel(parcelR);
+        assertEquals(reconfig.getStoredCreatorUserId(), testUserId);
     }
 }

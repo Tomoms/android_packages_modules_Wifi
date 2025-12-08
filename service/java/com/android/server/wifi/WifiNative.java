@@ -88,7 +88,6 @@ import com.android.server.wifi.hal.WifiChip;
 import com.android.server.wifi.hal.WifiHal;
 import com.android.server.wifi.hal.WifiNanIface;
 import com.android.server.wifi.hotspot2.NetworkDetail;
-import com.android.server.wifi.mainline_supplicant.MainlineSupplicant;
 import com.android.server.wifi.mockwifi.MockWifiServiceUtil;
 import com.android.server.wifi.proto.WifiStatsLog;
 import com.android.server.wifi.usd.UsdRequestManager;
@@ -126,7 +125,7 @@ import java.util.TimeZone;
  * Native calls for bring up/shut down of the supplicant daemon and for
  * sending requests to the supplicant daemon
  *
- * {@hide}
+ * @hide
  */
 public class WifiNative {
     private static final String TAG = "WifiNative";
@@ -162,7 +161,6 @@ public class WifiNative {
     private boolean mIsLocationModeEnabled = false;
     private long mLastLocationModeEnabledTimeMs = 0;
     private Map<String, Bundle> mCachedTwtCapabilities = new ArrayMap<>();
-    private final MainlineSupplicant mMainlineSupplicant;
 
     /**
      * Mapping of unknown AKMs configured in overlay config item
@@ -177,7 +175,7 @@ public class WifiNative {
                       WifiNl80211Manager condManager, WifiMonitor wifiMonitor,
                       PropertyService propertyService, WifiMetrics wifiMetrics,
                       Handler handler, Random random, BuildProperties buildProperties,
-                      WifiInjector wifiInjector, MainlineSupplicant mainlineSupplicant) {
+                      WifiInjector wifiInjector) {
         mWifiVendorHal = vendorHal;
         mSupplicantStaIfaceHal = staIfaceHal;
         mHostapdHal = hostapdHal;
@@ -190,7 +188,6 @@ public class WifiNative {
         mBuildProperties = buildProperties;
         mWifiInjector = wifiInjector;
         mContext = wifiInjector.getContext();
-        mMainlineSupplicant = mainlineSupplicant;
         initializeUnknownAkmMapping();
     }
 
@@ -268,7 +265,6 @@ public class WifiNative {
         mHostapdHal.enableVerboseLogging(verboseEnabled, halVerboseEnabled);
         mWifiVendorHal.enableVerboseLogging(verboseEnabled, halVerboseEnabled);
         mIfaceMgr.enableVerboseLogging(verboseEnabled);
-        mMainlineSupplicant.enableVerboseLogging(verboseEnabled, halVerboseEnabled);
     }
 
     /**
@@ -823,15 +819,6 @@ public class WifiNative {
                     Log.e(TAG, "Failed to register supplicant death handler");
                     return false;
                 }
-                if (mMainlineSupplicant.isAvailable()) {
-                    if (mMainlineSupplicant.startService()) {
-                        mMainlineSupplicant.registerFrameworkDeathHandler(
-                                new MainlineSupplicantDeathHandlerInternal());
-                    } else {
-                        // Fail quietly if the mainline supplicant does not start
-                        Log.e(TAG, "Unable to start the mainline supplicant");
-                    }
-                }
             }
             return true;
         }
@@ -853,12 +840,6 @@ public class WifiNative {
                     } else {
                         mWifiInjector.getWifiP2pNative().stopP2pSupplicantIfNecessary();
                     }
-                }
-
-                // Mainline supplicant should be disabled if no STA ifaces are in use
-                if (mMainlineSupplicant.isActive()) {
-                    mMainlineSupplicant.unregisterFrameworkDeathHandler();
-                    mMainlineSupplicant.stopService();
                 }
             }
         }
@@ -938,11 +919,6 @@ public class WifiNative {
             }
             if (!mSupplicantStaIfaceHal.teardownIface(iface.name)) {
                 Log.e(TAG, "Failed to teardown iface in supplicant on " + iface);
-            }
-            if (mMainlineSupplicant.isActive()
-                    && !mMainlineSupplicant.removeStaInterface(iface.name)) {
-                Log.e(TAG, "Unable to tear down " + iface.name + " in the mainline supplicant"
-                        + " after client interface destroyed");
             }
             if (!mWifiCondManager.tearDownClientInterface(iface.name)) {
                 Log.e(TAG, "Failed to teardown iface in wificond on " + iface);
@@ -1103,19 +1079,6 @@ public class WifiNative {
                 Log.i(TAG, "hostapd died. Cleaning up internal state.");
                 onNativeDaemonDeath();
                 mWifiMetrics.incrementNumHostapdCrashes();
-            });
-        }
-    }
-
-    /**
-     * Death handler for the mainline supplicant.
-     */
-    private class MainlineSupplicantDeathHandlerInternal implements SupplicantDeathEventHandler {
-        public void onDeath() {
-            mHandler.post(() -> {
-                // TODO: Add metrics for mainline supplicant crashes
-                Log.i(TAG, "Mainline supplicant died. Cleaning up internal state.");
-                onNativeDaemonDeath();
             });
         }
     }
@@ -1875,11 +1838,6 @@ public class WifiNative {
                 teardownInterface(iface.name);
                 return false;
             }
-            if (mMainlineSupplicant.isActive()
-                    && !mMainlineSupplicant.removeStaInterface(iface.name)) {
-                Log.e(TAG, "Unable to tear down " + iface.name + " in the mainline supplicant"
-                        + " for switch to scan mode");
-            }
             iface.type = Iface.IFACE_TYPE_STA_FOR_SCAN;
             stopSupplicantIfNecessary();
             iface.featureSet = getSupportedFeatureSetInternal(iface.name);
@@ -1950,10 +1908,6 @@ public class WifiNative {
                 if (!mQosPolicyFeatureEnabled) {
                     Log.e(TAG, "Failed to enable QoS policy feature for iface " + iface.name);
                 }
-            }
-            if (mMainlineSupplicant.isActive()
-                    && !mMainlineSupplicant.addStaInterface(iface.name)) {
-                Log.e(TAG, "Unable to add interface " + iface.name + " to mainline supplicant");
             }
             iface.type = Iface.IFACE_TYPE_STA_FOR_CONNECTIVITY;
             iface.featureSet = getSupportedFeatureSetInternal(iface.name);
@@ -4681,7 +4635,6 @@ public class WifiNative {
         pw.println("mIsLocationModeEnabled: " + mIsLocationModeEnabled);
         pw.println("mLastLocationModeEnabledTimeMs: " + mLastLocationModeEnabledTimeMs);
         mHostapdHal.dump(pw);
-        mMainlineSupplicant.dump(pw);
     }
 
     //---------------------------------------------------------------------------------

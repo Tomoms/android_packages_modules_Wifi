@@ -11,9 +11,11 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import os
 import logging
 import time
 
+from mobly import asserts
 from mobly.controllers import android_device
 
 
@@ -33,7 +35,7 @@ def enable_wifi_verbose_logging(ad: android_device.AndroidDevice):
 
 def take_bug_reports(ads, test_name=None, begin_time=None, destination=None):
     logging.info('Collecting bugreports...')
-    android_device.take_bug_reports(ads, destination)
+    android_device.take_bug_reports(ads, destination=destination)
 
 def restart_wifi_and_disable_connection_scan(ad: android_device.AndroidDevice):
     ad.wifi.wifiDisableAllSavedNetworks()
@@ -44,3 +46,63 @@ def restart_wifi_and_disable_connection_scan(ad: android_device.AndroidDevice):
 def restore_wifi_auto_join(ad: android_device.AndroidDevice):
     ad.wifi.wifiEnableAllSavedNetworks()
     ad.wifi.wifiAllowAutojoinGlobal(True)
+
+def skip_if_not_meet_min_sdk_level(
+    ad: android_device.AndroidDevice, min_sdk_level: int
+):
+    """Skips current test if the Android SDK level does not meet requirement."""
+    sdk_level = ad.build_info.get(
+        android_device.BuildInfoConstants.BUILD_VERSION_SDK.build_info_key, None)
+    asserts.skip_if(
+        sdk_level is None, f'{ad}. Cannot get Android SDK level for device.')
+    sdk_level = int(sdk_level)
+    asserts.skip_if(
+        sdk_level < min_sdk_level,
+        (
+            f'{ad}. The sdk level {sdk_level} is less than required minimum '
+            f'sdk level {min_sdk_level} for this test case.'
+        ),
+    )
+
+def skip_if_tv_device(
+    ad: android_device.AndroidDevice,
+):
+    """Skips current test if the device is a TV."""
+    characteristics = (ad.adb.shell('getprop ro.build.characteristics').decode().strip())
+    asserts.skip_if('tv' in characteristics, f'{ad}. This test is not for TV devices.')
+
+
+def capture_hsv_snapshot(
+    device: android_device.AndroidDevice,
+    prefix: str,
+    output_path: str | None = None,
+) -> None:
+  """Captures go/hsv device snapshots.
+
+  Note: Assumes the uiautomator is loaded, otherwise only capture screenshot.
+
+  Args:
+    device: Android device to have the HSV snapshot captured.
+    prefix: Name of the HSV snapshot file.
+    output_path: Path to the log directory.
+  """
+  if output_path is None:
+      output_path = device.log_path
+
+  # Take a screenshot equiped with hierarchy.
+  device.take_screenshot(output_path, prefix=f'screenshot,{prefix}')
+
+  if not hasattr(device, 'ui'):
+      return
+
+  hierarchy = device.ui.dump()
+  hsv_file_name = device.generate_filename(
+      file_type=f'hsv,{prefix}', extension_name='xml'
+  )
+
+  # Write hierarchy to xml file.
+  with open(
+      os.path.join(output_path, hsv_file_name), 'w', encoding='utf8'
+  ) as f:
+      print(hierarchy, file=f)
+  logging.info('UI hierarchy saved to: %s', hsv_file_name)

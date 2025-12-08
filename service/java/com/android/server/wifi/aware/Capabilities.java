@@ -19,8 +19,6 @@ package com.android.server.wifi.aware;
 import android.net.wifi.aware.Characteristics;
 import android.os.Bundle;
 
-import com.android.server.wifi.DeviceConfigFacade;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -53,12 +51,13 @@ public class Capabilities {
     public boolean isPeriodicRangingSupported;
     public int maxSupportedRangingPktBandWidth;
     public int maxSupportedRxChains;
+    public int ndpSessionLimit;
 
     /**
      * Converts the internal capabilities to a parcelable & potentially app-facing
      * characteristics bundle. Only some of the information is exposed.
      */
-    public Characteristics toPublicCharacteristics(DeviceConfigFacade deviceConfigFacade) {
+    public Characteristics toPublicCharacteristics() {
         Bundle bundle = new Bundle();
         bundle.putInt(Characteristics.KEY_MAX_SERVICE_NAME_LENGTH, maxServiceNameLen);
         bundle.putInt(
@@ -71,18 +70,27 @@ public class Capabilities {
                 supportedPairingCipherSuites);
         bundle.putBoolean(Characteristics.KEY_IS_INSTANT_COMMUNICATION_MODE_SUPPORTED,
                 isInstantCommunicationModeSupported);
-        bundle.putInt(Characteristics.KEY_MAX_NDP_NUMBER, maxNdpSessions);
+        bundle.putInt(Characteristics.KEY_MAX_NDP_NUMBER, getMaxNdpSessions());
         bundle.putInt(Characteristics.KEY_MAX_NDI_NUMBER, maxNdiInterfaces);
         bundle.putInt(Characteristics.KEY_MAX_PUBLISH_NUMBER, maxPublishes);
         bundle.putInt(Characteristics.KEY_MAX_SUBSCRIBE_NUMBER, maxSubscribes);
         bundle.putBoolean(Characteristics.KEY_SUPPORT_NAN_PAIRING, isNanPairingSupported);
-        bundle.putBoolean(Characteristics.KEY_SUPPORT_SUSPENSION,
-                deviceConfigFacade.isAwareSuspensionEnabled() && isSuspensionSupported);
+        bundle.putBoolean(Characteristics.KEY_SUPPORT_SUSPENSION, isSuspensionSupported);
         bundle.putBoolean(Characteristics.KEY_SUPPORT_PERIODIC_RANGING, isPeriodicRangingSupported);
         bundle.putInt(Characteristics.KEY_MAX_SUPPORTED_RANGING_PKT_BANDWIDTH,
                 maxSupportedRangingPktBandWidth);
         bundle.putInt(Characteristics.KEY_MAX_SUPPORTED_RX_CHAINS, maxSupportedRxChains);
         return new Characteristics(bundle);
+    }
+
+    /**
+     * Get the max NDP sessions number.
+     */
+    public int getMaxNdpSessions() {
+        if (ndpSessionLimit > 0) {
+            return Math.min(ndpSessionLimit, maxNdpSessions);
+        }
+        return maxNdpSessions;
     }
 
     JSONObject toJSON() throws JSONException {

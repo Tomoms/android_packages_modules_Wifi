@@ -16,6 +16,7 @@
 
 package com.android.server.wifi;
 
+import static android.net.wifi.WifiManager.IFACE_IP_MODE_TETHERED;
 import static android.net.wifi.WifiManager.SAP_START_FAILURE_GENERAL;
 import static android.net.wifi.WifiManager.WIFI_AP_STATE_FAILED;
 import static android.net.wifi.WifiManager.WIFI_STATE_DISABLED;
@@ -1193,6 +1194,7 @@ public class ActiveModeWardenTest extends WifiBaseTest {
                 WifiManager.IFACE_IP_MODE_TETHERED, configBuilder2.build(),
                 mSoftApCapability, TEST_COUNTRYCODE, null);
 
+        when(mSoftApManager.getSoftApModeConfiguration()).thenReturn(softApConfig1);
         doAnswer(new Answer<SoftApManager>() {
             public SoftApManager answer(InvocationOnMock invocation) {
                 Object[] args = invocation.getArguments();
@@ -1204,6 +1206,7 @@ public class ActiveModeWardenTest extends WifiBaseTest {
                 anyBoolean());
         // make a second softap manager
         SoftApManager softapManager = mock(SoftApManager.class);
+        when(softapManager.getSoftApModeConfiguration()).thenReturn(softApConfig2);
         Mutable<Listener<SoftApManager>> softApListener =
                 new Mutable<>();
         doAnswer(new Answer<SoftApManager>() {
@@ -1395,6 +1398,7 @@ public class ActiveModeWardenTest extends WifiBaseTest {
 
         // mock SoftAPManagers
         when(mSoftApManager.getRole()).thenReturn(ROLE_SOFTAP_TETHERED);
+        when(mSoftApManager.getSoftApModeConfiguration()).thenReturn(tetherConfig);
         doAnswer(new Answer<SoftApManager>() {
             public SoftApManager answer(InvocationOnMock invocation) {
                 Object[] args = invocation.getArguments();
@@ -1407,6 +1411,7 @@ public class ActiveModeWardenTest extends WifiBaseTest {
         // make a second softap manager
         SoftApManager lohsSoftapManager = mock(SoftApManager.class);
         when(lohsSoftapManager.getRole()).thenReturn(ROLE_SOFTAP_LOCAL_ONLY);
+        when(lohsSoftapManager.getSoftApModeConfiguration()).thenReturn(lohsConfig);
         Mutable<Listener<SoftApManager>> lohsSoftApListener = new Mutable<>();
         doAnswer(new Answer<SoftApManager>() {
             public SoftApManager answer(InvocationOnMock invocation) {
@@ -3100,6 +3105,30 @@ public class ActiveModeWardenTest extends WifiBaseTest {
         verify(mSelfRecovery).onRecoveryCompleted();
         verify(mSubsystemRestartCallback).onSubsystemRestarting();
         verify(mSubsystemRestartCallback).onSubsystemRestarted();
+    }
+
+    /**
+     * Verify that if Wifi is restarted before an ActiveModeWarden exists, we can
+     * successfully re-enable Wifi and mark recovery as complete.
+     */
+    @Test
+    public void testRestartWifiStackWithNoActiveModeWarden() throws Exception {
+        when(mSettingsStore.isWifiToggleEnabled()).thenReturn(true);
+        when(mSelfRecovery.isRecoveryInProgress()).thenReturn(true);
+
+        // No ActiveModeWarden exists in the disabled state.
+        assertInDisabledState();
+        assertWifiShutDown(() -> {
+            mActiveModeWarden.recoveryRestartWifi(SelfRecovery.REASON_WIFINATIVE_FAILURE,
+                    true);
+            mLooper.dispatchAll();
+        });
+
+        mLooper.moveTimeForward(TEST_WIFI_RECOVERY_DELAY_MS);
+        mLooper.dispatchAll();
+
+        assertInEnabledState();
+        verify(mSelfRecovery).onRecoveryCompleted();
     }
 
     /**
@@ -5871,5 +5900,82 @@ public class ActiveModeWardenTest extends WifiBaseTest {
 
         verify(remoteCallback1, times(1)).onWifiStateChanged();
         verify(remoteCallback2, times(1)).onWifiStateChanged();
+    }
+
+    @Test
+    public void testIsSoftApRestartingForCcChangeReturnsFalseWhenNotRestarting() throws Exception {
+        enterSoftApActiveMode();
+        assertThat(mActiveModeWarden.isSoftApRestartingForCcChange(IFACE_IP_MODE_TETHERED))
+                .isFalse();
+    }
+
+
+    @Test
+    public void testIsSoftApRestartingForCcChangeReturnsTrueWhileRestarting() throws Exception {
+        enterSoftApActiveMode();
+        SoftApModeConfiguration config = new SoftApModeConfiguration(
+                WifiManager.IFACE_IP_MODE_TETHERED, null, mSoftApCapability, TEST_COUNTRYCODE,
+                null);
+
+        mActiveModeWarden.restartSoftApForCcChange(config, TEST_WORKSOURCE);
+        mLooper.dispatchAll();
+
+        assertThat(mActiveModeWarden.isSoftApRestartingForCcChange(IFACE_IP_MODE_TETHERED))
+                .isTrue();
+    }
+
+    @Test
+    public void testIsSoftApRestartingForCcChangeReturnsFalseWhenStartFailed() throws Exception {
+        enterSoftApActiveMode();
+        SoftApModeConfiguration config = new SoftApModeConfiguration(
+                WifiManager.IFACE_IP_MODE_TETHERED, null, mSoftApCapability, TEST_COUNTRYCODE,
+                null);
+        mActiveModeWarden.restartSoftApForCcChange(config, TEST_WORKSOURCE);
+        mLooper.dispatchAll();
+        ArgumentCaptor<ActiveModeManager.Listener<SoftApManager>> softApListenerCaptor =
+                ArgumentCaptor.forClass(Listener.class);
+        verify(mWifiInjector, times(2)).makeSoftApManager(softApListenerCaptor.capture(),
+                any(WifiServiceImpl.SoftApCallbackInternal.class), any(), any(), any(),
+                anyBoolean());
+
+        softApListenerCaptor.getValue().onStartFailure(mSoftApManager);
+
+        assertThat(mActiveModeWarden.isSoftApRestartingForCcChange(IFACE_IP_MODE_TETHERED))
+                .isFalse();
+    }
+
+    @Test
+    public void testIsSoftApRestartingForCcChangeReturnsFalseWhenStartFailedDueToEmergencyMode()
+            throws Exception {
+        enterSoftApActiveMode();
+        SoftApModeConfiguration config = new SoftApModeConfiguration(
+                WifiManager.IFACE_IP_MODE_TETHERED, null, mSoftApCapability, TEST_COUNTRYCODE,
+                null);
+        mActiveModeWarden.emergencyCallbackModeChanged(true);
+        mActiveModeWarden.restartSoftApForCcChange(config, TEST_WORKSOURCE);
+        mLooper.dispatchAll();
+
+        assertThat(mActiveModeWarden.isSoftApRestartingForCcChange(IFACE_IP_MODE_TETHERED))
+                .isFalse();
+    }
+
+    @Test
+    public void testIsSoftApRestartingForCcChangeReturnsFalseWhenStartSucceeded() throws Exception {
+        enterSoftApActiveMode();
+        SoftApModeConfiguration config = new SoftApModeConfiguration(
+                WifiManager.IFACE_IP_MODE_TETHERED, null, mSoftApCapability, TEST_COUNTRYCODE,
+                null);
+        mActiveModeWarden.restartSoftApForCcChange(config, TEST_WORKSOURCE);
+        mLooper.dispatchAll();
+        ArgumentCaptor<ActiveModeManager.Listener<SoftApManager>> softApListenerCaptor =
+                ArgumentCaptor.forClass(Listener.class);
+        verify(mWifiInjector, times(2)).makeSoftApManager(softApListenerCaptor.capture(),
+                any(WifiServiceImpl.SoftApCallbackInternal.class), any(), any(), any(),
+                anyBoolean());
+
+        softApListenerCaptor.getValue().onStarted(mSoftApManager);
+
+        assertThat(mActiveModeWarden.isSoftApRestartingForCcChange(IFACE_IP_MODE_TETHERED))
+                .isFalse();
     }
 }

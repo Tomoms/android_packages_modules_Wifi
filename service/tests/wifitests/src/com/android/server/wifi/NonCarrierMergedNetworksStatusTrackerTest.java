@@ -42,11 +42,13 @@ public class NonCarrierMergedNetworksStatusTrackerTest extends WifiBaseTest {
     private NonCarrierMergedNetworksStatusTracker mNonCarrierMergedNetworksStatusTracker;
     private WifiConfiguration mTestNonCarrierMergedNetwork;
     @Mock private Clock mClock;
+    @Mock private NonCarrierMergedNetworksStatusTracker.Callback mCallback;
 
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         mNonCarrierMergedNetworksStatusTracker = new NonCarrierMergedNetworksStatusTracker(mClock);
+        mNonCarrierMergedNetworksStatusTracker.setListener(mCallback);
         mTestNonCarrierMergedNetwork = WifiConfigurationTestUtil.createOpenNetwork();
     }
 
@@ -63,6 +65,102 @@ public class NonCarrierMergedNetworksStatusTrackerTest extends WifiBaseTest {
     public void testNetworkIsEnabledByDefault() {
         assertFalse(mNonCarrierMergedNetworksStatusTracker.isNetworkDisabled(
                 mTestNonCarrierMergedNetwork));
+    }
+
+    /**
+     * Verify that getRestrictionSubId returns INVALID_SUBSCRIPTION_ID by default.
+     */
+    @Test
+    public void testGetRestrictionSubId_isInvalidByDefault() {
+        assertEquals(INVALID_SUBSCRIPTION_ID,
+                mNonCarrierMergedNetworksStatusTracker.getRestrictionSubId());
+    }
+
+    /**
+     * Verify that getRestrictionSubId returns the correct subId after restriction starts.
+     */
+    @Test
+    public void testGetRestrictionSubId_returnsCorrectSubIdWhenActive() {
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID, TEST_MIN_DISABLE_ALL_DURATION, TEST_MAX_DISABLE_ALL_DURATION);
+        assertEquals(TEST_SUBSCRIPTION_ID,
+                mNonCarrierMergedNetworksStatusTracker.getRestrictionSubId());
+    }
+
+    /**
+     * Verify that getRestrictionSubId returns INVALID_SUBSCRIPTION_ID after clear() is called.
+     */
+    @Test
+    public void testGetRestrictionSubId_isInvalidAfterClear() {
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID, TEST_MIN_DISABLE_ALL_DURATION, TEST_MAX_DISABLE_ALL_DURATION);
+        mNonCarrierMergedNetworksStatusTracker.clear();
+        assertEquals(INVALID_SUBSCRIPTION_ID,
+                mNonCarrierMergedNetworksStatusTracker.getRestrictionSubId());
+    }
+
+    /**
+     * Verify that the onRestrictionSubIdChanged callback is fired when restriction starts.
+     */
+    @Test
+    public void testDisableAllNonCarrierMergedNetworks_firesCallbackOnSubIdChange() {
+        // First change fires callback
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID, TEST_MIN_DISABLE_ALL_DURATION, TEST_MAX_DISABLE_ALL_DURATION);
+        verify(mCallback).onRestrictionStarted(TEST_SUBSCRIPTION_ID);
+
+        // Second change fires callback
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID + 1, TEST_MIN_DISABLE_ALL_DURATION,
+                TEST_MAX_DISABLE_ALL_DURATION);
+        verify(mCallback).onRestrictionStarted(TEST_SUBSCRIPTION_ID + 1);
+    }
+
+    /**
+     * Verify that the onRestrictionSubIdChanged callback is fired when restriction starts.
+     */
+    @Test
+    public void testDisableAllNonCarrierMergedNetworks_doesNotfireCallbackWhenSubIdUnchanged() {
+        // First change fires callback
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID, TEST_MIN_DISABLE_ALL_DURATION, TEST_MAX_DISABLE_ALL_DURATION);
+        verify(mCallback).onRestrictionStarted(TEST_SUBSCRIPTION_ID);
+
+        // Unchanged sub ID should not fire callback
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID, TEST_MIN_DISABLE_ALL_DURATION, TEST_MAX_DISABLE_ALL_DURATION);
+        verifyNoMoreInteractions(mCallback);
+    }
+
+    /**
+     * Verify that the onRestrictionSubIdChanged callback is fired when clear() is called on an
+     * active restriction.
+     */
+    @Test
+    public void testClear_firesCallbackWhenActive() {
+        // Start a restriction first.
+        mNonCarrierMergedNetworksStatusTracker.disableAllNonCarrierMergedNetworks(
+                TEST_SUBSCRIPTION_ID, TEST_MIN_DISABLE_ALL_DURATION, TEST_MAX_DISABLE_ALL_DURATION);
+        verify(mCallback).onRestrictionStarted(TEST_SUBSCRIPTION_ID);
+
+        // Now clear it.
+        mNonCarrierMergedNetworksStatusTracker.clear();
+
+        // Verify restriction is stopped.
+        verify(mCallback).onRestrictionStopped();
+    }
+
+    /**
+     * Verify that the onRestrictionSubIdChanged callback is not fired when clear() is called when
+     * already inactive.
+     */
+    @Test
+    public void testClear_doesNotFireCallbackWhenAlreadyInactive() {
+        // Tracker is in its default, inactive state.
+        mNonCarrierMergedNetworksStatusTracker.clear();
+
+        // Verify no callbacks are fired.
+        verify(mCallback, never()).onRestrictionStopped();
     }
 
     /**

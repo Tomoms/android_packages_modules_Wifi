@@ -70,17 +70,17 @@ public class WifiSettingsBackupRestore {
             // Start writing the XML stream.
             XmlUtil.writeNextSectionStart(out, XML_TAG_SECTION_HEADER_WIFI_SETTINGS_DATA);
             XmlUtil.writeNextSectionStart(out,
-                    WifiSettingsConfigStore.StoreData.XML_TAG_SECTION_HEADER);
+                    WifiSettingsConfigStore.XML_TAG_SECTION_HEADER);
             // Prepare the setting's map.
             for (WifiSettingsConfigStore.Key key
                     : mWifiSettingsConfigStore.getAllBackupRestoreKeys()) {
                 backupSettingsMap.put(key.key, mWifiSettingsConfigStore.get(key));
             }
-            XmlUtil.writeNextValue(out, WifiSettingsConfigStore.StoreData.XML_TAG_VALUES,
+            XmlUtil.writeNextValue(out, WifiSettingsConfigStore.XML_TAG_VALUES,
                     backupSettingsMap);
 
             XmlUtil.writeNextSectionEnd(out,
-                    WifiSettingsConfigStore.StoreData.XML_TAG_SECTION_HEADER);
+                    WifiSettingsConfigStore.XML_TAG_SECTION_HEADER);
             XmlUtil.writeNextSectionEnd(out, XML_TAG_SECTION_HEADER_WIFI_SETTINGS_DATA);
         } catch (XmlPullParserException | IOException e) {
             Log.e(TAG, "Error retrieving the backup data: " + e);
@@ -100,9 +100,9 @@ public class WifiSettingsBackupRestore {
         }
         try {
             XmlUtil.gotoNextSectionWithName(in,
-                    WifiSettingsConfigStore.StoreData.XML_TAG_SECTION_HEADER, depth + 1);
+                    WifiSettingsConfigStore.XML_TAG_SECTION_HEADER, depth + 1);
             Map<String, Object> values =
-                    WifiSettingsConfigStore.StoreData.deserializeSettingsData(in, depth + 2);
+                    WifiSettingsConfigStore.deserializeSettingsData(in, depth + 2);
             if (values != null) {
                 for (String keyString : values.keySet()) {
                     if (mRestoreSettingsMap.containsKey(keyString)) {

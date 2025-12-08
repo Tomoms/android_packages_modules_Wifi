@@ -16,15 +16,20 @@
 
 package com.google.snippet.wifi.aware;
 
-import android.app.UiAutomation;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import android.Manifest;
+import android.app.UiAutomation;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.net.NetworkSpecifier;
 import android.net.MacAddress;
+import android.net.NetworkSpecifier;
+import android.net.wifi.ScanResult;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.net.wifi.aware.AttachCallback;
 import android.net.wifi.aware.Characteristics;
 import android.net.wifi.aware.DiscoverySession;
@@ -43,16 +48,14 @@ import android.net.wifi.rtt.RangingRequest;
 import android.net.wifi.rtt.RangingResult;
 import android.net.wifi.rtt.RangingResultCallback;
 import android.net.wifi.rtt.WifiRttManager;
-import android.net.wifi.ScanResult;
-import android.net.wifi.WifiInfo;
-import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.RemoteException;
 import android.text.TextUtils;
 import android.util.Base64;
-
-import android.os.RemoteException;
+import android.util.SparseArray;
 
 import androidx.annotation.NonNull;
 import androidx.test.core.app.ApplicationProvider;
@@ -72,9 +75,7 @@ import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -96,6 +97,9 @@ public class WifiAwareManagerSnippet implements Snippet {
     private final EventCache eventCache = EventCache.getInstance();
     private WifiAwareStateChangedReceiver stateChangedReceiver;
 
+    private final SparseArray<Long> mMssageStartTime = new SparseArray<>();
+
+
     /**
      * Custom exception class for handling specific errors related to the WifiAwareManagerSnippet
      * operations.
@@ -109,9 +113,11 @@ public class WifiAwareManagerSnippet implements Snippet {
     public WifiAwareManagerSnippet() throws WifiAwareManagerSnippetException {
         mContext = ApplicationProvider.getApplicationContext();
         PermissionUtils.checkPermissions(mContext, Manifest.permission.ACCESS_WIFI_STATE,
-                Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.NEARBY_WIFI_DEVICES
+                Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_FINE_LOCATION
         );
+        if (Build.VERSION.SDK_INT >= 33) {
+            PermissionUtils.checkPermissions(mContext, Manifest.permission.NEARBY_WIFI_DEVICES);
+        }
         mWifiAwareManager = mContext.getSystemService(WifiAwareManager.class);
         checkWifiAwareManager();
         mWifiRttManager = mContext.getSystemService(WifiRttManager.class);
@@ -404,6 +410,7 @@ public class WifiAwareManagerSnippet implements Snippet {
             SnippetEvent snippetEvent = new SnippetEvent(mCallBackId, "discoveryResult");
             snippetEvent.getData().putString("callbackName", "onPublishStarted");
             snippetEvent.getData().putBoolean("isSessionInitialized", session != null);
+            snippetEvent.getData().putLong("timestampMs", System.currentTimeMillis());
             EventCache.getInstance().postEvent(snippetEvent);
         }
 
@@ -413,6 +420,7 @@ public class WifiAwareManagerSnippet implements Snippet {
             SnippetEvent snippetEvent = new SnippetEvent(mCallBackId, "discoveryResult");
             snippetEvent.getData().putString("callbackName", "onSubscribeStarted");
             snippetEvent.getData().putBoolean("isSessionInitialized", session != null);
+            snippetEvent.getData().putLong("timestampMs", System.currentTimeMillis());
             EventCache.getInstance().postEvent(snippetEvent);
         }
 
@@ -438,6 +446,7 @@ public class WifiAwareManagerSnippet implements Snippet {
             event.getData().putByteArray("serviceSpecificInfo", info.getServiceSpecificInfo());
             event.getData().putString("pairedAlias", info.getPairedAlias());
             event.getData().putInt("peerId", info.getPeerHandle().hashCode());
+            event.getData().putLong("timestampMs", System.currentTimeMillis());
             List<byte[]> matchFilter = info.getMatchFilters();
             putMatchFilterData(matchFilter, event);
             EventCache.getInstance().postEvent(event);
@@ -462,6 +471,9 @@ public class WifiAwareManagerSnippet implements Snippet {
             SnippetEvent event = new SnippetEvent(mCallBackId, "messageSendResult");
             event.getData().putString("callbackName", "onMessageSendSucceeded");
             event.getData().putInt("messageId", messageId);
+            Long startTime = mMssageStartTime.get(messageId);
+            event.getData().putLong(
+                    "latencyMs", System.currentTimeMillis() - startTime.longValue());
             EventCache.getInstance().postEvent(event);
         }
 
@@ -479,6 +491,7 @@ public class WifiAwareManagerSnippet implements Snippet {
             SnippetEvent event = new SnippetEvent(mCallBackId, "onMessageReceived");
             event.getData().putByteArray("receivedMessage", message);
             event.getData().putInt("peerId", peerHandle.hashCode());
+            event.getData().putString("messageAsString", new String(message, UTF_8));
             EventCache.getInstance().postEvent(event);
         }
 
@@ -659,7 +672,9 @@ public class WifiAwareManagerSnippet implements Snippet {
         // 4. send message & wait for send status
         DiscoverySession session = getDiscoverySession(discoverySessionId);
         PeerHandle handle = getPeerHandler(peerId);
+        long startTime = System.currentTimeMillis();
         session.sendMessage(handle, messageId, message.getBytes(StandardCharsets.UTF_8));
+        mMssageStartTime.put(messageId, startTime);
     }
 
     /**

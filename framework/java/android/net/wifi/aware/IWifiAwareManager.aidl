@@ -36,7 +36,7 @@ import android.os.Bundle;
 /**
  * Interface that WifiAwareService implements
  *
- * {@hide}
+ * @hide
  */
 interface IWifiAwareManager
 {

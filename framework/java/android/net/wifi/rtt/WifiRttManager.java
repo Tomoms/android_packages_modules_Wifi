@@ -21,12 +21,14 @@ import static android.Manifest.permission.ACCESS_WIFI_STATE;
 import static android.Manifest.permission.CHANGE_WIFI_STATE;
 import static android.Manifest.permission.LOCATION_HARDWARE;
 import static android.Manifest.permission.NEARBY_WIFI_DEVICES;
+import static android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME;
 
 import android.annotation.CallbackExecutor;
 import android.annotation.FlaggedApi;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.RequiresPermission;
+import android.annotation.RestrictedForEnvironment;
 import android.annotation.SdkConstant;
 import android.annotation.StringDef;
 import android.annotation.SystemApi;
@@ -35,6 +37,7 @@ import android.content.Context;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.RemoteException;
 import android.os.WorkSource;
@@ -67,6 +70,8 @@ import java.util.concurrent.Executor;
  *     broadcast. Note that this broadcast is not sticky - you should register for it and then
  *     check the above API to avoid a race condition.
  */
+@RestrictedForEnvironment(
+        environments = ENVIRONMENT_SDK_RUNTIME, from = Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @SystemService(Context.WIFI_RTT_RANGING_SERVICE)
 public class WifiRttManager {
     private static final String TAG = "WifiRttManager";

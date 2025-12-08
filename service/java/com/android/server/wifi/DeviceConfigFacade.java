@@ -141,11 +141,6 @@ public class DeviceConfigFacade {
     // depends on the score evaluation period normally controlled by
     // 'com.android.wifi.resources.R' config_wifiPollRssiIntervalMilliseconds.
     static final int DEFAULT_MIN_CONFIRMATION_DURATION_SEND_LOW_SCORE_MS = 5000;
-    // Default minimum confirmation duration for sending network score to connectivity service
-    // when score breaches high. The actual confirmation duration is longer in general and it
-    // depends on the score evaluation period normally controlled by
-    // 'com.android.wifi.resources.R' config_wifiPollRssiIntervalMilliseconds.
-    static final int DEFAULT_MIN_CONFIRMATION_DURATION_SEND_HIGH_SCORE_MS = 0;
     // Default RSSI threshold in dBm above which low score is not sent to connectivity service
     // when external scorer takes action.
     static final int DEFAULT_RSSI_THRESHOLD_NOT_SEND_LOW_SCORE_TO_CS_DBM = -67;
@@ -205,14 +200,12 @@ public class DeviceConfigFacade {
     private int mStationaryScanRssiValidTimeMs;
     private int mHealthMonitorFwAlertValidTimeMs;
     private int mMinConfirmationDurationSendLowScoreMs;
-    private int mMinConfirmationDurationSendHighScoreMs;
     private int mRssiThresholdNotSendLowScoreToCsDbm;
     private int mTrafficStatsThresholdMaxKbyte;
     private int mBandwidthEstimatorLargeTimeConstantSec;
     private boolean mInterfaceFailureBugreportEnabled;
     private boolean mP2pFailureBugreportEnabled;
     private boolean mApmEnhancementEnabled;
-    private boolean mAwareSuspensionEnabled;
     private boolean mHighPerfLockDeprecated;
     private Optional<Boolean> mOobPseudonymEnabled = Optional.empty();
     private Consumer<Boolean> mOobPseudonymFeatureFlagChangedListener = null;
@@ -385,9 +378,6 @@ public class DeviceConfigFacade {
         mMinConfirmationDurationSendLowScoreMs = DeviceConfig.getInt(NAMESPACE,
                 "min_confirmation_duration_send_low_score_ms",
                 DEFAULT_MIN_CONFIRMATION_DURATION_SEND_LOW_SCORE_MS);
-        mMinConfirmationDurationSendHighScoreMs = DeviceConfig.getInt(NAMESPACE,
-                "min_confirmation_duration_send_high_score_ms",
-                DEFAULT_MIN_CONFIRMATION_DURATION_SEND_HIGH_SCORE_MS);
         mRssiThresholdNotSendLowScoreToCsDbm = DeviceConfig.getInt(NAMESPACE,
                 "rssi_threshold_not_send_low_score_to_cs_dbm",
                 DEFAULT_RSSI_THRESHOLD_NOT_SEND_LOW_SCORE_TO_CS_DBM);
@@ -402,8 +392,6 @@ public class DeviceConfigFacade {
                 "p2p_failure_bugreport_enabled", false);
         mApmEnhancementEnabled = DeviceConfig.getBoolean(NAMESPACE,
                 "apm_enhancement_enabled", false);
-        mAwareSuspensionEnabled = DeviceConfig.getBoolean(NAMESPACE,
-                "aware_suspension_enabled", true);
         mHighPerfLockDeprecated = DeviceConfig.getBoolean(NAMESPACE,
                 "high_perf_lock_deprecated", true);
         boolean oobPseudonymEnabled = DeviceConfig.getBoolean(NAMESPACE,
@@ -832,14 +820,6 @@ public class DeviceConfigFacade {
     }
 
     /**
-     * Gets the minimum confirmation duration for sending network score to connectivity service
-     * when score breaches high.
-     */
-    public int getMinConfirmationDurationSendHighScoreMs() {
-        return mMinConfirmationDurationSendHighScoreMs;
-    }
-
-    /**
      * Gets the RSSI threshold above which low score is not sent to connectivity service when
      * external scorer takes action.
      */
@@ -882,13 +862,6 @@ public class DeviceConfigFacade {
         // reads the value set by Bluetooth device config for APM enhancement feature flag
         return Settings.Global.getInt(
                 mContext.getContentResolver(), "apm_enhancement_enabled", 0) == 1;
-    }
-
-    /**
-     * Gets the feature flag for Aware suspension
-     */
-    public boolean isAwareSuspensionEnabled() {
-        return mAwareSuspensionEnabled;
     }
 
     /**

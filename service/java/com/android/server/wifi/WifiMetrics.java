@@ -17,6 +17,9 @@
 package com.android.server.wifi;
 
 import static android.net.wifi.WifiConfiguration.MeteredOverride;
+import static android.net.wifi.WifiUsabilityStatsEntry.SCORER_TYPE_INVALID;
+import static android.net.wifi.WifiUsabilityStatsEntry.SCORER_TYPE_ML;
+import static android.net.wifi.WifiUsabilityStatsEntry.SCORER_TYPE_VELOCITY;
 
 import static com.android.server.wifi.ActiveModeManager.ROLE_CLIENT_PRIMARY;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED;
@@ -26,6 +29,8 @@ import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESUL
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_NO_SIM_INSERTED;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_OTHERS;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__DEVICE_STATE__STATE_SCORING_DISABLED;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__IS_ACTIVE_SCORER__FALSE;
+import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__IS_ACTIVE_SCORER__TRUE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_DS__FALSE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_DS__TRUE;
 import static com.android.server.wifi.proto.WifiStatsLog.SCORER_PREDICTION_RESULT_REPORTED__SPEED_SUFFICIENT_NETWORK_CAPABILITIES_US__FALSE;
@@ -218,8 +223,10 @@ public class WifiMetrics {
     public static final int MIN_LINK_SPEED_MBPS = 0;
     /** Maximum time period between ScanResult and RSSI poll to generate rssi delta datapoint */
     public static final long TIMEOUT_RSSI_DELTA_MILLIS =  3000;
+    // Time period to attribute a disconnect to firmware alert
+    public static final long FIRMWARE_ALERT_DISCONNECT_MILLIS = 1000;
     private static final int MIN_WIFI_SCORE = 0;
-    private static final int MAX_WIFI_SCORE = ConnectedScore.WIFI_MAX_SCORE;
+    private static final int MAX_WIFI_SCORE = ConnectedScorer.WIFI_MAX_SCORE;
     private static final int MIN_WIFI_USABILITY_SCORE = 0; // inclusive
     private static final int MAX_WIFI_USABILITY_SCORE = 100; // inclusive
     @VisibleForTesting
@@ -253,6 +260,8 @@ public class WifiMetrics {
     public static final int COUNTRY_CODE_CONFLICT_WIFI_SCAN = -1;
     public static final int COUNTRY_CODE_CONFLICT_WIFI_SCAN_TELEPHONY = -2;
     public static final int MAX_COUNTRY_CODE_COUNT = 4;
+    public static final String INTERNAL_VELOCITY_SCORER_NAME = "INTERNAL_VELOCITY_SCORER";
+    public static final String INTERNAL_ML_SCORER_NAME = "INTERNAL_ML_SCORER";
     // Histogram for WifiConfigStore IO duration times. Indicates the following 5 buckets (in ms):
     //   < 50
     //   [50, 100)
@@ -302,6 +311,8 @@ public class WifiMetrics {
     private WifiScoreCard mWifiScoreCard;
     private Map<String, String> mLastBssidPerIfaceMap = new ArrayMap<>();
     private Map<String, Integer> mLastFrequencyPerIfaceMap = new ArrayMap<>();
+    // Map from ifaceName -> <firmware alert timestamp since boot millis, firmware alert reason>
+    private Map<String, Pair<Long, Integer>> mLastFirmwareAlertPerIfaceMap = new ArrayMap<>();
     private int mSeqNumInsideFramework = 0;
     private int mLastWifiUsabilityScore = -1;
     private int mLastWifiUsabilityScoreNoReset = -1;
@@ -744,12 +755,24 @@ public class WifiMetrics {
     }
 
     /**
-     * Sets the timestamp after roaming is complete.
+     * Updates timestamp and router capabilities metrics upon successful completion of Wi-Fi
+     * roaming.
      */
     public void onRoamComplete(String ifaceName) {
         SessionData currentSession = mCurrentConnectionSessionPerIface.get(ifaceName);
         if (currentSession != null) {
             currentSession.mLastRoamCompleteMillis = mClock.getElapsedSinceBootMillis();
+        }
+
+        synchronized (mLock) {
+            SessionData sessionData = mCurrentConnectionSessionPerIface.get(ifaceName);
+            if (sessionData != null && sessionData.mConnectionEvent != null
+                    && sessionData.mConnectionEvent.mRouterFingerPrint != null) {
+                reportRouterCapabilities(sessionData.mConnectionEvent.mRouterFingerPrint);
+            } else {
+                Log.w(TAG, "onRoamComplete: No current connection session router fingerprint for "
+                        + ifaceName);
+            }
         }
     }
 
@@ -833,6 +856,9 @@ public class WifiMetrics {
         private NetworkDetail.HSRelease mHsRelease = NetworkDetail.HSRelease.Unknown;
         private ApType6GHz mApType6GHz = ApType6GHz.AP_TYPE_6GHZ_UNKNOWN;
         public @WifiAnnotations.ChannelWidth int mChannelWidth = ScanResult.UNSPECIFIED;
+        private boolean mIsPasnSupported = false;
+        private boolean mIsSecureHeLtfSupported = false;
+        private boolean mIsRangingFrameProtectionRequired = false;
 
         public String toString() {
             StringBuilder sb = new StringBuilder();
@@ -869,6 +895,9 @@ public class WifiMetrics {
                 sb.append(", mIsEcpsPriorityAccessSupported=" + mIsEcpsPriorityAccessSupported);
                 sb.append(", mHsRelease=" + mHsRelease);
                 sb.append(", mChannelWidth" + mChannelWidth);
+                sb.append("" + mIsPasnSupported);
+                sb.append("" + mIsSecureHeLtfSupported);
+                sb.append("" + mIsRangingFrameProtectionRequired);
             }
             return sb.toString();
         }
@@ -2228,6 +2257,12 @@ public class WifiMetrics {
     public void setConnectionScanDetail(String ifaceName, ScanDetail scanDetail) {
         synchronized (mLock) {
             ConnectionEvent currentConnectionEvent = mCurrentConnectionEventPerIface.get(ifaceName);
+            if (currentConnectionEvent == null) {
+                SessionData sessionData = mCurrentConnectionSessionPerIface.get(ifaceName);
+                if (sessionData != null) {
+                    currentConnectionEvent = sessionData.mConnectionEvent;
+                }
+            }
             if (currentConnectionEvent == null || scanDetail == null) {
                 return;
             }
@@ -2855,7 +2890,16 @@ public class WifiMetrics {
                 r.mIs11AzSupported, convertHsReleasetoProto(r.mHsRelease),
                 r.mRouterFingerPrintProto.isPasspointHomeProvider,
                 convertApType6GhzToProto(r.mApType6GHz), r.mIsEcpsPriorityAccessSupported,
-                convertChannelWidthToProto(r.mChannelWidth));
+                convertChannelWidthToProto(r.mChannelWidth),
+                r.mIsPasnSupported
+                        ? WifiStatsLog.WIFI_AP_CAPABILITIES_REPORTED__IS_PASN_SUPPORTED__TRI_STATE_TRUE
+                        : WifiStatsLog.WIFI_AP_CAPABILITIES_REPORTED__IS_PASN_SUPPORTED__TRI_STATE_FALSE,
+                r.mIsSecureHeLtfSupported
+                        ? WifiStatsLog.WIFI_AP_CAPABILITIES_REPORTED__IS_SECURE_HE_LTF_SUPPORTED__TRI_STATE_TRUE
+                        : WifiStatsLog.WIFI_AP_CAPABILITIES_REPORTED__IS_SECURE_HE_LTF_SUPPORTED__TRI_STATE_FALSE,
+                r.mIsRangingFrameProtectionRequired
+                        ? WifiStatsLog.WIFI_AP_CAPABILITIES_REPORTED__IS_RANGING_FRAME_PROTECTION_REQUIRED__TRI_STATE_TRUE
+                        : WifiStatsLog.WIFI_AP_CAPABILITIES_REPORTED__IS_RANGING_FRAME_PROTECTION_REQUIRED__TRI_STATE_FALSE);
     }
 
     /**
@@ -2884,6 +2928,20 @@ public class WifiMetrics {
                         - currentSession.mLastRoamCompleteMillis) / 1000;
                 int timeSinceLastRssiUpdateSeconds = (int) (mClock.getElapsedSinceBootMillis()
                         - lastRssiUpdateMillis) / 1000;
+                int firmwareAlertReason = 0;
+                if (disconnectReason <= 0) {
+                    // some chips will report a firmware alert, and then trigger disconnect with
+                    // an unknown disconnect reason. Replace with the disconnect reason with
+                    // firmware alert in this case.
+                    Pair<Long, Integer> timestampAndReason =
+                            mLastFirmwareAlertPerIfaceMap.get(ifaceName);
+                    if (timestampAndReason != null
+                            && currentSession.mSessionEndTimeMillis - timestampAndReason.first
+                            < FIRMWARE_ALERT_DISCONNECT_MILLIS) {
+                        disconnectReason = WifiStatsLog.WIFI_DISCONNECT_REPORTED__FAILURE_CODE__DISCONNECT_FIRMWARE_ALERT;
+                        firmwareAlertReason = timestampAndReason.second;
+                    }
+                }
                 currentSession.mDisconnectReason = disconnectReason;
 
                 WifiStatsLog.write(WifiStatsLog.WIFI_DISCONNECT_REPORTED,
@@ -2900,7 +2958,8 @@ public class WifiMetrics {
                         toMetricPhase2Method(currentSession.mConnectionEvent.mPhase2Method),
                         currentSession.mConnectionEvent.mPasspointRoamingType,
                         currentSession.mConnectionEvent.mCarrierId,
-                        currentSession.mConnectionEvent.mUid);
+                        currentSession.mConnectionEvent.mUid,
+                        firmwareAlertReason);
                 /* Log validation never succeed */
                 WifiValidationInfo validationInfo = currentSession.mValidationInfo;
                 if (validationInfo != null && validationInfo.mValidationCount > 0) {
@@ -3061,6 +3120,8 @@ public class WifiMetrics {
         currentConnectionEvent.mRouterFingerPrint.mIsEcpsPriorityAccessSupported =
                 networkDetail.isEpcsPriorityAccessSupported();
         currentConnectionEvent.mRouterFingerPrint.mHsRelease = networkDetail.getHSRelease();
+        currentConnectionEvent.mRouterFingerPrint.mIsSecureHeLtfSupported = networkDetail.isSecureHeLtfSupported();
+        currentConnectionEvent.mRouterFingerPrint.mIsRangingFrameProtectionRequired = networkDetail.isRangingFrameProtectionRequired();
     }
 
     /**
@@ -3090,6 +3151,8 @@ public class WifiMetrics {
         }
         currentConnectionEvent.mRouterFingerPrint.mRouterFingerPrintProto.channelInfo =
                 scanResult.frequency;
+        currentConnectionEvent.mRouterFingerPrint.mIsPasnSupported =
+                scanResult.capabilities != null && scanResult.capabilities.contains("PASN");
     }
 
     void setIsLocationEnabled(boolean enabled) {
@@ -3999,6 +4062,8 @@ public class WifiMetrics {
                     event.channelFrequency = infos.get(infoIndex).getFrequency();
                     event.channelBandwidth = infos.get(infoIndex).getBandwidth();
                     event.generation = infos.get(infoIndex).getWifiStandardInternal();
+                    writeSoftApInfoChanged(event.channelFrequency,
+                            event.channelBandwidth, event.generation);
                     numOfEventNeededToUpdate--;
                 }
             }
@@ -4034,6 +4099,7 @@ public class WifiMetrics {
                             config.getMaxNumberOfClients();
                     event.shutdownTimeoutSettingInSoftapConfiguration =
                             config.getShutdownTimeoutMillis();
+                    event.autoShutdownIsEnabled = config.isAutoShutdownEnabled();
                     event.clientControlIsEnabled = config.isClientControlByUserEnabled();
                     numOfEventNeededToUpdate--;
                 }
@@ -4519,6 +4585,8 @@ public class WifiMetrics {
         logWifiIsUnusableEvent(ifaceName, WifiIsUnusableEvent.TYPE_FIRMWARE_ALERT, errorCode);
         logAsynchronousEvent(ifaceName,
                 WifiUsabilityStatsEntry.CAPTURE_EVENT_TYPE_FIRMWARE_ALERT, errorCode);
+        mLastFirmwareAlertPerIfaceMap.put(ifaceName, new Pair<>(
+                mClock.getElapsedSinceBootMillis(), errorCode));
     }
 
     public static final String PROTO_DUMP_ARG = "wifiMetricsProto";
@@ -5027,6 +5095,8 @@ public class WifiMetrics {
                             + event.maxNumClientsSettingInSoftapConfiguration);
                     eventLine.append(",max_num_clients_setting_in_softap_capability="
                             + event.maxNumClientsSettingInSoftapCapability);
+                    eventLine.append(",auto_shutdown_is_enabled="
+                            + event.autoShutdownIsEnabled);
                     eventLine.append(",shutdown_timeout_setting_in_softap_configuration="
                             + event.shutdownTimeoutSettingInSoftapConfiguration);
                     eventLine.append(",default_shutdown_timeout_setting="
@@ -5049,6 +5119,8 @@ public class WifiMetrics {
                             + event.maxNumClientsSettingInSoftapConfiguration);
                     eventLine.append(",max_num_clients_setting_in_softap_capability="
                             + event.maxNumClientsSettingInSoftapCapability);
+                    eventLine.append(",auto_shutdown_is_enabled="
+                            + event.autoShutdownIsEnabled);
                     eventLine.append(",shutdown_timeout_setting_in_softap_configuration="
                             + event.shutdownTimeoutSettingInSoftapConfiguration);
                     eventLine.append(",default_shutdown_timeout_setting="
@@ -5580,6 +5652,36 @@ public class WifiMetrics {
                 mInitPartialScanFailureHistogram.increment(channelCount);
             }
         }
+    }
+
+    private int setScanTypeProto(int scanType) {
+        return switch(scanType) {
+            case WifiScanner.SCAN_TYPE_LOW_LATENCY ->
+                    WifiStatsLog.WIFI_PERIODIC_SCAN_REPORT__SCAN_TYPE__LOW_LATENCY;
+            case WifiScanner.SCAN_TYPE_LOW_POWER ->
+                    WifiStatsLog.WIFI_PERIODIC_SCAN_REPORT__SCAN_TYPE__LOW_POWER;
+            case WifiScanner.SCAN_TYPE_HIGH_ACCURACY ->
+                    WifiStatsLog.WIFI_PERIODIC_SCAN_REPORT__SCAN_TYPE__HIGH_ACCURACY;
+            default -> WifiStatsLog.WIFI_PERIODIC_SCAN_REPORT__SCAN_TYPE__UNKNOWN;
+        };
+    }
+
+    /**
+     * Call when WifiConnectivityManager triggers periodic scan.
+     * @param isWifiConnected is wifiState == WIFI_STATE_CONNECTED
+     * @param isFullBandScan is full band scan or not
+     * @param scanType @see ScanSettings#type
+     * @param scanIntervalMs the scheduled scan interval of current scanning attempt
+     */
+    public void reportWifiPeriodicScan(boolean isWifiConnected, boolean isFullBandScan,
+            int scanType, int scanIntervalMs) {
+            // Write metrics to statsd
+        WifiStatsLog.write(
+                WifiStatsLog.WIFI_PERIODIC_SCAN_REPORT,
+                isWifiConnected,
+                isFullBandScan,
+                setScanTypeProto(scanType),
+                scanIntervalMs);
     }
 
     /**
@@ -7344,14 +7446,9 @@ public class WifiMetrics {
      *
      * oneshot is used to indicate that this call came from CMD_ONESHOT_RSSI_POLL.
      */
-    public void updateWifiUsabilityStatsEntries(String ifaceName, WifiInfo info,
+    public WifiUsabilityStatsEntry buildStatsEntry(String ifaceName, WifiInfo info,
             WifiLinkLayerStats stats, boolean oneshot, int statusDataStall) {
         synchronized (mLock) {
-            // This is only collected for primary STA currently because RSSI polling is disabled for
-            // non-primary STAs.
-            if (info == null) {
-                return;
-            }
             if (stats == null) {
                 // For devices lacking vendor hal, fill in the parts that we can
                 stats = new WifiLinkLayerStats();
@@ -7776,40 +7873,35 @@ public class WifiMetrics {
             wifiUsabilityStatsEntry.captureEventType = oneshot
                     ? WifiUsabilityStatsEntry.CAPTURE_EVENT_TYPE_ONESHOT_RSSI_POLL
                     : WifiUsabilityStatsEntry.CAPTURE_EVENT_TYPE_SYNCHRONOUS;
-
-            if (mScoreBreachLowTimeMillis != -1) {
-                long elapsedTime =  mClock.getElapsedSinceBootMillis() - mScoreBreachLowTimeMillis;
-                if (elapsedTime >= MIN_SCORE_BREACH_TO_GOOD_STATS_WAIT_TIME_MS) {
-                    mScoreBreachLowTimeMillis = -1;
-                }
-            }
-
-            // Invoke Wifi usability stats listener.
-            // TODO(b/179518316): Enable this for secondary transient STA also if external scorer
-            // is in charge of MBB.
-            if (isPrimary(ifaceName)) {
-                sendWifiUsabilityStats(mSeqNumInsideFramework, isSameBssidAndFreq,
-                        createNewWifiUsabilityStatsEntryParcelable(wifiUsabilityStatsEntry, stats,
-                                info));
-            }
-
-            // We need the records in the ring buffer to all have the same timebase. The records
-            // created here are timestamped by the WiFi driver and the timestamps have been found to
-            // drift relative to the Android clock. Historically, these records have been forwarded
-            // to external WiFi scorers with the drifting clock. In order to maintain historical
-            // behavior while ensuring that records in the ring buffer have the same timebase, we
-            // will send the record created in this function unmodified to any external WiFi Scorer,
-            // but we will modify the timestamp before storing in the ring buffer. Thus, the
-            // following statement, which also modifies the timestamp, must be executed AFTER the
-            // record is deep copied and sent to the external WiFi Scorer.
-            addToRingBuffer(wifiUsabilityStatsEntry);
-
-            mSeqNumInsideFramework++;
-            mProbeStatusSinceLastUpdate =
-                    android.net.wifi.WifiUsabilityStatsEntry.PROBE_STATUS_NO_PROBE;
-            mProbeElapsedTimeSinceLastUpdateMs = -1;
-            mProbeMcsRateSinceLastUpdate = -1;
+            return wifiUsabilityStatsEntry;
         }
+    }
+
+    /** Add the WifiUsabilityStatsEntry into the ring buffer and update the global variables. */
+    public void addWifiUsabilityStatsEntries(WifiUsabilityStatsEntry wifiUsabilityStatsEntry) {
+        if (mScoreBreachLowTimeMillis != -1) {
+            long elapsedTime =  mClock.getElapsedSinceBootMillis() - mScoreBreachLowTimeMillis;
+            if (elapsedTime >= MIN_SCORE_BREACH_TO_GOOD_STATS_WAIT_TIME_MS) {
+                mScoreBreachLowTimeMillis = -1;
+            }
+        }
+
+        // We need the records in the ring buffer to all have the same timebase. The records
+        // created here are timestamped by the WiFi driver and the timestamps have been found to
+        // drift relative to the Android clock. Historically, these records have been forwarded
+        // to external WiFi scorers with the drifting clock. In order to maintain historical
+        // behavior while ensuring that records in the ring buffer have the same timebase, we
+        // will send the record created in this function unmodified to any external WiFi Scorer,
+        // but we will modify the timestamp before storing in the ring buffer. Thus, the
+        // following statement, which also modifies the timestamp, must be executed AFTER the
+        // record is deep copied and sent to the external WiFi Scorer.
+        addToRingBuffer(wifiUsabilityStatsEntry);
+
+        mSeqNumInsideFramework++;
+        mProbeStatusSinceLastUpdate =
+            android.net.wifi.WifiUsabilityStatsEntry.PROBE_STATUS_NO_PROBE;
+        mProbeElapsedTimeSinceLastUpdateMs = -1;
+        mProbeMcsRateSinceLastUpdate = -1;
     }
 
     /**
@@ -7818,13 +7910,14 @@ public class WifiMetrics {
      * @param isSameBssidAndFreq
      * @param statsEntry
      */
-    private void sendWifiUsabilityStats(int seqNum, boolean isSameBssidAndFreq,
-            android.net.wifi.WifiUsabilityStatsEntry statsEntry) {
+    public void sendWifiUsabilityStats(WifiUsabilityStatsEntry statsEntry,
+            android.net.wifi.WifiUsabilityStatsEntry parcelableStatsEntry) {
         int itemCount = mOnWifiUsabilityListeners.beginBroadcast();
         for (int i = 0; i < itemCount; i++) {
             try {
-                mOnWifiUsabilityListeners.getBroadcastItem(i).onWifiUsabilityStats(seqNum,
-                        isSameBssidAndFreq, statsEntry);
+                mOnWifiUsabilityListeners.getBroadcastItem(i).onWifiUsabilityStats(
+                        statsEntry.seqNumInsideFramework,
+                        statsEntry.isSameBssidAndFreq, parcelableStatsEntry);
             } catch (RemoteException e) {
                 Log.e(TAG, "Unable to invoke Wifi usability stats entry listener ", e);
             }
@@ -8087,7 +8180,7 @@ public class WifiMetrics {
      *
      * These are two different types.
      */
-    private android.net.wifi.WifiUsabilityStatsEntry createNewWifiUsabilityStatsEntryParcelable(
+    public android.net.wifi.WifiUsabilityStatsEntry createNewWifiUsabilityStatsEntryParcelable(
             WifiUsabilityStatsEntry s, WifiLinkLayerStats stats, WifiInfo info) {
         int probeStatus;
         switch (s.probeStatusSinceLastUpdate) {
@@ -8135,7 +8228,9 @@ public class WifiMetrics {
                 s.isThroughputPredictorDownstreamSufficient,
                 s.isThroughputPredictorUpstreamSufficient, s.isBluetoothConnected,
                 s.uwbAdapterState, s.isLowLatencyActivated, s.maxSupportedTxLinkspeed,
-                s.maxSupportedRxLinkspeed, s.voipMode, s.threadDeviceRole, s.statusDataStall
+                s.maxSupportedRxLinkspeed, s.voipMode, s.threadDeviceRole, s.statusDataStall,
+                -1, // This field will be set by the internal scorer
+                SCORER_TYPE_INVALID // This field will be set by the internal scorer
         );
     }
 
@@ -8256,6 +8351,8 @@ public class WifiMetrics {
                 return android.net.wifi.WifiUsabilityStatsEntry.WIFI_PREAMBLE_VHT;
             case RateStats.WIFI_PREAMBLE_HE:
                 return android.net.wifi.WifiUsabilityStatsEntry.WIFI_PREAMBLE_HE;
+            case RateStats.WIFI_PREAMBLE_EHT:
+                return android.net.wifi.WifiUsabilityStatsEntry.WIFI_PREAMBLE_EHT;
         }
         return android.net.wifi.WifiUsabilityStatsEntry.WIFI_PREAMBLE_INVALID;
     }
@@ -9080,7 +9177,7 @@ public class WifiMetrics {
         // since these fields don't apply to multicast locks
         writeWifiLockActiveSession(
                 WifiStatsLog.WIFI_LOCK_DEACTIVATED__MODE__WIFI_MODE_MULTICAST_FILTERING_DISABLED,
-                new int[0], new String[0], duration, false, false, false);
+                new int[]{0}, new String[]{""}, duration, false, false, false);
     }
 
     private void writeWifiLockActiveSession(int lockMode, int[] attrUids, String[] attrTags,
@@ -9719,7 +9816,9 @@ public class WifiMetrics {
             boolean isMobileDataEnabled,
             int pollingIntervalMs,
             int aospScorerPrediction,
-            int externalScorerPrediction
+            int externalScorerPrediction,
+            boolean isExternalScorerActive,
+            int internalScorerType
     ) {
         boolean isCellularDataAvailable = mWifiDataStall.isCellularDataAvailable();
         boolean isThroughputSufficient = mWifiDataStall.isThroughputSufficient();
@@ -9728,17 +9827,24 @@ public class WifiMetrics {
                 hasActiveSubInfo, isMobileDataEnabled, isCellularDataAvailable,
                 mAdaptiveConnectivityEnabled);
         int scorerUnusableEvent = convertWifiUnusableTypeForScorer(mUnusableEventType);
-
+        String internalAttributionTag = null;
+        if (internalScorerType == SCORER_TYPE_VELOCITY) {
+            internalAttributionTag = INTERNAL_VELOCITY_SCORER_NAME;
+        } else if (internalScorerType == SCORER_TYPE_ML) {
+            internalAttributionTag = INTERNAL_ML_SCORER_NAME;
+        }
         WifiStatsLog.write_non_chained(SCORER_PREDICTION_RESULT_REPORTED,
-                    Process.WIFI_UID,
-                    null,
-                    aospScorerPrediction,
-                    scorerUnusableEvent,
-                    isThroughputSufficient, deviceState, pollingIntervalMs,
-                    mWifiFrameworkState, mSpeedSufficientNetworkCapabilities.Downstream,
-                    mSpeedSufficientNetworkCapabilities.Upstream,
-                    mSpeedSufficientThroughputPredictor.Downstream,
-                    mSpeedSufficientThroughputPredictor.Upstream);
+                Process.WIFI_UID,
+                internalAttributionTag,
+                aospScorerPrediction,
+                scorerUnusableEvent,
+                isThroughputSufficient, deviceState, pollingIntervalMs,
+                mWifiFrameworkState, mSpeedSufficientNetworkCapabilities.Downstream,
+                mSpeedSufficientNetworkCapabilities.Upstream,
+                mSpeedSufficientThroughputPredictor.Downstream,
+                mSpeedSufficientThroughputPredictor.Upstream,
+                isExternalScorerActive ? SCORER_PREDICTION_RESULT_REPORTED__IS_ACTIVE_SCORER__FALSE
+                        : SCORER_PREDICTION_RESULT_REPORTED__IS_ACTIVE_SCORER__TRUE);
         if (mScorerUid != Process.WIFI_UID) {
             WifiStatsLog.write_non_chained(SCORER_PREDICTION_RESULT_REPORTED,
                     mScorerUid,
@@ -9749,7 +9855,10 @@ public class WifiMetrics {
                     mWifiFrameworkState, mSpeedSufficientNetworkCapabilities.Downstream,
                     mSpeedSufficientNetworkCapabilities.Upstream,
                     mSpeedSufficientThroughputPredictor.Downstream,
-                    mSpeedSufficientThroughputPredictor.Upstream);
+                    mSpeedSufficientThroughputPredictor.Upstream,
+                    isExternalScorerActive
+                            ? SCORER_PREDICTION_RESULT_REPORTED__IS_ACTIVE_SCORER__TRUE
+                            : SCORER_PREDICTION_RESULT_REPORTED__IS_ACTIVE_SCORER__FALSE);
         }
 
         // We'd better reset to TYPE_NONE if it is defined in the future.
@@ -10643,6 +10752,57 @@ public class WifiMetrics {
                 getSoftApStoppedUpstreamType(upstreamCaps));
         WifiStatsLog.write(WifiStatsLog.SOFT_AP_STATE_CHANGED,
                 WifiStatsLog.SOFT_AP_STATE_CHANGED__HOTSPOT_ON__STATE_OFF);
+    }
+
+    /**
+     * Map SoftApInfo channel width to proto enum.
+     */
+    @VisibleForTesting
+    int convertSoftApInfoChannelWidthToProto(
+            @WifiAnnotations.ChannelWidth int channelWidth) {
+        return switch (channelWidth) {
+            case SoftApInfo.CHANNEL_WIDTH_20MHZ_NOHT ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_20MHZ_NOHT;
+            case SoftApInfo.CHANNEL_WIDTH_20MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_20MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_40MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_40MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_80MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_80MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_80MHZ_PLUS_MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_80MHZ_PLUS_MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_160MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_160MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_320MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_320MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_2160MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_2160MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_4320MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_4320MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_6480MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_6480MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_8640MHZ ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_8640MHZ;
+            case SoftApInfo.CHANNEL_WIDTH_AUTO ->
+                    WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_AUTO;
+            default -> WifiStatsLog.SOFT_AP_INFO_CHANGED__CHANNEL_WIDTH_MHZ__CHANNEL_WIDTH_UNKNOWN;
+        };
+    }
+
+    /**
+     * Call when SoftAp info changed intent is triggered.
+     *
+     * @param frequency new channel frequency_mhz after info changed
+     * @param bandwidth new softAp bandwidth setting
+     * @param standard new softAp supported Wifi standard
+     */
+    public void writeSoftApInfoChanged(int frequency, int bandwidth, int standard) {
+        WifiStatsLog.write(WifiStatsLog.SOFT_AP_INFO_CHANGED,
+                frequency,
+                KnownBandsChannelHelper.getBand(frequency),
+                convertSoftApInfoChannelWidthToProto(bandwidth),
+                getSoftApStoppedStandard(standard)
+        );
     }
 
     /**

@@ -61,6 +61,7 @@ import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA3_SAE;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA3_SUITE_B;
 import static android.net.wifi.WifiManager.WIFI_FEATURE_WPA_PERSONAL;
 import static android.net.wifi.WifiManager.WpsCallback;
+import static android.net.wifi.WifiUsabilityStatsEntry.SCORER_TYPE_ML;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -124,6 +125,7 @@ import android.net.wifi.WifiUsabilityStatsEntry.RateStats;
 import android.net.wifi.WifiUsabilityStatsEntry.ScanResultWithSameFreq;
 import android.net.wifi.twt.TwtRequest;
 import android.net.wifi.twt.TwtSessionCallback;
+import android.net.wifi.util.Environment;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -132,6 +134,7 @@ import android.os.OutcomeReceiver;
 import android.os.RemoteException;
 import android.os.connectivity.WifiActivityEnergyInfo;
 import android.os.test.TestLooper;
+import android.platform.test.annotations.RequiresFlagsEnabled;
 import android.util.ArraySet;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
@@ -140,6 +143,7 @@ import androidx.test.filters.SmallTest;
 
 import com.android.modules.utils.HandlerExecutor;
 import com.android.modules.utils.build.SdkLevel;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.x.com.android.modules.utils.ParceledListSlice;
 
 import com.google.common.collect.ImmutableList;
@@ -199,6 +203,7 @@ public class WifiManagerTest {
     private static final TetheringManager.TetheringRequest TEST_TETHERING_REQUEST =
             new TetheringManager.TetheringRequest.Builder(TetheringManager.TETHERING_WIFI).build();
     private static final String TEST_INTERFACE_NAME = "test-wlan0";
+    private static final int TEST_INTERNAL_SCORE = 50;
 
     @Mock Context mContext;
     @Mock android.net.wifi.IWifiManager mWifiService;
@@ -227,6 +232,8 @@ public class WifiManagerTest {
     private ScanResultsCallback mScanResultsCallback;
     private CoexCallback mCoexCallback;
     private WifiManager.WifiStateChangedListener mWifiStateChangedListener;
+    private WifiManager.RestrictAutoJoinToSubIdCallback
+            mRestrictAutoJoinToSubIdCallback;
     private SubsystemRestartTrackingCallback mRestartCallback;
     private int mRestartCallbackMethodRun = 0; // 1: restarting, 2: restarted
     private WifiActivityEnergyInfo mWifiActivityEnergyInfo;
@@ -327,6 +334,17 @@ public class WifiManagerTest {
             }
         };
         mWifiStateChangedListener = () -> mRunnable.run();
+        mRestrictAutoJoinToSubIdCallback = new WifiManager.RestrictAutoJoinToSubIdCallback() {
+            @Override
+            public void onRestrictionStarted(int subscriptionId) {
+                mRunnable.run();
+            }
+
+            @Override
+            public void onRestrictionStopped() {
+                mRunnable.run();
+            }
+        };
         if (SdkLevel.isAtLeastS()) {
             mCoexCallback = new CoexCallback() {
                 @Override
@@ -2536,6 +2554,42 @@ public class WifiManagerTest {
     }
 
     /**
+     * Verify client provided callback is being called to the right callback.
+     */
+    @Test
+    public void testAddRestrictAutoJoinToSubIdCallbackAndReceiveEvent() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastS());
+        assertThrows(NullPointerException.class,
+                () -> mWifiManager.addRestrictAutoJoinToSubIdCallback(mExecutor, null));
+        assertThrows(NullPointerException.class,
+                () -> mWifiManager.addRestrictAutoJoinToSubIdCallback(
+                        null, mRestrictAutoJoinToSubIdCallback));
+
+
+        ArgumentCaptor<IRestrictAutoJoinToSubIdCallback.Stub> callbackCaptor =
+                ArgumentCaptor.forClass(IRestrictAutoJoinToSubIdCallback.Stub.class);
+        mWifiManager.addRestrictAutoJoinToSubIdCallback(new SynchronousExecutor(),
+                mRestrictAutoJoinToSubIdCallback);
+        verify(mWifiService).addRestrictAutoJoinToSubIdCallback(callbackCaptor.capture());
+        callbackCaptor.getValue().onRestrictionStarted(1);
+        verify(mRunnable).run();
+    }
+
+    /**
+     * Verify client removeRestrictAutoJoinToSubIdCallback.
+     */
+    @Test
+    public void testRemoveUnknownRestrictAutoJoinToSubIdCallback() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastS());
+        assertThrows(NullPointerException.class,
+                () -> mWifiManager.removeRestrictAutoJoinToSubIdCallback(null));
+
+        mWifiManager.removeRestrictAutoJoinToSubIdCallback(
+                mRestrictAutoJoinToSubIdCallback);
+        verify(mWifiService, never()).removeRestrictAutoJoinToSubIdCallback(any());
+    }
+
+    /**
      * Verify the call to addOnWifiUsabilityStatsListener goes to WifiServiceImpl.
      */
     @Test
@@ -2583,7 +2637,7 @@ public class WifiManagerTest {
                         100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 1, 100, 10,
                         100, 27, contentionTimeStats, rateStats, radioStats, 101, true, true, true,
                         0, 10, 10, true, linkStats, 1, 0, 10, 20, 1, 2, 1, 1, 1, 1, false, 0,
-                        false, 100, 100, 1, 3, 1));
+                        false, 100, 100, 1, 3, 1, TEST_INTERNAL_SCORE, SCORER_TYPE_ML));
         verify(mOnWifiUsabilityStatsListener).onWifiUsabilityStats(anyInt(), anyBoolean(),
                 any(WifiUsabilityStatsEntry.class));
     }
@@ -4515,6 +4569,12 @@ public class WifiManagerTest {
                         customConfig, mExecutor, null));
     }
 
+    @Test
+    public void testRefreshMacRandomizationToWifiServiceImpl() throws Exception {
+        mWifiManager.refreshMacRandomization(TEST_NETWORK_ID);
+        verify(mWifiService).refreshMacRandomization(eq(TEST_NETWORK_ID));
+    }
+
     /**
      * Verify an IllegalArgumentException is thrown if listener is not provided.
      */
@@ -4573,15 +4633,15 @@ public class WifiManagerTest {
 
     @Test
     public void testAyncGetPrivilegedConfiguredNetworks() throws Exception {
-        assumeTrue(SdkLevel.isAtLeastS());
-        OutcomeReceiver<List<WifiConfiguration>, Error> resultsSetCallback =
+        assumeTrue(SdkLevel.isAtLeastT());
+        OutcomeReceiver<List<WifiConfiguration>, Exception> resultsSetCallback =
                 new OutcomeReceiver<>() {
                     @Override
                     public void onResult(List<WifiConfiguration> configs) {
                     }
 
                     @Override
-                    public void onError(Error error) {
+                    public void onError(Exception ex) {
                     }
                 };
         SynchronousExecutor executor = mock(SynchronousExecutor.class);
@@ -4608,5 +4668,62 @@ public class WifiManagerTest {
         // Thus we just use "mContext.getAttributionSource" to verify it.
         assertEquals(mContext.getAttributionSource(),
                 bundleCaptor.getValue().getParcelable(EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE));
+    }
+
+    @RequiresFlagsEnabled(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
+    @Test
+    public void testSetOpenNetworkNotifierEnabled() throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        mWifiManager.setOpenNetworkNotifierEnabled(true);
+        verify(mWifiService).setOpenNetworkNotifierEnabled(true);
+        mWifiManager.setOpenNetworkNotifierEnabled(false);
+        verify(mWifiService).setOpenNetworkNotifierEnabled(false);
+    }
+
+    @RequiresFlagsEnabled(Flags.FLAG_MULTI_USER_WIFI_ENHANCEMENT)
+    @Test
+    public void testIsOpenNetworkNotifierEnabled() throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        Consumer<Boolean> resultsSetCallback = mock(Consumer.class);
+        SynchronousExecutor executor = mock(SynchronousExecutor.class);
+        // Null executor/callback exception.
+        assertThrows("null executor should trigger exception", NullPointerException.class,
+                () -> mWifiManager.isOpenNetworkNotifierEnabled(null, resultsSetCallback));
+        assertThrows("null listener should trigger exception", NullPointerException.class,
+                () -> mWifiManager.isOpenNetworkNotifierEnabled(executor, null));
+        // Query and verify.
+        mWifiManager.isOpenNetworkNotifierEnabled(executor, resultsSetCallback);
+        verify(mWifiService).isOpenNetworkNotifierEnabled(
+                any(IBooleanListener.Stub.class));
+    }
+
+    @RequiresFlagsEnabled(Flags.FLAG_GET_SUPPORTED_INTERFACE_NAMES)
+    @Test
+    public void testGetSupportedInterfaceNames() throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        OutcomeReceiver<List<String>, Exception> resultsCallback =
+                new OutcomeReceiver<>() {
+                    @Override
+                    public void onResult(List<String> names) {}
+
+                    @Override
+                    public void onError(Exception ex) {}
+                };
+
+        SynchronousExecutor executor = mock(SynchronousExecutor.class);
+        // Null executor/callback exception.
+        try {
+            mWifiManager.getSupportedInterfaceNames(null, resultsCallback);
+            fail("expected NullPointerException");
+        } catch (NullPointerException expected) {
+        }
+        try {
+            mWifiManager.getSupportedInterfaceNames(executor, null);
+            fail("expected NullPointerException");
+        } catch (NullPointerException expected) {
+        }
+        // Call and verify.
+        mWifiManager.getSupportedInterfaceNames(executor, resultsCallback);
+        verify(mWifiService).getSupportedInterfaceNames(any(IListListener.Stub.class));
     }
 }

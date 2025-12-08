@@ -12,12 +12,13 @@ android_test {
     static_libs: [
         "androidx.test.runner",
         "compatibility-device-util-axt",
-        "gson",
         "guava",
         "mobly-snippet-lib",
         "mobly-bundled-snippets-lib",
         "wifi_aconfig_flags_lib",
+        "snippet-uiautomator-lib",
     ],
-    min_sdk_version: "31",
+    resource_dirs: ["res"],
+    min_sdk_version: "30",
     target_sdk_version: "35",
 }

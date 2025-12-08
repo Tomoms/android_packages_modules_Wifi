@@ -24,12 +24,18 @@ import static com.android.server.wifi.ConnectToNetworkNotificationBuilder.AVAILA
 import static com.android.server.wifi.OpenNetworkNotifier.DEFAULT_REPEAT_DELAY_SEC;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNotNull;
 import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -44,6 +50,7 @@ import android.net.Uri;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiContext;
 import android.net.wifi.WifiManager;
+import android.net.wifi.util.Environment;
 import android.os.Message;
 import android.os.Process;
 import android.os.RemoteException;
@@ -59,10 +66,12 @@ import com.android.server.wifi.proto.nano.WifiMetricsProto;
 import com.android.server.wifi.proto.nano.WifiMetricsProto.ConnectToNetworkNotificationAndActionCount;
 import com.android.server.wifi.util.ActionListenerWrapper;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -97,6 +106,8 @@ public class OpenNetworkNotifierTest extends WifiBaseTest {
     @Mock private ConnectHelper mConnectHelper;
     @Mock private MakeBeforeBreakManager mMakeBeforeBreakManager;
     @Mock private WifiPermissionsUtil mWifiPermissionsUtil;
+    @Mock private WifiSettingsConfigStore mWifiSettingsConfigStore;
+    @Mock private FeatureFlags mFeatureFlags;
     private OpenNetworkNotifier mNotificationController;
     private TestLooper mLooper;
     private BroadcastReceiver mBroadcastReceiver;
@@ -128,7 +139,8 @@ public class OpenNetworkNotifierTest extends WifiBaseTest {
         mNotificationController = new OpenNetworkNotifier(
                 mContext, mLooper.getLooper(), mFrameworkFacade, mClock, mWifiMetrics,
                 mWifiConfigManager, mWifiConfigStore, mConnectHelper, mNotificationBuilder,
-                mMakeBeforeBreakManager, mWifiNotificationManager, mWifiPermissionsUtil);
+                mMakeBeforeBreakManager, mWifiNotificationManager, mWifiPermissionsUtil,
+                mWifiSettingsConfigStore, mFeatureFlags);
         ArgumentCaptor<BroadcastReceiver> broadcastReceiverCaptor =
                 ArgumentCaptor.forClass(BroadcastReceiver.class);
         verify(mContext).registerReceiver(broadcastReceiverCaptor.capture(), any(), any(), any());
@@ -137,6 +149,10 @@ public class OpenNetworkNotifierTest extends WifiBaseTest {
                 ArgumentCaptor.forClass(ContentObserver.class);
         verify(mFrameworkFacade).registerContentObserver(eq(mContext), any(Uri.class), eq(true),
                 observerCaptor.capture());
+        verify(mFrameworkFacade).getIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1);
+        when(mWifiSettingsConfigStore.get(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON)).thenReturn(true);
         mContentObserver = observerCaptor.getValue();
         mNotificationController.handleScreenStateChanged(true);
         when(mWifiConfigManager.addOrUpdateNetwork(any(), anyInt()))
@@ -159,16 +175,206 @@ public class OpenNetworkNotifierTest extends WifiBaseTest {
     }
 
     /**
-     * When feature setting is toggled, WifiMetrics should track the disabled setting state.
+     * On {@link OpenNetworkNotifier} construction, a listener will be registered with
+     * WifiSettingsConfigStore to sync setting state.
      */
     @Test
-    public void onFeatureDisable_setWifiNetworksAvailableNotificationSettingDisabled() {
+    public void onCreate_registerSettingsConfigStoreListener()
+            throws Settings.SettingNotFoundException {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+        mNotificationController = new OpenNetworkNotifier(
+                mContext, mLooper.getLooper(), mFrameworkFacade, mClock, mWifiMetrics,
+                mWifiConfigManager, mWifiConfigStore, mConnectHelper, mNotificationBuilder,
+                mMakeBeforeBreakManager, mWifiNotificationManager, mWifiPermissionsUtil,
+                mWifiSettingsConfigStore, mFeatureFlags);
+
+        // Verify and capture the listener registered with WifiSettingsConfigStore.
+        ArgumentCaptor<WifiSettingsConfigStore.OnSettingsChangedListener> listenerCaptor =
+                ArgumentCaptor.forClass(WifiSettingsConfigStore.OnSettingsChangedListener.class);
+        verify(mWifiSettingsConfigStore).registerChangeListener(
+                eq(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON),
+                listenerCaptor.capture(),
+                isNotNull());
+        WifiSettingsConfigStore.OnSettingsChangedListener listener = listenerCaptor.getValue();
+
+        // Verify the listener behavior with pre-configured Settings.Global value.
+        InOrder inOrder = inOrder(mFrameworkFacade);
+
+        // 1. Update to "enabled", different from the pre-configured Settings.Global value 0.
+        when(mFrameworkFacade.getIntegerSetting(any(),
+                eq(Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON))).thenReturn(0);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                true);
+        assertTrue(mNotificationController.isSettingEnabled());
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1);
+
+        // 2. Update to "disabled", the same as the pre-configured Settings.Global value 0.
+        when(mFrameworkFacade.getIntegerSetting(any(),
+                eq(Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON))).thenReturn(0);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                false);
+        assertFalse(mNotificationController.isSettingEnabled());
+        inOrder.verify(mFrameworkFacade, never()).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 0);
+
+        // 3. Update to "enabled", the same as the pre-configured Settings.Global value 1.
+        when(mFrameworkFacade.getIntegerSetting(any(),
+                eq(Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON))).thenReturn(1);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                true);
+        assertTrue(mNotificationController.isSettingEnabled());
+        inOrder.verify(mFrameworkFacade, never()).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1);
+
+        // 4. Update to "disabled", different from the pre-configured Settings.Global value 1.
+        when(mFrameworkFacade.getIntegerSetting(any(),
+                eq(Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON))).thenReturn(1);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                false);
+        assertFalse(mNotificationController.isSettingEnabled());
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 0);
+
+        // 5. Update to "enabled" when Settings.Global has no pre-configured value.
+        doThrow(Settings.SettingNotFoundException.class)
+                .when(mFrameworkFacade)
+                .getIntegerSetting(any(),
+                        eq(Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON));
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                true);
+        assertTrue(mNotificationController.isSettingEnabled());
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1);
+
+        // 6. Update to "disabled" when Settings.Global has no pre-configured value.
+        doThrow(Settings.SettingNotFoundException.class)
+                .when(mFrameworkFacade)
+                .getIntegerSetting(any(),
+                        eq(Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON));
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                false);
+        assertFalse(mNotificationController.isSettingEnabled());
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 0);
+    }
+
+    /**
+     * When feature setting is toggled from the legacy Settings.Global source, internal state should
+     * change accordingly and WifiMetrics should track the corresponding setting state. This test
+     * covers the legacy case when this setting hasn't been migrated to WifiSettingsConfigStore.
+     */
+    @Test
+    public void onFeatureChange_reactToContentObserverChanges() {
+        // Clear all invocation records during class initialization.
+        clearInvocations(mWifiMetrics);
+
         when(mFrameworkFacade.getIntegerSetting(mContext,
                 Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1)).thenReturn(0);
         mContentObserver.onChange(false);
-
         verify(mWifiMetrics).setIsWifiNetworksAvailableNotificationEnabled(OPEN_NET_NOTIFIER_TAG,
                 false);
+        assertFalse(mNotificationController.isSettingEnabled());
+
+        when(mFrameworkFacade.getIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1)).thenReturn(1);
+        mContentObserver.onChange(false);
+        verify(mWifiMetrics).setIsWifiNetworksAvailableNotificationEnabled(OPEN_NET_NOTIFIER_TAG,
+                true);
+        assertTrue(mNotificationController.isSettingEnabled());
+    }
+
+    /**
+     * When feature setting is toggled from the legacy Settings.Global source, internal state should
+     * change accordingly, value should be synced with the WifiSettingsConfigStore Key, and
+     * WifiMetrics should track the corresponding setting state.
+     */
+    @Test
+    public void onFeatureChange_reactToContentObserverChangesAndSyncWithSettingsConfig() {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+        InOrder inOrder = inOrder(mWifiMetrics, mWifiSettingsConfigStore);
+
+        // 1. Settings.Global updates the value to false and WifiSettingsConfigStore already has
+        // the same value.
+        when(mFrameworkFacade.getIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1)).thenReturn(0);
+        when(mWifiSettingsConfigStore.get(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON)).thenReturn(false);
+        mContentObserver.onChange(/*selfChange=*/ false);
+        inOrder.verify(mWifiMetrics).setIsWifiNetworksAvailableNotificationEnabled(
+                OPEN_NET_NOTIFIER_TAG,
+                false);
+        assertFalse(mNotificationController.isSettingEnabled());
+        inOrder.verify(mWifiSettingsConfigStore, never()).put(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, false);
+
+        // 2. Settings.Global updates the value to false and WifiSettingsConfigStore has a
+        // different value.
+        when(mFrameworkFacade.getIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1)).thenReturn(0);
+        when(mWifiSettingsConfigStore.get(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON)).thenReturn(true);
+        mContentObserver.onChange(/*selfChange=*/ false);
+        inOrder.verify(mWifiMetrics).setIsWifiNetworksAvailableNotificationEnabled(
+                OPEN_NET_NOTIFIER_TAG,
+                false);
+        assertFalse(mNotificationController.isSettingEnabled());
+        inOrder.verify(mWifiSettingsConfigStore).put(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, false);
+
+        // 3. Settings.Global updates the value to true and WifiSettingsConfigStore already has
+        // the same value.
+        when(mFrameworkFacade.getIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1)).thenReturn(1);
+        when(mWifiSettingsConfigStore.get(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON)).thenReturn(true);
+        mContentObserver.onChange(/*selfChange=*/ false);
+        inOrder.verify(mWifiMetrics).setIsWifiNetworksAvailableNotificationEnabled(
+                OPEN_NET_NOTIFIER_TAG,
+                true);
+        assertTrue(mNotificationController.isSettingEnabled());
+        inOrder.verify(mWifiSettingsConfigStore, never()).put(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, true);
+
+        // 4. Settings.Global updates the value to true and WifiSettingsConfigStore has a
+        // different value.
+        when(mFrameworkFacade.getIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1)).thenReturn(1);
+        when(mWifiSettingsConfigStore.get(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON)).thenReturn(false);
+        mContentObserver.onChange(/*selfChange=*/ false);
+        inOrder.verify(mWifiMetrics).setIsWifiNetworksAvailableNotificationEnabled(
+                OPEN_NET_NOTIFIER_TAG,
+                true);
+        assertTrue(mNotificationController.isSettingEnabled());
+        inOrder.verify(mWifiSettingsConfigStore).put(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, true);
+    }
+
+    /**
+     * When feature setting is toggled from the setter, verify that the setting value in cache,
+     * WifiSettingsConfigStore, and Settings.Global are all updated accordingly.
+     */
+    @Test
+    public void onFeatureChange_reactToSetter() {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+
+        mNotificationController.setSettingsEnabled(true);
+        assertTrue(mNotificationController.isSettingEnabled());
+        verify(mWifiSettingsConfigStore).put(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, true);
+        verify(mFrameworkFacade).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 1);
+
+        mNotificationController.setSettingsEnabled(false);
+        assertFalse(mNotificationController.isSettingEnabled());
+        verify(mWifiSettingsConfigStore).put(
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, false);
+        verify(mFrameworkFacade).setIntegerSetting(mContext,
+                Settings.Global.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON, 0);
     }
 
     /**

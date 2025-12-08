@@ -66,9 +66,10 @@ public class PasspointObjectFactory{
      */
     public PasspointProvider makePasspointProvider(PasspointConfiguration config,
             WifiKeyStore keyStore, WifiCarrierInfoManager wifiCarrierInfoManager, long providerId,
-            int creatorUid, String packageName, boolean isFromSuggestion, Clock clock) {
+            int creatorUid, String packageName, boolean isFromSuggestion, Clock clock,
+            int creatorUserId) {
         return new PasspointProvider(config, keyStore, wifiCarrierInfoManager, providerId,
-                creatorUid, packageName, isFromSuggestion, clock);
+                creatorUid, packageName, isFromSuggestion, clock, creatorUserId);
     }
 
     /**

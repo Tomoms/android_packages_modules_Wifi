@@ -622,7 +622,7 @@ public class WifiNanIfaceHidlImplTest extends WifiBaseTest {
         }
 
         mDut.initiateDataPath(tid, peerId, channelRequestType, channel, peer, interfaceName,
-                isOutOfBand, appInfo, CAP, securityConfig, (byte) 0);
+                isOutOfBand, appInfo, CAP, securityConfig, (byte) 0, false);
 
         verify(mIWifiNanIface).initiateDataPathRequest(eq(tid), captor.capture());
 
@@ -696,7 +696,7 @@ public class WifiNanIfaceHidlImplTest extends WifiBaseTest {
         }
 
         mDut.respondToDataPathRequest(tid, accept, ndpId, interfaceName,
-                appInfo, isOutOfBand, CAP, securityConfig, (byte) 0);
+                appInfo, isOutOfBand, CAP, securityConfig, (byte) 0, false);
 
         verify(mIWifiNanIface).respondToDataPathIndicationRequest(eq(tid), captor.capture());
 

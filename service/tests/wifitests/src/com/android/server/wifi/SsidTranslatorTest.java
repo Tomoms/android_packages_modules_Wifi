@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 
 import android.content.BroadcastReceiver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.MacAddress;
@@ -36,13 +37,18 @@ import android.net.wifi.WifiSsid;
 import android.os.Handler;
 import android.os.LocaleList;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -59,10 +65,14 @@ public class SsidTranslatorTest extends WifiBaseTest{
     private @Mock LocaleList mLocaleList;
     private @Mock Locale mLocale;
     private @Mock Handler mHandler;
+    MockitoSession mSession;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
+        mSession = ExtendedMockito.mockitoSession().strictness(Strictness.LENIENT)
+                .mockStatic(Flags.class).startMocking();
+        when(Flags.monitorIntentForAllUsers()).thenReturn(false);
         when(mWifiContext.getResources()).thenReturn(mResources);
         when(mResources.getConfiguration()).thenReturn(mConfiguration);
         when(mConfiguration.getLocales()).thenReturn(mLocaleList);
@@ -74,6 +84,11 @@ public class SsidTranslatorTest extends WifiBaseTest{
                         "zh,GBK",
                         "ko,EUC-KR",
                 });
+    }
+
+    @After
+    public void cleanUp() {
+        mSession.finishMocking();
     }
 
     /**
@@ -414,5 +429,14 @@ public class SsidTranslatorTest extends WifiBaseTest{
         // SSID is too long for any encoding, so return null.
         config.SSID = "\"こんにちは! This is an SSID!!!!!!!!!!!!!!!!!!!!\"";
         assertThat(ssidTranslator.getOriginalSsid(config)).isNull();
+    }
+
+    @Test
+    public void testUsingRegisterReceiverForAllUsersWhenFlagEnabled() throws Exception {
+        when(Flags.monitorIntentForAllUsers()).thenReturn(true);
+        SsidTranslator ssidTranslator = new SsidTranslator(mWifiContext, mHandler);
+        ssidTranslator.handleBootCompleted();
+        verify(mWifiContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
+                any(IntentFilter.class), eq(null), eq(mHandler));
     }
 }

@@ -666,6 +666,21 @@ public class WifiGlobals {
         return numberOfMLDSupported != 0;
     }
 
+    /**
+     * Returns the internal scorer type. 0 is the Velocity scorer a.k.a. traditional AOSP scorer.
+     * 1 is the ML(Machine Learning) scorer.
+     */
+    public int getInternalScorerType() {
+        return mWifiResourceCache.getInteger(R.integer.config_internalScorerType);
+    }
+
+    /**
+     * Returns true if the external scorer should take priority over the internal scorer.
+     */
+    public boolean prioritizeExternalScorer() {
+        return mWifiResourceCache.getBoolean(R.bool.config_prioritizeExternalScorer);
+    }
+
     /** Dump method for debugging */
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("Dump of WifiGlobals");

@@ -734,7 +734,7 @@ public class UsdRequestManager {
                 return;
             }
             UsdSession usdSession = mUsdSessions.get(USD_TEMP_SESSION_ID);
-            if (isValidSession(usdSession, USD_TEMP_SESSION_ID, Role.PUBLISHER)) return;
+            if (!isValidSession(usdSession, USD_TEMP_SESSION_ID, Role.PUBLISHER)) return;
             usdSession.sessionCleanup();
             try {
                 usdSession.mIPublishSessionCallback.onPublishFailed(errorCode);
@@ -798,7 +798,7 @@ public class UsdRequestManager {
             }
             // Check whether events are enabled for the publisher.
             UsdSession usdSession = mUsdSessions.get(info.ownId);
-            if (isValidSession(usdSession, info.ownId, Role.PUBLISHER)) return;
+            if (!isValidSession(usdSession, info.ownId, Role.PUBLISHER)) return;
             if (!usdSession.mPublishConfig.isEventsEnabled()) return;
             // Add the peer to the session if not already present.
             UsdPeer peer = new UsdPeer(info.ownId, info.peerId, info.peerMacAddress);
@@ -822,7 +822,7 @@ public class UsdRequestManager {
             // Add the peer to the session if not already present.
             UsdPeer peer = new UsdPeer(info.ownId, info.peerId, info.peerMacAddress);
             UsdSession usdSession = mUsdSessions.get(info.ownId);
-            if (isValidSession(usdSession, info.ownId, Role.SUBSCRIBER)) return;
+            if (!isValidSession(usdSession, info.ownId, Role.SUBSCRIBER)) return;
             usdSession.addPeerOnce(peer);
             try {
                 // Pass unique peer hash to the application. When the application gives back the
@@ -845,7 +845,7 @@ public class UsdRequestManager {
             // Add the peer to the session if not already present.
             UsdPeer peer = new UsdPeer(ownId, peerId, peerMacAddress);
             UsdSession usdSession = mUsdSessions.get(ownId);
-            if (isValidSession(usdSession, ownId, mRequesterRole)) return;
+            if (!isValidSession(usdSession, ownId, mRequesterRole)) return;
             usdSession.addPeerOnce(peer);
             try {
                 // Pass unique peer hash to the application. When the application gives back the

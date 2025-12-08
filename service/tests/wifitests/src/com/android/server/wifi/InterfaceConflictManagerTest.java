@@ -26,6 +26,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -805,5 +806,18 @@ public class InterfaceConflictManagerTest extends WifiBaseTest{
         assertFalse(mDut.needsUserApprovalToDelete(
                 HDM_CREATE_IFACE_NAN, mWsHelper,
                 HDM_CREATE_IFACE_P2P, mExistingWsHelper));
+    }
+
+    @Test
+    public void testUsingRegisterReceiverForAllUsersWhenFlagEnabled() throws Exception {
+        when(mResources.getBoolean(R.bool.config_wifiUserApprovalNotRequireForDisconnectedP2p))
+                .thenReturn(true);
+        when(Flags.monitorIntentForAllUsers()).thenReturn(true);
+        initInterfaceConflictManager();
+
+        verify(mWifiContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
+                argThat(filter -> filter.hasAction(
+                        WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)),
+                eq(null), any());
     }
 }

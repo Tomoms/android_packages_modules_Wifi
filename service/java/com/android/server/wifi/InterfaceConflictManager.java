@@ -111,7 +111,7 @@ public class InterfaceConflictManager {
         // Monitor P2P connection for auto-approval
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION);
-        mContext.registerReceiver(new BroadcastReceiver() {
+        BroadcastReceiver p2pConnectionChangeReceiver =  new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
@@ -125,8 +125,13 @@ public class InterfaceConflictManager {
                     }
                 }
 
-            }
-        }, intentFilter);
+            }};
+        if (Flags.monitorIntentForAllUsers()) {
+            mContext.registerReceiverForAllUsers(p2pConnectionChangeReceiver,
+                    intentFilter, null, mThreadRunner.getHandler());
+        } else {
+            mContext.registerReceiver(p2pConnectionChangeReceiver, intentFilter);
+        }
     }
 
     /**

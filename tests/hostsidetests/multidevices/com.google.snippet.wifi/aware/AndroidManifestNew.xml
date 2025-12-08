@@ -27,6 +27,7 @@
                        com.google.android.mobly.snippet.bundled.WifiManagerSnippet"/>
         <meta-data
                 android:name="mobly-object-converter"
+                tools:replace="android:value"
                 android:value="com.google.snippet.wifi.aware.WifiAwareSnippetConverter"/>
     </application>
     <!-- Add an instrumentation tag so that the app can be launched through an

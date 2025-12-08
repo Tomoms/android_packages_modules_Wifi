@@ -29,18 +29,21 @@ import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_GENL_NAME
 import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_MULTICAST_GROUP_MLME;
 import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_MULTICAST_GROUP_REG;
 import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_MULTICAST_GROUP_SCAN;
+import static com.android.server.wifi.nl80211.NetlinkConstants.NLMSG_DONE;
+import static com.android.server.wifi.nl80211.NetlinkConstants.NLMSG_ERROR;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.os.Handler;
-import android.os.HandlerThread;
 import android.system.ErrnoException;
 import android.util.Log;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.modules.utils.BackgroundThread;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNlAttr;
 import com.android.net.module.util.netlink.StructNlMsgHdr;
+import com.android.wifi.flags.Flags;
 
 import java.io.FileDescriptor;
 import java.io.InterruptedIOException;
@@ -67,8 +70,8 @@ public class Nl80211Proxy {
     private FileDescriptor mNetlinkFd;
     private short mNl80211FamilyId;
     private int mSequenceNumber;
-    private Handler mAsyncHandler;
-
+    private Handler mWifiHandler;
+    private Nl80211BroadcastMonitor mBroadcastMonitor;
     private Map<String, Integer> mMulticastGroups = new HashMap<>();
 
     /**
@@ -83,8 +86,8 @@ public class Nl80211Proxy {
         void onResponse(@Nullable List<GenericNetlinkMsg> responses);
     }
 
-    public Nl80211Proxy(HandlerThread asyncHandlerThread) {
-        mAsyncHandler = new Handler(asyncHandlerThread.getLooper());
+    public Nl80211Proxy(Handler wifiHandler) {
+        mWifiHandler = wifiHandler;
     }
 
     private int getSequenceNumber() {
@@ -115,33 +118,52 @@ public class Nl80211Proxy {
         }
     }
 
-    private static @Nullable List<GenericNetlinkMsg> parseNl80211MessagesFromBuffer(
+    private static @Nullable GenericNetlinkMsg parseNl80211MessageFromBuffer(
             @NonNull ByteBuffer buffer) {
-        if (buffer == null) return null;
-        List<GenericNetlinkMsg> parsedMessages = new ArrayList<>();
-
-        // Expect buffer to be the exact size of all the contained messages
-        while (buffer.remaining() > 0) {
-            GenericNetlinkMsg message = GenericNetlinkMsg.parse(buffer);
-            if (message == null) {
-                Log.e(TAG, "Unable to parse a received message. numParsed=" + parsedMessages.size()
-                        + ", bufRemaining=" + buffer.remaining());
-                return null;
-            }
-            parsedMessages.add(message);
+        if (buffer.remaining() == 0) {
+            return null;
         }
-        return parsedMessages;
+        GenericNetlinkMsg message = GenericNetlinkMsg.parse(buffer);
+        if (message == null) {
+            Log.e(TAG, "Unable to parse a received message. bufRemaining=" + buffer.remaining());
+            return null;
+        }
+        return message;
     }
 
     private @Nullable List<GenericNetlinkMsg> receiveNl80211Messages() {
+        List<GenericNetlinkMsg> messages = new ArrayList<>();
         try {
-            ByteBuffer recvBuffer = NetlinkUtils.recvMessage(
-                    mNetlinkFd, NetlinkUtils.DEFAULT_RECV_BUFSIZE, NetlinkUtils.IO_TIMEOUT_MS);
-            return parseNl80211MessagesFromBuffer(recvBuffer);
+            while (true) {
+                ByteBuffer recvBuffer =
+                        NetlinkUtils.recvMessage(
+                                mNetlinkFd,
+                                NetlinkUtils.DEFAULT_RECV_BUFSIZE,
+                                NetlinkUtils.IO_TIMEOUT_MS);
+                GenericNetlinkMsg message = parseNl80211MessageFromBuffer(recvBuffer);
+                if (message == null) {
+                    Log.e(TAG, "Unable to parse a received message.");
+                    return null;
+                }
+                if (message.nlHeader.nlmsg_type == NLMSG_DONE) {
+                    break;
+                }
+                messages.add(message);
+                if (message.nlHeader.nlmsg_type == NLMSG_ERROR) {
+                    Log.e(TAG, "Received NLMSG_ERROR: " + message);
+                    break;
+                }
+                if ((message.nlHeader.nlmsg_flags & StructNlMsgHdr.NLM_F_MULTI)
+                        != StructNlMsgHdr.NLM_F_MULTI) {
+                    break;
+                }
+
+            }
         } catch (ErrnoException | IllegalArgumentException | InterruptedIOException e) {
             Log.i(TAG, "Unable to receive Nl80211 messages. " + e);
             return null;
         }
+        return messages;
     }
 
     /**
@@ -150,9 +172,31 @@ public class Nl80211Proxy {
      * @return true if initialization was successful, false otherwise
      */
     public boolean initialize() {
+        if (!Flags.nl80211ProxyEnabled()) {
+            Log.i(TAG, "Feature is not enabled");
+            return false;
+        }
+        if (mIsInitialized) {
+            Log.i(TAG, "Instance is already initialized");
+            return true;
+        }
         mNetlinkFd = createNetlinkFileDescriptor();
         if (mNetlinkFd == null) return false;
         if (!retrieveNl80211FamilyInfo()) return false;
+
+        // If the family info was successfully retrieved above, then
+        // all the required group IDs will be in the map.
+        List<Integer> requiredGroupIds = new ArrayList<>();
+        for (String groupName : sRequiredMulticastGroups) {
+            requiredGroupIds.add(mMulticastGroups.get(groupName));
+        }
+
+        // Start the broadcast monitor on the background thread.
+        // Received events will be posted to the Wifi thread.
+        Handler backgroundHandler = BackgroundThread.getHandler();
+        mBroadcastMonitor = new Nl80211BroadcastMonitor(
+                backgroundHandler, mWifiHandler, requiredGroupIds);
+        backgroundHandler.post(mBroadcastMonitor::start);
 
         Log.i(TAG, "Initialization was successful");
         mIsInitialized = true;
@@ -221,7 +265,7 @@ public class Nl80211Proxy {
             Log.e(TAG, "Null argument was provided");
             return false;
         }
-        mAsyncHandler.post(() -> {
+        mWifiHandler.post(() -> {
             List<GenericNetlinkMsg> responses = sendMessageAndReceiveResponses(request);
             executor.execute(() -> listener.onResponse(responses));
         });
@@ -311,19 +355,70 @@ public class Nl80211Proxy {
      * Wrapper to construct an Nl80211 request message.
      *
      * @param command Command ID for this request.
+     * @param flags Flags for this request.
+     * @param attributes Attributes for this request.
      * @return Nl80211 message, or null if the Nl80211Proxy has not been initialized
      */
     public @Nullable GenericNetlinkMsg createNl80211Request(
-            short command, StructNlAttr... attributes) {
+            short command, short flags, StructNlAttr... attributes) {
         if (!mIsInitialized) {
             Log.e(TAG, "Instance has not been initialized");
             return null;
         }
-        GenericNetlinkMsg request = new GenericNetlinkMsg(
-                command, mNl80211FamilyId, StructNlMsgHdr.NLM_F_REQUEST, getSequenceNumber());
+        GenericNetlinkMsg request =
+                new GenericNetlinkMsg(
+                        command,
+                        mNl80211FamilyId,
+                        (short) (flags | StructNlMsgHdr.NLM_F_REQUEST),
+                        getSequenceNumber());
         for (StructNlAttr attribute : attributes) {
             request.addAttribute(attribute);
         }
         return request;
+    }
+
+    /**
+     * Wrapper to construct an Nl80211 request message.
+     *
+     * @param command Command ID for this request.
+     * @param attributes Attributes for this request.
+     * @return Nl80211 message, or null if the Nl80211Proxy has not been initialized
+     */
+    public @Nullable GenericNetlinkMsg createNl80211Request(
+            short command, StructNlAttr... attributes) {
+        return createNl80211Request(command, (short) 0x0, attributes);
+    }
+
+
+    /**
+     * Register a callback to trigger when the specified broadcast event type is received.
+     *
+     * @param type Type of broadcast event on which to trigger the callback.
+     * @param callback Callback object that should be called.
+     */
+    public boolean registerBroadcastCallback(
+            short type, @NonNull Nl80211BroadcastMonitor.Nl80211BroadcastCallback callback) {
+        if (!mIsInitialized || mBroadcastMonitor == null) {
+            Log.e(TAG, "Unable to register broadcast callback before initialization");
+            return false;
+        }
+        mBroadcastMonitor.registerBroadcastCallback(type, callback);
+        return true;
+    }
+
+    /**
+     * Unregister a broadcast event callback that was previously registered.
+     *
+     * @param type Type of broadcast event which the callback is associated with.
+     * @param callback Callback object which was registered.
+     */
+    public boolean unregisterBroadcastCallback(
+            short type, @NonNull Nl80211BroadcastMonitor.Nl80211BroadcastCallback callback) {
+        if (!mIsInitialized || mBroadcastMonitor == null) {
+            Log.e(TAG, "Unable to unregister broadcast callback before initialization");
+            return false;
+        }
+        mBroadcastMonitor.unregisterBroadcastCallback(type, callback);
+        return true;
     }
 }

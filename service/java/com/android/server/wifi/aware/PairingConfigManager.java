@@ -16,6 +16,7 @@
 
 package com.android.server.wifi.aware;
 
+import android.net.wifi.util.HexEncoding;
 import android.util.Log;
 
 import java.nio.ByteBuffer;
@@ -67,6 +68,24 @@ public class PairingConfigManager {
             mAkm = akm;
             mLocalNik = localNik;
             mCipherSuite = cipherSuite;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("PairingSecurityAssociationInfo{");
+            sb.append("mPeerNik=");
+            sb.append(HexEncoding.encode(mPeerNik));
+            sb.append(", mNpk=");
+            sb.append(HexEncoding.encode(mNpk));
+            sb.append(", mAkm=");
+            sb.append(mAkm);
+            sb.append(", mLocalNik=");
+            sb.append(HexEncoding.encode(mLocalNik));
+            sb.append(", mCipherSuite=");
+            sb.append(mCipherSuite);
+            sb.append("}");
+            return sb.toString();
         }
     }
 

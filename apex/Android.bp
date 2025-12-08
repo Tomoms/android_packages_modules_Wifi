@@ -38,7 +38,8 @@ apex_defaults {
         "WifiDialog",
     ],
     binaries: select(release_flag("RELEASE_WIFI_MAINLINE_SUPPLICANT_BINARY"), {
-        true: ["wpa_supplicant_mainline"],
+        // TODO: Add the mainline supplicant binary into the flag-enabled list
+        true: [],
         default: [],
     }),
     jni_libs: [

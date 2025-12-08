@@ -27,8 +27,10 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import android.annotation.Nullable;
 import android.net.DscpPolicy;
@@ -37,12 +39,15 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.test.TestLooper;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.SupplicantStaIfaceHal.QosPolicyClassifierParams;
 import com.android.server.wifi.SupplicantStaIfaceHal.QosPolicyRequest;
 import com.android.server.wifi.SupplicantStaIfaceHal.QosPolicyRequestType;
 import com.android.server.wifi.SupplicantStaIfaceHal.QosPolicyStatus;
+import com.android.server.wifi.proto.WifiStatsLog;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -50,7 +55,9 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
@@ -72,11 +79,16 @@ public class QosPolicyRequestHandlerTest extends WifiBaseTest{
 
     @Captor ArgumentCaptor<List<QosPolicyStatus>> mQosStatusListCaptor;
     private InOrder mInOrder;
+    private MockitoSession mSession;
 
     @Before
     public void setUp() throws Exception {
         assumeTrue(SdkLevel.isAtLeastT());
         MockitoAnnotations.initMocks(this);
+        mSession = ExtendedMockito.mockitoSession()
+                .strictness(Strictness.LENIENT)
+                .mockStatic(WifiStatsLog.class, withSettings().lenient())
+                .startMocking();
         mLooper = new TestLooper();
         when(mHandlerThread.getLooper()).thenReturn(mLooper.getLooper());
         mQosPolicyRequestHandler = new QosPolicyRequestHandler(
@@ -103,6 +115,14 @@ public class QosPolicyRequestHandlerTest extends WifiBaseTest{
                     policyId, NetworkAgent.DSCP_POLICY_STATUS_DELETED));
             return null;
         }).when(mWifiNetworkAgent).sendRemoveDscpPolicy(anyInt());
+    }
+
+    @After
+    public void cleanup() {
+        validateMockitoUsage();
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     private QosPolicyRequest createQosPolicyRequest(
@@ -144,6 +164,13 @@ public class QosPolicyRequestHandlerTest extends WifiBaseTest{
         verify(mWifiNetworkAgent, times(1)).sendRemoveDscpPolicy(anyInt());
         verify(mWifiNative).sendQosPolicyResponse(eq(TEST_IFACE_NAME), eq(QOS_REQUEST_DIALOG_TOKEN),
                 eq(true), mQosStatusListCaptor.capture());
+
+        // Metrics should show that the AP requested 3 new policies, although not all
+        // were accepted and sent to the network agent.
+        ExtendedMockito.verify(() -> WifiStatsLog.write(
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_ACCESS_POINT_REQUESTED,
+                3, true /* srcIp */, false /* dstIp */, false /* dstPortRange */,
+                true /* srcPort */, false /* protocol */));
 
         assertEquals(policies.size(), mQosStatusListCaptor.getValue().size());
         for (QosPolicyStatus status : mQosStatusListCaptor.getValue()) {
@@ -189,6 +216,12 @@ public class QosPolicyRequestHandlerTest extends WifiBaseTest{
                 assertEquals(NetworkAgent.DSCP_POLICY_STATUS_SUCCESS, status.statusCode);
             }
         }
+
+        // Each batch of policy requests should be logged in the metrics.
+        ExtendedMockito.verify(() -> WifiStatsLog.write(
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_ACCESS_POINT_REQUESTED,
+                3, true /* srcIp */, false /* dstIp */, true /* dstPortRange */,
+                true /* srcPort */, false /* protocol */), times(numQosPolicyRequestEvents));
     }
 
     /**

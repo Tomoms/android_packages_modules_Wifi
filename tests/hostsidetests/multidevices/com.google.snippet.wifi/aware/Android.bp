@@ -54,6 +54,7 @@ android_test {
         "guava",
         "mobly-snippet-lib",
         "mobly-bundled-snippets-lib",
+        "snippet-uiautomator-lib",
     ],
     min_sdk_version: "31",
 }

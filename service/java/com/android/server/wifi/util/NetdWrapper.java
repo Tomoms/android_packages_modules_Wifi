@@ -25,6 +25,8 @@ import android.net.InterfaceConfigurationParcel;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 import android.net.RouteInfo;
+import android.net.RouteInfoParcel;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.RemoteException;
@@ -181,33 +183,36 @@ public class NetdWrapper {
     }
 
     private void modifyRoute(boolean add, int netId, RouteInfo route) {
-        final String ifName = route.getInterface();
-        final String dst = route.getDestination().toString();
-        final String nextHop;
+        final RouteInfoParcel rip = new RouteInfoParcel();
+        rip.destination = route.getDestination().toString();
+        rip.ifName = route.getInterface();
 
         switch (route.getType()) {
             case RouteInfo.RTN_UNICAST:
                 if (route.hasGateway()) {
-                    nextHop = route.getGateway().getHostAddress();
+                    rip.nextHop = route.getGateway().getHostAddress();
                 } else {
-                    nextHop = INetd.NEXTHOP_NONE;
+                    rip.nextHop = INetd.NEXTHOP_NONE;
                 }
                 break;
             case RouteInfo.RTN_UNREACHABLE:
-                nextHop = INetd.NEXTHOP_UNREACHABLE;
+                rip.nextHop = INetd.NEXTHOP_UNREACHABLE;
                 break;
             case RouteInfo.RTN_THROW:
-                nextHop = INetd.NEXTHOP_THROW;
+                rip.nextHop = INetd.NEXTHOP_THROW;
                 break;
             default:
-                nextHop = INetd.NEXTHOP_NONE;
+                rip.nextHop = INetd.NEXTHOP_NONE;
                 break;
         }
         try {
             if (add) {
-                mNetdService.networkAddRoute(netId, ifName, dst, nextHop);
+                if (isAtLeast25Q4()) mNetdService.networkAddRouteParcel(netId, rip);
+                else mNetdService.networkAddRoute(netId, rip.ifName, rip.destination, rip.nextHop);
             } else {
-                mNetdService.networkRemoveRoute(netId, ifName, dst, nextHop);
+                if (isAtLeast25Q4()) mNetdService.networkRemoveRouteParcel(netId, rip);
+                else mNetdService.networkRemoveRoute(netId, rip.ifName, rip.destination,
+                        rip.nextHop);
             }
         } catch (RemoteException | ServiceSpecificException e) {
             throw new IllegalStateException(e);
@@ -508,5 +513,10 @@ public class NetdWrapper {
         for (NetdEventObserver observer : mObservers) {
             observer.interfaceLinkStateChanged(iface, up);
         }
+    }
+
+    /** Checks if the device is running on a release version of Android 25Q4 or newer. */
+    private boolean isAtLeast25Q4() {
+        return Build.VERSION.SDK_INT_FULL > Build.VERSION_CODES_FULL.BAKLAVA;
     }
 }

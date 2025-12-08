@@ -93,7 +93,7 @@ public class WifiNetworkSelector {
      * as unconnected when filtering scan results.
      */
     @VisibleForTesting
-    public static final int WIFI_POOR_SCORE = ConnectedScore.WIFI_TRANSITION_SCORE - 10;
+    public static final int WIFI_POOR_SCORE = ConnectedScorer.WIFI_TRANSITION_SCORE - 10;
 
     /**
      * The identifier string of the CandidateScorer to use (in the absence of overrides).
@@ -1143,53 +1143,51 @@ public class WifiNetworkSelector {
             }
             // Continue candidate selection but only allow the user connect choice as candidate
             localLog("Current network is sufficient. Continue network selection only "
-                    + "considering user connect choice: " + userConnectChoiceKey);
+                    + "considering current network and user connect choice: "
+                    + userConnectChoiceKey);
         } else {
             userConnectChoiceKey = null;
         }
 
         WifiCandidates wifiCandidates = new WifiCandidates(mWifiScoreCard, mContext);
-        if (userConnectChoiceKey == null) {
-            // Add connected network as candidates unless only considering connect choice.
-            for (ClientModeManagerState cmmState : cmmStates) {
-                // Always get the current BSSID from WifiInfo in case that firmware initiated
-                // roaming happened.
-                String currentBssid = cmmState.wifiInfo.getBSSID();
-                WifiConfiguration currentNetwork =
-                        mWifiConfigManager.getConfiguredNetwork(cmmState.wifiInfo.getNetworkId());
-                if (currentNetwork != null && currentBssid != null) {
-                    wifiCandidates.setCurrent(currentNetwork.networkId, currentBssid);
-                    // We always want the current network to be a candidate so that it can
-                    // participate.
-                    // It may also get re-added by a nominator, in which case this fallback
-                    // will be replaced.
-                    MacAddress bssid = MacAddress.fromString(currentBssid);
-                    SecurityParams params = currentNetwork.getNetworkSelectionStatus()
-                            .getLastUsedSecurityParams();
-                    if (null == params) {
-                        localLog("No known candidate security params for current network.");
-                        continue;
-                    }
-                    WifiCandidates.Key key = new WifiCandidates.Key(
-                            ScanResultMatchInfo.fromWifiConfiguration(currentNetwork),
-                            bssid, currentNetwork.networkId,
-                            params.getSecurityType());
-                    ScanDetail scanDetail = findScanDetailForBssid(mFilteredNetworks, currentBssid);
-                    int predictedTputMbps = (scanDetail == null) ? 0
-                            : predictThroughput(scanDetail);
-                    wifiCandidates.add(key, currentNetwork,
-                            NetworkNominator.NOMINATOR_ID_CURRENT,
-                            cmmState.wifiInfo.getRssi(),
-                            cmmState.wifiInfo.getFrequency(),
-                            ScanResult.CHANNEL_WIDTH_20MHZ, // channel width unavailable in WifiInfo
-                            calculateLastSelectionWeight(currentNetwork.networkId,
-                                    WifiConfiguration.isMetered(currentNetwork, cmmState.wifiInfo)),
-                            WifiConfiguration.isMetered(currentNetwork, cmmState.wifiInfo),
-                            isFromCarrierOrPrivilegedApp(currentNetwork),
-                            predictedTputMbps,
-                            (scanDetail != null) ? scanDetail.getScanResult().getApMldMacAddress()
-                                    : null);
+        for (ClientModeManagerState cmmState : cmmStates) {
+            // Always get the current BSSID from WifiInfo in case that firmware initiated
+            // roaming happened.
+            String currentBssid = cmmState.wifiInfo.getBSSID();
+            WifiConfiguration currentNetwork =
+                    mWifiConfigManager.getConfiguredNetwork(cmmState.wifiInfo.getNetworkId());
+            if (currentNetwork != null && currentBssid != null) {
+                wifiCandidates.setCurrent(currentNetwork.networkId, currentBssid);
+                // We always want the current network to be a candidate so that it can
+                // participate.
+                // It may also get re-added by a nominator, in which case this fallback
+                // will be replaced.
+                MacAddress bssid = MacAddress.fromString(currentBssid);
+                SecurityParams params = currentNetwork.getNetworkSelectionStatus()
+                        .getLastUsedSecurityParams();
+                if (null == params) {
+                    localLog("No known candidate security params for current network.");
+                    continue;
                 }
+                WifiCandidates.Key key = new WifiCandidates.Key(
+                        ScanResultMatchInfo.fromWifiConfiguration(currentNetwork),
+                        bssid, currentNetwork.networkId,
+                        params.getSecurityType());
+                ScanDetail scanDetail = findScanDetailForBssid(mFilteredNetworks, currentBssid);
+                int predictedTputMbps = (scanDetail == null) ? 0
+                        : predictThroughput(scanDetail);
+                wifiCandidates.add(key, currentNetwork,
+                        NetworkNominator.NOMINATOR_ID_CURRENT,
+                        cmmState.wifiInfo.getRssi(),
+                        cmmState.wifiInfo.getFrequency(),
+                        ScanResult.CHANNEL_WIDTH_20MHZ, // channel width unavailable in WifiInfo
+                        calculateLastSelectionWeight(currentNetwork.networkId,
+                                WifiConfiguration.isMetered(currentNetwork, cmmState.wifiInfo)),
+                        WifiConfiguration.isMetered(currentNetwork, cmmState.wifiInfo),
+                        isFromCarrierOrPrivilegedApp(currentNetwork),
+                        predictedTputMbps,
+                        (scanDetail != null) ? scanDetail.getScanResult().getApMldMacAddress()
+                                : null);
             }
         }
 

@@ -39,6 +39,7 @@ import android.net.wifi.hotspot2.PasspointConfiguration;
 import android.net.wifi.hotspot2.pps.Credential.CertificateCredential;
 import android.net.wifi.hotspot2.pps.Credential.SimCredential;
 import android.net.wifi.hotspot2.pps.Credential.UserCredential;
+import android.net.wifi.util.Environment;
 import android.os.Looper;
 import android.os.Process;
 import android.text.TextUtils;
@@ -69,6 +70,7 @@ import com.android.server.wifi.hotspot2.anqp.VenueUrlElement;
 import com.android.server.wifi.proto.nano.WifiMetricsProto.UserActionEvent;
 import com.android.server.wifi.util.InformationElementUtil;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.Flags;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -513,10 +515,12 @@ public class PasspointManager {
         }
 
         mWifiCarrierInfoManager.tryUpdateCarrierIdForPasspoint(config);
+        int creatorUserId = (Environment.isSdkNewerThanB() && Flags.multiUserWifiEnhancement())
+                ? ActivityManager.getCurrentUser() : -2;
         // Create a provider and install the necessary certificates and keys.
         PasspointProvider newProvider = mObjectFactory.makePasspointProvider(config, mKeyStore,
                 mWifiCarrierInfoManager, mProviderIndex++, uid, packageName, isFromSuggestion,
-                mClock);
+                mClock, creatorUserId);
         newProvider.setTrusted(isTrusted);
         newProvider.setRestricted(isRestricted);
 
@@ -1422,7 +1426,8 @@ public class PasspointManager {
                 mWifiCarrierInfoManager,
                 mProviderIndex++, wifiConfig.creatorUid, null, false,
                 Arrays.asList(enterpriseConfig.getCaCertificateAlias()),
-                enterpriseConfig.getClientCertificateAlias(), null, false, false, mClock);
+                enterpriseConfig.getClientCertificateAlias(), null, false, false, mClock,
+                wifiConfig.getCreatorUserIdInternal());
         provider.enableVerboseLogging(mVerboseLoggingEnabled);
         mProviders.put(passpointConfig.getUniqueId(), provider);
         return true;
@@ -1474,7 +1479,7 @@ public class PasspointManager {
             @NonNull PasspointConfiguration passpointConfiguration,
             @NonNull List<ScanResult> scanResults) {
         PasspointProvider provider = mObjectFactory.makePasspointProvider(passpointConfiguration,
-                null, mWifiCarrierInfoManager, 0, 0, null, false, mClock);
+                null, mWifiCarrierInfoManager, 0, 0, null, false, mClock, 0);
         List<ScanResult> filteredScanResults = new ArrayList<>();
         for (ScanResult scanResult : scanResults) {
             PasspointMatch matchInfo = provider.match(getANQPElements(scanResult),

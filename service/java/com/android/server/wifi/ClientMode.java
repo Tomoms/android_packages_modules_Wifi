@@ -370,6 +370,11 @@ public interface ClientMode {
      */
     void setShouldReduceNetworkScore(boolean shouldReduceNetworkScore);
 
+    /**
+     * Set whether the network should get forced to restricted.
+     */
+    void setRestrictedNetworkDebug(boolean restricted);
+
 
     /**
      * update the capabilities

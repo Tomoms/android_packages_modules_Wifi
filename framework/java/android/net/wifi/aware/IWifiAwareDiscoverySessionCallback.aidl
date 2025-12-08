@@ -23,7 +23,7 @@ import android.net.wifi.rtt.RangingResult;
 /**
  * Callback interface that WifiAwareManager implements
  *
- * {@hide}
+ * @hide
  */
 oneway interface IWifiAwareDiscoverySessionCallback {
     void onSessionStarted(int discoverySessionId);

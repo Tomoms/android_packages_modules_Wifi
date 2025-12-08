@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,16 @@
  * limitations under the License.
  */
 
-package android.system.wifi.mainline_supplicant;
+package com.android.server.wifi.ml_connected_scorer;
 
-/**
- * Service protocols that use USD.
- */
-@Backing(type="int")
-enum UsdServiceProtoType {
-    /**
-     * Unknown service type.
-     */
-    UNKNOWN = 0,
+import java.util.Deque;
 
-    /**
-     * Generic service.
-     */
-    GENERIC = 1,
+/** Interface to wifi usability classifiers. */
+public interface WifiUsabilityClassifier {
 
-    /**
-     * CSA (Connectivity Standards Alliance) Matter.
-     *
-     * Note: CSA Matter is an open-source, royalty-free standard for smart home technology that
-     * allows devices to work with any Matter-certified ecosystem.
-     */
-    CSA_MATTER = 2,
+    /** Calculate a usability score for the wifi network based on the data provided */
+    double calculateScore(Deque<WifiUsabilityStatsEntryWrapper> data);
+
+    /** Returns the model id of this classifier */
+    int getModelId();
 }

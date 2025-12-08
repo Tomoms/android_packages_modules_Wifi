@@ -29,70 +29,70 @@ import java.io.FileDescriptor;
 import java.io.PrintWriter;
 
 /**
- * Observer for adaptive connectivity enable settings changes.
- * This is enabled by default. Will be toggled off via adb command or a settings
- * toggle by the user to disable adaptive connectivity.
+ * Observer for adaptive connectivity enable settings changes. This is enabled by default. Will be
+ * toggled off via adb command or a settings toggle by the user to disable adaptive connectivity.
  */
 public class AdaptiveConnectivityEnabledSettingObserver {
 
     private static final String TAG = "WifiAdaptConnObserver";
+
     /**
-     * Copy of the settings string. Can't directly use the constant because it is @hide.
-     * See {@link Settings.Secure#ADAPTIVE_CONNECTIVITY_ENABLED}.
-     * TODO(b/167709538): remove this hardcoded string and create new API in Wifi mainline.
+     * Copy of the {@link Settings.Secure#ADAPTIVE_CONNECTIVITY_ENABLED} string. This setting is
+     * used to enable master adaptive connectivity toggle. TODO(b/167709538): remove this hardcoded
+     * string and create new API in Wifi mainline.
      */
     @VisibleForTesting
-    public static final String SETTINGS_SECURE_ADAPTIVE_CONNECTIVITY_ENABLED =
-            "adaptive_connectivity_enabled";
+    public static final String ADAPTIVE_CONNECTIVITY_ENABLED = "adaptive_connectivity_enabled";
+
+    /**
+     * Copy of the {@link Settings.Secure#ADAPTIVE_CONNECTIVITY_WIFI_ENABLED} string. This setting
+     * is used to enable adaptive connectivity toggle for wifi. If this setting is not set, the
+     * observer will use {@link #ADAPTIVE_CONNECTIVITY_ENABLED} to check the master adaptive
+     * connectivity setting.
+     */
+    @VisibleForTesting
+    public static final String ADAPTIVE_CONNECTIVITY_WIFI_ENABLED =
+            "adaptive_connectivity_wifi_enabled";
 
     private final WifiMetrics mWifiMetrics;
     private final FrameworkFacade mFrameworkFacade;
     private final Context mContext;
-
     private final ContentObserver mContentObserver;
-
+    private String mObservedSettingsKey;
     private boolean mAdaptiveConnectivityEnabled = true;
 
-    public AdaptiveConnectivityEnabledSettingObserver(Handler handler,
-            WifiMetrics wifiMetrics, FrameworkFacade frameworkFacade,
+    public AdaptiveConnectivityEnabledSettingObserver(
+            Handler handler,
+            WifiMetrics wifiMetrics,
+            FrameworkFacade frameworkFacade,
             Context context) {
         mWifiMetrics = wifiMetrics;
         mFrameworkFacade = frameworkFacade;
         mContext = context;
-        mContentObserver = new ContentObserver(handler) {
-            @Override
-            public void onChange(boolean selfChange) {
-                handleChange();
-            }
-        };
-    }
-
-    private void handleChange() {
-        mAdaptiveConnectivityEnabled = readValueFromSettings();
-        Log.d(TAG, "Adaptive connectivity status changed: " + mAdaptiveConnectivityEnabled);
-        mWifiMetrics.setAdaptiveConnectivityState(mAdaptiveConnectivityEnabled);
-        mWifiMetrics.logUserActionEvent(
-                WifiMetrics.convertAdaptiveConnectivityStateToUserActionEventType(
-                        mAdaptiveConnectivityEnabled));
+        mContentObserver =
+                new ContentObserver(handler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        handleChange();
+                    }
+                };
     }
 
     /** Register settings change observer. */
     public void initialize() {
-        Uri uri = Settings.Secure.getUriFor(SETTINGS_SECURE_ADAPTIVE_CONNECTIVITY_ENABLED);
+        String settingsKey = getObservedSettingsKey();
+        Uri uri = Settings.Secure.getUriFor(settingsKey);
         if (uri == null) {
-            Log.e(TAG, "Adaptive connectivity user toggle does not exist in Settings");
+            Log.e(
+                    TAG,
+                    "Adaptive connectivity user toggle does not exist in Settings for key "
+                            + settingsKey);
             return;
         }
-        mFrameworkFacade.registerContentObserver(
-                mContext, uri, true, mContentObserver);
+        mFrameworkFacade.registerContentObserver(mContext, uri, true, mContentObserver);
         mAdaptiveConnectivityEnabled = readValueFromSettings();
         Log.d(TAG, "Adaptive connectivity status initialized to: " + mAdaptiveConnectivityEnabled);
         mWifiMetrics.setAdaptiveConnectivityState(mAdaptiveConnectivityEnabled);
-    }
-
-    private boolean readValueFromSettings() {
-        return mFrameworkFacade.getSecureIntegerSetting(
-                mContext, SETTINGS_SECURE_ADAPTIVE_CONNECTIVITY_ENABLED, 1) == 1;
     }
 
     /** True if adaptive connectivity is enabled, false otherwise. */
@@ -104,5 +104,30 @@ public class AdaptiveConnectivityEnabledSettingObserver {
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
         pw.println("Dump of AdaptiveConnectivityEnabledSettingObserver");
         pw.println("mAdaptiveConnectivityEnabled=" + mAdaptiveConnectivityEnabled);
+    }
+
+    private void handleChange() {
+        mAdaptiveConnectivityEnabled = readValueFromSettings();
+        Log.d(TAG, "Adaptive connectivity status changed: " + mAdaptiveConnectivityEnabled);
+        mWifiMetrics.setAdaptiveConnectivityState(mAdaptiveConnectivityEnabled);
+        mWifiMetrics.logUserActionEvent(
+                WifiMetrics.convertAdaptiveConnectivityStateToUserActionEventType(
+                        mAdaptiveConnectivityEnabled));
+    }
+
+    private boolean readValueFromSettings() {
+        return mFrameworkFacade.getSecureIntegerSetting(mContext, getObservedSettingsKey(), 1) == 1;
+    }
+
+    private String getObservedSettingsKey() {
+        if (mObservedSettingsKey == null) {
+            mObservedSettingsKey =
+                    mFrameworkFacade.getSecureIntegerSetting(
+                                            mContext, ADAPTIVE_CONNECTIVITY_WIFI_ENABLED, -1)
+                                    != -1
+                            ? ADAPTIVE_CONNECTIVITY_WIFI_ENABLED
+                            : ADAPTIVE_CONNECTIVITY_ENABLED;
+        }
+        return mObservedSettingsKey;
     }
 }

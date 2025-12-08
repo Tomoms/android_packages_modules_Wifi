@@ -37,6 +37,7 @@ import android.net.wifi.p2p.nsd.WifiP2pServiceInfo;
 import android.net.wifi.p2p.nsd.WifiP2pServiceRequest;
 import android.net.wifi.p2p.nsd.WifiP2pUpnpServiceInfo;
 import android.net.wifi.p2p.nsd.WifiP2pUpnpServiceRequest;
+import android.os.Build;
 import android.os.Bundle;
 import android.widget.Button;
 
@@ -125,8 +126,10 @@ public class WifiP2pManagerSnippet implements Snippet {
         mContext = ApplicationProvider.getApplicationContext();
 
         checkPermissions(mContext, Manifest.permission.ACCESS_WIFI_STATE,
-                Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.NEARBY_WIFI_DEVICES);
+                Manifest.permission.CHANGE_WIFI_STATE, Manifest.permission.ACCESS_FINE_LOCATION);
+        if (Build.VERSION.SDK_INT >= 33) {
+            checkPermissions(mContext, Manifest.permission.NEARBY_WIFI_DEVICES);
+        }
 
         mP2pManager = mContext.getSystemService(WifiP2pManager.class);
 

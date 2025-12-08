@@ -287,9 +287,16 @@ public class WifiNetworkFactory extends NetworkFactory {
                 Log.v(TAG, "Received " + scanResults.length + " scan results");
             }
             handleScanResults(scanResults);
-            if (!mSkipUserDialogue && mActiveMatchedScanResults != null) {
-                sendNetworkRequestMatchCallbacksForActiveRequest(
-                        mActiveMatchedScanResults.values());
+            if (mActiveMatchedScanResults != null) {
+                if (mSkipUserDialogue) {
+                    if (!mActiveMatchedScanResults.isEmpty()) {
+                        // Already find result, device will start connection
+                        return;
+                    }
+                } else {
+                    sendNetworkRequestMatchCallbacksForActiveRequest(
+                            mActiveMatchedScanResults.values());
+                }
             }
             scheduleNextPeriodicScan();
         }
@@ -1095,11 +1102,8 @@ public class WifiNetworkFactory extends NetworkFactory {
 
     // Helper method to remove the provided network configuration from WifiConfigManager, if it was
     // added by an app's specifier request.
-    private void disconnectAndRemoveNetworkFromWifiConfigManager(
+    private void removeNetworkFromWifiConfigManager(
             @Nullable WifiConfiguration network) {
-        // Trigger a disconnect first.
-        if (mClientModeManager != null) mClientModeManager.disconnect();
-
         if (network == null) return;
         WifiConfiguration wcmNetwork =
                 mWifiConfigManager.getConfiguredNetwork(network.getProfileKey());
@@ -1414,9 +1418,6 @@ public class WifiNetworkFactory extends NetworkFactory {
         if (mClientModeManager != null) {
             // Set to false anyway, because no network request is active.
             mWifiConnectivityManager.setSpecificNetworkRequestInProgress(false);
-            if (mContext.getResources().getBoolean(R.bool.config_wifiUseHalApiToDisableFwRoaming)) {
-                mClientModeManager.enableRoaming(true); // Re-enable roaming.
-            }
             if (mVerboseLoggingEnabled) {
                 Log.v(TAG, "removeClientModeManager, role: " + mClientModeManagerRole);
             }
@@ -1431,7 +1432,7 @@ public class WifiNetworkFactory extends NetworkFactory {
     private void teardownForActiveRequest() {
         if (mPendingConnectionSuccess) {
             Log.i(TAG, "Disconnecting from network on reset");
-            disconnectAndRemoveNetworkFromWifiConfigManager(mUserSelectedNetwork);
+            removeNetworkFromWifiConfigManager(mUserSelectedNetwork);
         }
         cleanupActiveRequest();
         // ensure there is no connected request in progress.
@@ -1481,20 +1482,12 @@ public class WifiNetworkFactory extends NetworkFactory {
             mCmiListener = new CmiListener();
             mClientModeImplMonitor.registerListener(mCmiListener);
         }
-        // Disable roaming.
-        if (mContext.getResources().getBoolean(R.bool.config_wifiUseHalApiToDisableFwRoaming)) {
-            // Note: This is an old HAL API, but since it wasn't being exercised before, we are
-            // being extra cautious and only using it on devices running >= S.
-            if (!mClientModeManager.enableRoaming(false)) {
-                Log.w(TAG, "Failed to disable roaming");
-            }
-        }
     }
 
     // Invoked at the termination of current connected request processing.
     private void teardownForConnectedNetwork() {
         Log.i(TAG, "Disconnecting from network on reset");
-        disconnectAndRemoveNetworkFromWifiConfigManager(mUserSelectedNetwork);
+        removeNetworkFromWifiConfigManager(mUserSelectedNetwork);
         mConnectedSpecificNetworkRequest = null;
         mConnectedSpecificNetworkRequestSpecifier = null;
         mConnectedUids.clear();
@@ -1566,7 +1559,10 @@ public class WifiNetworkFactory extends NetworkFactory {
         }
 
         // Disconnect from the current network before issuing a new connect request.
-        disconnectAndRemoveNetworkFromWifiConfigManager(mUserSelectedNetwork);
+        if (mClientModeManager != null) {
+            mClientModeManager.disconnect();
+        }
+        removeNetworkFromWifiConfigManager(mUserSelectedNetwork);
 
         // Trigger connection to the network.
         connectToNetwork(mUserSelectedNetwork);

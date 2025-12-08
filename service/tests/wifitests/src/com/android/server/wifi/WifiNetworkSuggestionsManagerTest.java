@@ -68,6 +68,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.Resources;
 import android.net.wifi.EAPConstants;
 import android.net.wifi.ISuggestionConnectionStatusListener;
@@ -105,6 +106,7 @@ import com.android.server.wifi.WifiNetworkSuggestionsManager.PerAppInfo;
 import com.android.server.wifi.hotspot2.PasspointManager;
 import com.android.server.wifi.util.LruConnectionTracker;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import org.junit.After;
@@ -222,8 +224,13 @@ public class WifiNetworkSuggestionsManagerTest extends WifiBaseTest {
         MockitoAnnotations.initMocks(this);
         mStaticMockSession = mockitoSession()
                 .mockStatic(WifiInjector.class)
+                .mockStatic(ActivityManager.class)
+                .mockStatic(Flags.class)
                 .startMocking();
         lenient().when(WifiInjector.getInstance()).thenReturn(mWifiInjector);
+        // Mock necessary method and enable flag by default to make sure test won't be broken.
+        lenient().when(ActivityManager.getCurrentUser()).thenReturn(0);
+        lenient().when(Flags.multiUserWifiEnhancement()).thenReturn(true);
         mLooper = new TestLooper();
 
         mInorder = inOrder(mContext, mWifiPermissionsUtil);
@@ -4588,14 +4595,6 @@ public class WifiNetworkSuggestionsManagerTest extends WifiBaseTest {
                 mWifiNetworkSuggestionsManager.add(Arrays.asList(networkSuggestion), TEST_UID_1,
                         TEST_PACKAGE_1, TEST_FEATURE));
 
-        // Adding carrier merged network is not metered will fail.
-        eapSimConfig.meteredOverride = WifiConfiguration.METERED_OVERRIDE_NONE;
-        networkSuggestion = createWifiNetworkSuggestion(
-                eapSimConfig, null, false, false, true, true, DEFAULT_PRIORITY_GROUP);
-        assertEquals(WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_ADD_INVALID,
-                mWifiNetworkSuggestionsManager.add(Arrays.asList(networkSuggestion), TEST_UID_1,
-                        TEST_PACKAGE_1, TEST_FEATURE));
-
         // Adding carrier merged network without a valid SubID will fail.
         eapSimConfig.meteredOverride = WifiConfiguration.METERED_OVERRIDE_METERED;
         eapSimConfig.subscriptionId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
@@ -5299,5 +5298,27 @@ public class WifiNetworkSuggestionsManagerTest extends WifiBaseTest {
         assertEquals(WifiManager.STATUS_NETWORK_SUGGESTIONS_ERROR_INTERNAL,
                 mWifiNetworkSuggestionsManager.remove(Collections.emptyList(), TEST_UID_1,
                         TEST_PACKAGE_1, ACTION_REMOVE_SUGGESTION_DISCONNECT));
+    }
+
+    @Test
+    public void testUsingRegisterReceiverForAllUsersWhenFlagEnabled() throws Exception {
+        when(Flags.monitorIntentForAllUsers()).thenReturn(true);
+        mWifiNetworkSuggestionsManager =
+                new WifiNetworkSuggestionsManager(
+                        mContext,
+                        new RunnerHandler(mLooper.getLooper(), 100, new LocalLog(128)),
+                        mWifiInjector,
+                        mWifiPermissionsUtil,
+                        mWifiConfigManager,
+                        mWifiConfigStore,
+                        mWifiMetrics,
+                        mWifiCarrierInfoManager,
+                        mWifiKeyStore,
+                        mLruConnectionTracker,
+                        mClock);
+        mLooper.dispatchAll();
+        verify(mContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
+                any(IntentFilter.class),
+                eq(null), any());
     }
 }

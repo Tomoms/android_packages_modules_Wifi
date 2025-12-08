@@ -36,6 +36,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import java.io.PrintWriter;
@@ -123,15 +124,24 @@ public class SsidTranslator {
             }
             mCharsetsPerLocaleLanguage.put(localeLanguage, charset);
         }
-        mWifiContext.registerReceiver(new BroadcastReceiver() {
+
+        BroadcastReceiver localeChangedReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (!Intent.ACTION_LOCALE_CHANGED.equals(intent.getAction())) {
                     return;
                 }
                 updateCurrentLocaleCharset();
-            }
-        }, new IntentFilter(Intent.ACTION_LOCALE_CHANGED), null, mWifiHandler);
+            }};
+        if (Flags.monitorIntentForAllUsers()) {
+            mWifiContext.registerReceiverForAllUsers(localeChangedReceiver,
+                    new IntentFilter(Intent.ACTION_LOCALE_CHANGED), null,
+                    mWifiHandler);
+        } else {
+            mWifiContext.registerReceiver(localeChangedReceiver,
+                    new IntentFilter(Intent.ACTION_LOCALE_CHANGED), null,
+                    mWifiHandler);
+        }
         updateCurrentLocaleCharset();
     }
 

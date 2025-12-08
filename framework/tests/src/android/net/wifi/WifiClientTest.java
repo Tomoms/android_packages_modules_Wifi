@@ -89,19 +89,6 @@ public class WifiClientTest {
     }
 
     /**
-     * Verify not-equals for 2 WifiClients with different disconnect reason.
-     */
-    @Test
-    public void testWifiClientEqualsFailsWhenDisconnectReasonIsDifferent() throws Exception {
-        WifiClient writeWifiClient = new WifiClient(MAC_ADDRESS, INTERFACE_NAME, DISCONNECT_REASON);
-        WifiClient writeWifiClientNotEquals = new WifiClient(MAC_ADDRESS, INTERFACE_NAME,
-                DeauthenticationReasonCode.REASON_AKMP_NOT_VALID);
-
-        assertNotEquals(writeWifiClient, writeWifiClientNotEquals);
-        assertNotEquals(writeWifiClient.hashCode(), writeWifiClientNotEquals.hashCode());
-    }
-
-    /**
      * Verify that getDisconnectReason() returns REASON_UNKNOWN as the default value.
      */
     @Test

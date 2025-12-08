@@ -119,11 +119,27 @@ class WifiSoftApTest(base_test.BaseTestClass):
       self.host.wifi.wifiUnregisterSoftApCallback()
 
   def test_local_only_softap_disconnect(self):
-    """Tests local-only SoftAp disconnection."""
+    """Tests local-only SoftAp disconnection.
+
+    This test will only run on devices with SDK level >= 33, which support
+    local-only SoftAp feature.
+    """
+    wifi_test_utils.skip_if_not_meet_min_sdk_level(self.host, 33)
+    wifi_test_utils.skip_if_not_meet_min_sdk_level(self.client, 33)
+
+    # TVs don't have the tethering UI and don't support SoftAP.
+    wifi_test_utils.skip_if_tv_device(self.host)
+    wifi_test_utils.skip_if_tv_device(self.client)
+
     self._test_softap_disconnect(use_local_only=True)
 
   def test_tethering_softap_disconnect(self):
     """Tests tethering SoftAp disconnection."""
+
+    # TVs don't have the tethering UI and don't support SoftAP.
+    wifi_test_utils.skip_if_tv_device(self.host)
+    wifi_test_utils.skip_if_tv_device(self.client)
+
     self._test_softap_disconnect(use_local_only=False)
 
   def _check_wifi_scan_result_for_ssid(
@@ -227,7 +243,7 @@ class WifiSoftApTest(base_test.BaseTestClass):
 
     current_configuration = self.host.wifi.wifiGetSoftApConfiguration()
     ssid = current_configuration['SSID']
-    passphrase = current_configuration['mPassphrase']
+    passphrase = current_configuration['Passphrase']
     return ssid, passphrase
 
   def _stop_tethering(self, ad: android_device.AndroidDevice) -> bool:

@@ -368,7 +368,7 @@ public class WakeupConfigStoreData implements StoreData {
 
     @Override
     public @WifiConfigStore.StoreFileId int getStoreFileId() {
-        // Shared general store.
+        // User general store.
         return WifiConfigStore.STORE_FILE_USER_GENERAL;
     }
 }

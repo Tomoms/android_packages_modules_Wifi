@@ -16,6 +16,7 @@
 
 package com.android.server.wifi;
 
+import android.annotation.Nullable;
 import android.net.wifi.WifiConfiguration;
 import android.telephony.SubscriptionManager;
 import android.util.ArraySet;
@@ -37,6 +38,25 @@ public class NonCarrierMergedNetworksStatusTracker {
     private long mMaxDisableDurationMs;
     private final MissingCounterTimerLockList<String> mTemporarilyDisabledNonCarrierMergedList;
     private final Set<String> mTemporarilyDisabledNonCarrierMergedListAtStart;
+    private Callback mListener;
+
+    /**
+     * Listener for changes to the restriction state.
+     */
+    public interface Callback {
+        /**
+         * Called when the Wi-Fi auto-join restriction to a subscription ID starts.
+         *
+         * @param subscriptionId the subscriptionId of carrier-merged networks that auto-join is
+         * restricted to.
+         */
+        void onRestrictionStarted(int subscriptionId);
+
+        /**
+         * Called when the Wi-Fi auto-join restriction to a subscription ID stops.
+         */
+        void onRestrictionStopped();
+    }
 
     public NonCarrierMergedNetworksStatusTracker(Clock clock) {
         mClock = clock;
@@ -45,6 +65,21 @@ public class NonCarrierMergedNetworksStatusTracker {
                         WifiConfigManager.SCAN_RESULT_MISSING_COUNT_THRESHOLD, mClock);
         mTemporarilyDisabledNonCarrierMergedListAtStart = new ArraySet<>();
         mSubscriptionId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
+    }
+
+    /**
+     * @return The subscription ID for which auto-join is restricted to, or
+     *         {@link SubscriptionManager#INVALID_SUBSCRIPTION_ID} if there is no restriction.
+     */
+    public int getRestrictionSubId() {
+        return mSubscriptionId;
+    }
+
+    /**
+     * @return true if a restriction is currently active.
+     */
+    public boolean isRestrictionActive() {
+        return mMaxDisableDurationMs != 0;
     }
 
     /**
@@ -58,10 +93,16 @@ public class NonCarrierMergedNetworksStatusTracker {
      */
     public void disableAllNonCarrierMergedNetworks(int subscriptionId, long minDisableDurationMs,
             long maxDisableDurationMs) {
+        boolean wasActive = isRestrictionActive();
+        int prevSubId = mSubscriptionId;
         mSubscriptionId = subscriptionId;
         mDisableStartTimeMs = mClock.getElapsedSinceBootMillis();
         mMinDisableDurationMs = minDisableDurationMs;
         mMaxDisableDurationMs = maxDisableDurationMs;
+
+        if (!wasActive || prevSubId != mSubscriptionId) {
+            mListener.onRestrictionStarted(subscriptionId);
+        }
     }
 
     /**
@@ -88,12 +129,17 @@ public class NonCarrierMergedNetworksStatusTracker {
      * Resets this class and re-enables auto-join for all non-carrier-merged networks.
      */
     public void clear() {
+        boolean wasActive = isRestrictionActive();
         mSubscriptionId = SubscriptionManager.INVALID_SUBSCRIPTION_ID;
         mDisableStartTimeMs = 0;
         mMinDisableDurationMs = 0;
         mMaxDisableDurationMs = 0;
         mTemporarilyDisabledNonCarrierMergedList.clear();
         mTemporarilyDisabledNonCarrierMergedListAtStart.clear();
+
+        if (wasActive) {
+            mListener.onRestrictionStopped();
+        }
     }
 
     /**
@@ -132,6 +178,13 @@ public class NonCarrierMergedNetworksStatusTracker {
     }
 
     /**
+     * Sets a listener for changes to the restriction state.
+     */
+    public void setListener(@Nullable Callback listener) {
+        mListener = listener;
+    }
+
+    /**
      * Dump information for debugging.
      */
     public void dump(FileDescriptor fd, PrintWriter pw, String[] args) {
@@ -141,6 +194,7 @@ public class NonCarrierMergedNetworksStatusTracker {
         pw.println("mDisableStartTimeMs=" + mDisableStartTimeMs);
         pw.println("mMinDisableDurationMs=" + mMinDisableDurationMs);
         pw.println("mMaxDisableDurationMs=" + mMaxDisableDurationMs);
+        pw.println("mListener=" + mListener);
         pw.println("mTemporarilyDisabledNonCarrierMergedListAtStart=");
         for (String s : mTemporarilyDisabledNonCarrierMergedListAtStart) {
             pw.println(s);

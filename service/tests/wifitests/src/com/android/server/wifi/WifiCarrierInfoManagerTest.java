@@ -16,6 +16,7 @@
 
 package com.android.server.wifi;
 
+import static android.Manifest.permission.NETWORK_SETTINGS;
 import static android.telephony.CarrierConfigManager.KEY_CARRIER_CONFIG_APPLIED_BOOL;
 import static android.telephony.TelephonyManager.DATA_ENABLED_REASON_CARRIER;
 import static android.telephony.TelephonyManager.DATA_ENABLED_REASON_THERMAL;
@@ -41,6 +42,7 @@ import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.eq;
@@ -73,6 +75,7 @@ import android.net.wifi.WifiStringResourceWrapper;
 import android.net.wifi.hotspot2.PasspointConfiguration;
 import android.net.wifi.hotspot2.pps.Credential;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelUuid;
 import android.os.PersistableBundle;
 import android.os.UserHandle;
@@ -93,6 +96,7 @@ import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.WifiCarrierInfoManager.SimAuthRequestData;
 import com.android.server.wifi.WifiCarrierInfoManager.SimAuthResponseData;
 import com.android.server.wifi.entitlement.PseudonymInfo;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import org.junit.After;
@@ -186,6 +190,7 @@ public class WifiCarrierInfoManagerTest extends WifiBaseTest {
 
     MockitoSession mMockingSession = null;
     TestLooper mLooper;
+    Handler mHandler;
     private WifiCarrierInfoStoreManagerData.DataSource mCarrierInfoDataSource;
     private ImsiPrivacyProtectionExemptionStoreData.DataSource mImsiDataSource;
     private ArgumentCaptor<BroadcastReceiver> mBroadcastReceiverCaptor =
@@ -200,7 +205,12 @@ public class WifiCarrierInfoManagerTest extends WifiBaseTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+        mMockingSession = ExtendedMockito.mockitoSession().strictness(Strictness.LENIENT)
+                .mockStatic(SubscriptionManager.class)
+                .mockStatic(Flags.class).startMocking();
+        when(Flags.monitorIntentForAllUsers()).thenReturn(false);
         mLooper = new TestLooper();
+        mHandler = new Handler(mLooper.getLooper());
         when(mContext.getSystemService(CarrierConfigManager.class))
                 .thenReturn(mCarrierConfigManager);
         when(mContext.getResources()).thenReturn(mResources);
@@ -247,7 +257,7 @@ public class WifiCarrierInfoManagerTest extends WifiBaseTest {
                 .thenReturn(mWifiStringResourceWrapper);
         mWifiCarrierInfoManager = new WifiCarrierInfoManager(mTelephonyManager,
                 mSubscriptionManager, mWifiInjector, mFrameworkFacade, mContext, mWifiConfigStore,
-                new Handler(mLooper.getLooper()), mWifiMetrics, mClock, mWifiPseudonymManager);
+                mHandler, mWifiMetrics, mClock, mWifiPseudonymManager);
         mWifiCarrierInfoManager.enableVerboseLogging(true);
         ArgumentCaptor<WifiCarrierInfoStoreManagerData.DataSource>
                 carrierInfoSourceArgumentCaptor =
@@ -280,9 +290,6 @@ public class WifiCarrierInfoManagerTest extends WifiBaseTest {
         when(mCarrierConfigManager.getConfigForSubId(anyInt()))
                 .thenReturn(generateTestCarrierConfig(false));
         when(mSubscriptionManager.getCompleteActiveSubscriptionInfoList()).thenReturn(mSubInfoList);
-        mMockingSession = ExtendedMockito.mockitoSession().strictness(Strictness.LENIENT)
-                .mockStatic(SubscriptionManager.class).startMocking();
-
         doReturn(DATA_SUBID).when(
                 () -> SubscriptionManager.getDefaultDataSubscriptionId());
         doReturn(true).when(
@@ -2598,4 +2605,28 @@ public class WifiCarrierInfoManagerTest extends WifiBaseTest {
 
         assertFalse(mWifiCarrierInfoManager.hasActiveSubInfo());
     }
+
+    @Test
+    public void testUsingRegisterReceiverForAllUsersWhenFlagEnabled() throws Exception {
+        when(Flags.monitorIntentForAllUsers()).thenReturn(true);
+        Looper.prepare();
+        mWifiCarrierInfoManager = new WifiCarrierInfoManager(mTelephonyManager,
+                mSubscriptionManager, mWifiInjector, mFrameworkFacade, mContext,
+                mWifiConfigStore, mHandler, mWifiMetrics,
+                mClock, mWifiPseudonymManager);
+        verify(mContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
+                argThat(filter -> filter.hasAction(NOTIFICATION_USER_DISMISSED_INTENT_ACTION)
+                        && filter.hasAction(NOTIFICATION_USER_ALLOWED_CARRIER_INTENT_ACTION)
+                        && filter.hasAction(NOTIFICATION_USER_DISALLOWED_CARRIER_INTENT_ACTION)
+                        && filter.hasAction(NOTIFICATION_USER_CLICKED_INTENT_ACTION)),
+                eq(NETWORK_SETTINGS), any(Handler.class));
+
+        verify(mContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
+                argThat(filter -> filter.hasAction(
+                        CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED)
+                        && filter.hasAction(
+                                TelephonyManager.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED)),
+                eq(null), any(Handler.class));
+    }
+
 }

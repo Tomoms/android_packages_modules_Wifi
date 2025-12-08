@@ -27,6 +27,8 @@ import javax.annotation.concurrent.ThreadSafe;
  */
 @ThreadSafe
 public class Clock {
+    /** Initial value in milliseconds for any timestamp variable */
+    public static final long INVALID_TIMESTAMP_MS = -1;
 
     /**
      * Get the current time of the clock in milliseconds.

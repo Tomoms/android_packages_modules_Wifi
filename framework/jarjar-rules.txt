@@ -108,6 +108,10 @@ rule com.android.internal.telephony.flags.*FeatureFlags* com.android.wifi.x.@0
 rule com.android.internal.telephony.flags.FeatureFlags* com.android.wifi.x.@0
 rule com.android.internal.telephony.flags.Flags com.android.wifi.x.@0
 
+rule android.multiuser.*FeatureFlags* com.android.wifi.x.@0
+rule android.multiuser.FeatureFlags* com.android.wifi.x.@0
+rule android.multiuser.Flags com.android.wifi.x.@0
+
 # Use our statically linked bouncy castle library
 rule org.bouncycastle.** com.android.wifi.x.@0
 # Use our statically linked protobuf library

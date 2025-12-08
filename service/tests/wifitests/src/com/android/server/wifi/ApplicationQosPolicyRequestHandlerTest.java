@@ -29,8 +29,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import android.content.Context;
 import android.net.wifi.IListListener;
@@ -41,15 +43,20 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.test.TestLooper;
 
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import com.android.modules.utils.build.SdkLevel;
+import com.android.server.wifi.proto.WifiStatsLog;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
@@ -64,6 +71,7 @@ public class ApplicationQosPolicyRequestHandlerTest {
 
     private ApplicationQosPolicyRequestHandler mDut;
     private TestLooper mLooper;
+    private MockitoSession mSession;
 
     @Mock ActiveModeWarden mActiveModeWarden;
     @Mock WifiNative mWifiNative;
@@ -99,6 +107,10 @@ public class ApplicationQosPolicyRequestHandlerTest {
     public void setUp() throws Exception {
         assumeTrue(SdkLevel.isAtLeastU());
         MockitoAnnotations.initMocks(this);
+        mSession = ExtendedMockito.mockitoSession()
+                .strictness(Strictness.LENIENT)
+                .mockStatic(WifiStatsLog.class, withSettings().lenient())
+                .startMocking();
         mApCallbackReceivedIfaces = new ArrayList<>();
 
         mLooper = new TestLooper();
@@ -110,6 +122,14 @@ public class ApplicationQosPolicyRequestHandlerTest {
         when(mClientModeManager0.getInterfaceName()).thenReturn(TEST_IFACE_NAME_0);
         when(mClientModeManager1.getInterfaceName()).thenReturn(TEST_IFACE_NAME_1);
         setupSynchronousResponse(SupplicantStaIfaceHal.QOS_POLICY_SCS_REQUEST_STATUS_SENT);
+    }
+
+    @After
+    public void cleanup() {
+        validateMockitoUsage();
+        if (mSession != null) {
+            mSession.finishMocking();
+        }
     }
 
     private QosPolicyParams createDownlinkPolicy(int policyId) {
@@ -266,7 +286,9 @@ public class ApplicationQosPolicyRequestHandlerTest {
     public void testDownlinkPolicyAddAndRemove_oneClientModeManager() throws Exception {
         when(mActiveModeWarden.getInternetConnectivityClientModeManagers())
                 .thenReturn(Arrays.asList(mClientModeManager0));
-        List<QosPolicyParams> policyList = createDownlinkPolicyList(5, TEST_POLICY_ID_START);
+        int numPolicies = 5;
+        List<QosPolicyParams> policyList =
+                createDownlinkPolicyList(numPolicies, TEST_POLICY_ID_START);
         mDut.queueAddRequest(policyList, mIListListener, mBinder, TEST_UID);
 
         verify(mWifiNative).addQosPolicyRequestForScs(eq(TEST_IFACE_NAME_0), anyList());
@@ -275,6 +297,12 @@ public class ApplicationQosPolicyRequestHandlerTest {
                 SupplicantStaIfaceHal.QOS_POLICY_SCS_RESPONSE_STATUS_SUCCESS);
         mLooper.dispatchAll();
         verifyApplicationCallback(WifiManager.QOS_REQUEST_STATUS_TRACKING);
+
+        ExtendedMockito.verify(() -> WifiStatsLog.write(
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED, numPolicies, TEST_UID,
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__DOWNLINK,
+                false, false, false, false, false, false, true /* ipVersion */, false, false,
+                false, false, false, false, false, false, false));
 
         // Request removal of all the policies.
         List<Integer> policyIds = getPolicyIdsFromPolicyList(policyList);
@@ -289,12 +317,22 @@ public class ApplicationQosPolicyRequestHandlerTest {
     public void testDownlinkPolicyAddAndRemove_twoClientModeManagers() throws Exception {
         when(mActiveModeWarden.getInternetConnectivityClientModeManagers())
                 .thenReturn(Arrays.asList(mClientModeManager0, mClientModeManager1));
-        List<QosPolicyParams> policyList = createDownlinkPolicyList(5, TEST_POLICY_ID_START);
+        int numPolicies = 5;
+        List<QosPolicyParams> policyList =
+                createDownlinkPolicyList(numPolicies, TEST_POLICY_ID_START);
         mDut.queueAddRequest(policyList, mIListListener, mBinder, TEST_UID);
 
         verify(mWifiNative).addQosPolicyRequestForScs(eq(TEST_IFACE_NAME_0), anyList());
         verify(mWifiNative).addQosPolicyRequestForScs(eq(TEST_IFACE_NAME_1), anyList());
         verifyApplicationCallback(WifiManager.QOS_REQUEST_STATUS_TRACKING);
+
+        // Metrics should only be logged once during the initial add,
+        // even though the request is processed on multiple interfaces.
+        ExtendedMockito.verify(() -> WifiStatsLog.write(
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED, numPolicies, TEST_UID,
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__DOWNLINK,
+                false, false, false, false, false, false, true /* ipVersion */, false, false,
+                false, false, false, false, false, false, false), times(1));
 
         triggerAndVerifyApCallback(TEST_IFACE_NAME_0, policyList,
                 SupplicantStaIfaceHal.QOS_POLICY_SCS_RESPONSE_STATUS_SUCCESS);
@@ -437,10 +475,19 @@ public class ApplicationQosPolicyRequestHandlerTest {
         reset(mWifiNative, mIListListener);
 
         // Adding 10 new policies should fail due to insufficient resources.
-        List<QosPolicyParams> policyList = createDownlinkPolicyList(10, TEST_POLICY_ID_START);
+        int numPolicies = 10;
+        List<QosPolicyParams> policyList =
+                createDownlinkPolicyList(numPolicies, TEST_POLICY_ID_START);
         mDut.queueAddRequest(policyList, mIListListener, mBinder, TEST_UID);
         verify(mWifiNative, never()).addQosPolicyRequestForScs(eq(TEST_IFACE_NAME_0), anyList());
         verifyApplicationCallback(WifiManager.QOS_REQUEST_STATUS_INSUFFICIENT_RESOURCES);
+
+        // Although the request was rejected, it should still be logged in the metrics.
+        ExtendedMockito.verify(() -> WifiStatsLog.write(
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED, numPolicies, TEST_UID,
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__DOWNLINK,
+                false, false, false, false, false, false, true /* ipVersion */, false, false,
+                false, false, false, false, false, false, false));
     }
 
     /**
@@ -689,5 +736,45 @@ public class ApplicationQosPolicyRequestHandlerTest {
         verify(mWifiNative, atLeastOnce()).addQosPolicyRequestForScs(
                 eq(TEST_IFACE_NAME_0), mPolicyListCaptor.capture());
         assertEquals(numUplinkPolicies, mPolicyListCaptor.getValue().size());
+    }
+
+    /**
+     * Tests that the metrics method can aggregate the parameters used across the entire batch.
+     * If at least one policy in the batch uses a specific classifier or characteristic,
+     * it should be marked as enabled in the logged atom.
+     */
+    @Test
+    public void testMetricsClassifierAggregation() {
+        // First policy uses several classifiers and no optional QoS characteristics
+        // (only mandatory characteristics).
+        assumeTrue(SdkLevel.isAtLeastV());
+        QosCharacteristics qosCharacteristics1 =
+                new QosCharacteristics.Builder(1, 2, 3, 4).build();
+        QosPolicyParams policy1 = new QosPolicyParams.Builder(1, QosPolicyParams.DIRECTION_UPLINK)
+                .setDscp(10)
+                .setProtocol(QosPolicyParams.PROTOCOL_UDP)
+                .setSourcePort(999)
+                .setQosCharacteristics(qosCharacteristics1)
+                .build();
+
+        // Second policy uses several optional QoS characteristics.
+        QosCharacteristics qosCharacteristics2 = new QosCharacteristics.Builder(1, 2, 3, 4)
+                .setBurstSizeOctets(4)
+                .setMaxMsduSizeOctets(8)
+                .setMsduLifetimeMillis(1000)
+                .build();
+        QosPolicyParams policy2 = new QosPolicyParams.Builder(2, QosPolicyParams.DIRECTION_UPLINK)
+                .setQosCharacteristics(qosCharacteristics2)
+                .build();
+
+        // Metrics event should combine the classifiers and characteristics used across all policies
+        mDut.queueAddRequest(Arrays.asList(policy1, policy2), mIListListener, mBinder, TEST_UID);
+        ExtendedMockito.verify(() -> WifiStatsLog.write(
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED,
+                2 /* numPolicies */, TEST_UID,
+                WifiStatsLog.WIFI_QOS_POLICIES_FROM_APPLICATION_REQUESTED__DIRECTION__UPLINK,
+                false, false, true /* srcPort */, false, false, true /* protocol */, false, false,
+                true /* dscp */, true /* qosCharacteristics */, true /* maxMsduSize */, false,
+                false, true /* burstSize */, true /* msduLifetime */, false));
     }
 }

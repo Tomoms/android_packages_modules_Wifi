@@ -64,20 +64,30 @@
     <string name="wifi_p2p_dialog2_sent_title_display_pin" msgid="511248898541903515">"Connexió de dispositius"</string>
     <string name="wifi_p2p_dialog2_sent_message" msgid="2544736217133674163">"S\'ha enviat una invitació a <xliff:g id="DEVICE_NAME">%1$s</xliff:g>."</string>
     <string name="wifi_p2p_dialog2_sent_message_display_pin" msgid="5017076731258834940">"Introdueix aquest PIN a <xliff:g id="DEVICE_NAME">%1$s</xliff:g> per connectar-te."</string>
+    <string name="wifi_p2p_dialog2_sent_title_display_password" msgid="5945341353229150520">"Connexió del dispositiu"</string>
+    <string name="wifi_p2p_dialog2_sent_message_display_password" msgid="3091741241294462551">"Introdueix aquesta contrasenya a <xliff:g id="DEVICE_NAME">%1$s</xliff:g> per connectar-te."</string>
     <string name="wifi_p2p_dialog2_sent_positive_button" msgid="6464227471745156497">"D\'acord"</string>
     <string name="wifi_p2p_dialog2_received_title" msgid="6897349204607457747">"Connexió de dispositius"</string>
     <string name="wifi_p2p_dialog2_received_title_enter_pin" msgid="6431543271224139601">"Connexió de dispositius"</string>
     <string name="wifi_p2p_dialog2_received_title_display_pin" msgid="5017007825248741433">"Connexió de dispositius"</string>
+    <string name="wifi_p2p_dialog2_received_title_enter_password" msgid="3095877424010595495">"Connexió del dispositiu"</string>
+    <string name="wifi_p2p_dialog2_received_title_display_password" msgid="4497914334864716738">"Connexió del dispositiu"</string>
     <string name="wifi_p2p_dialog2_received_message" msgid="4376275522073306499">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> vol connectar-se al teu dispositiu."</string>
     <string name="wifi_p2p_dialog2_received_message_enter_pin" msgid="6070908860523284394">"Introdueix el PIN que es mostra a <xliff:g id="DEVICE_NAME">%1$s</xliff:g> per connectar-te."</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_password" msgid="4311988149700776411">"Introdueix la contrasenya que es mostra a <xliff:g id="DEVICE_NAME">%1$s</xliff:g> per connectar-te."</string>
     <string name="wifi_p2p_dialog2_received_message_display_pin" msgid="5906560549535982131">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> vol connectar-se al teu dispositiu amb el PIN següent."</string>
+    <string name="wifi_p2p_dialog2_received_message_display_password" msgid="5141934934500699354">"<xliff:g id="DEVICE_NAME">%1$s</xliff:g> vol connectar-se al teu dispositiu amb la contrasenya següent."</string>
     <string name="wifi_p2p_dialog2_received_message_countdown" msgid="557930403509771814">"{countdown,plural, =1{{device} vol connectar-se al teu dispositiu. Accepta-ho d\'aquí a {countdown} segon.}many{{device} vol connectar-se al teu dispositiu. Accepta-ho d\'aquí a {countdown} de segons.}other{{device} vol connectar-se al teu dispositiu. Accepta-ho d\'aquí a {countdown} segons.}}"</string>
     <string name="wifi_p2p_dialog2_received_message_enter_pin_countdown" msgid="3723666737782219820">"{countdown,plural, =1{Introdueix el PIN que es mostra a {device} en un termini d’{countdown} segon per connectar-te.}many{Introdueix el PIN que es mostra a {device} en un termini de {countdown} de segons per connectar-te.}other{Introdueix el PIN que es mostra a {device} en un termini de {countdown} segons per connectar-te.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_enter_password_countdown" msgid="776303595290437815">"{countdown,plural, =1{Introdueix la contrasenya que es mostra a {device} en un termini d’{countdown} segon per connectar-te.}many{Introdueix la contrasenya que es mostra a {device} en un termini de {countdown} de segons per connectar-te.}other{Introdueix la contrasenya que es mostra a {device} en un termini de {countdown} segons per connectar-te.}}"</string>
     <string name="wifi_p2p_dialog2_received_message_display_pin_countdown" msgid="1248395771858360837">"{countdown,plural, =1{{device} vol connectar-se al teu dispositiu amb el PIN següent. Accepta-ho d\'aquí a {countdown} segon.}many{{device} vol connectar-se al teu dispositiu amb el PIN següent. Accepta-ho d\'aquí a {countdown} de segons.}other{{device} vol connectar-se al teu dispositiu amb el PIN següent. Accepta-ho d\'aquí a {countdown} segons.}}"</string>
+    <string name="wifi_p2p_dialog2_received_message_display_password_countdown" msgid="3823408588191020986">"{countdown,plural, =1{{device} vol connectar-se al teu dispositiu amb la contrasenya següent. Accepta-ho d\'aquí a {countdown} segon.}many{{device} vol connectar-se al teu dispositiu amb la contrasenya següent. Accepta-ho d\'aquí a {countdown} de segons.}other{{device} vol connectar-se al teu dispositiu amb la contrasenya següent. Accepta-ho d\'aquí a {countdown} segons.}}"</string>
     <string name="wifi_p2p_dialog2_received_positive_button" msgid="6358592617824573781">"Connecta"</string>
     <string name="wifi_p2p_dialog2_received_negative_button" msgid="4762549789911681138">"Cancel·la"</string>
     <string name="wifi_p2p_dialog2_enter_pin_label" msgid="7410100924400114335">"PIN"</string>
+    <string name="wifi_p2p_dialog2_enter_password_label" msgid="7858587460348537230">"Contrasenya"</string>
     <string name="wifi_p2p_dialog2_display_pin_label" msgid="3929561425167093538">"PIN"</string>
+    <string name="wifi_p2p_dialog2_display_password_label" msgid="6091997937026945119">"Contrasenya"</string>
     <string name="wifi_p2p_frequency_conflict_message" msgid="8535404941723941766">"El dispositiu es desconnectarà temporalment de la Wi‑Fi mentre estigui connectat a <xliff:g id="DEVICE_NAME">%1$s</xliff:g>"</string>
     <string name="dlg_ok" msgid="254496739491689405">"D\'acord"</string>
     <string name="wifi_cannot_connect_with_randomized_mac_title" msgid="2344570489693915253">"No es pot connectar a <xliff:g id="SSID">%1$s</xliff:g>"</string>

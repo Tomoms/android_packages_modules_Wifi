@@ -147,12 +147,11 @@ public final class WifiClient implements Parcelable {
         if (this == o) return true;
         if (!(o instanceof WifiClient client)) return false;
         return Objects.equals(mMacAddress, client.mMacAddress)
-                && mApInstanceIdentifier.equals(client.mApInstanceIdentifier)
-                && mDisconnectReason == client.mDisconnectReason;
+                && mApInstanceIdentifier.equals(client.mApInstanceIdentifier);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(mMacAddress, mApInstanceIdentifier, mDisconnectReason);
+        return Objects.hash(mMacAddress, mApInstanceIdentifier);
     }
 }

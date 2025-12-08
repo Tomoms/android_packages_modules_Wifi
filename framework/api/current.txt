@@ -224,6 +224,7 @@ package android.net.wifi {
     field public static final int SECURITY_TYPE_WAPI_PSK = 7; // 0x7
     field public static final int SECURITY_TYPE_WEP = 1; // 0x1
     field public String SSID;
+    field @FlaggedApi("com.android.wifi.flags.multi_user_wifi_enhancement") public boolean allowAutojoin;
     field @NonNull public java.util.BitSet allowedAuthAlgorithms;
     field @NonNull public java.util.BitSet allowedGroupCiphers;
     field @NonNull public java.util.BitSet allowedGroupManagementCiphers;
@@ -239,6 +240,7 @@ package android.net.wifi {
     field @Deprecated public int priority;
     field public String providerFriendlyName;
     field public long[] roamingConsortiumIds;
+    field @FlaggedApi("com.android.wifi.flags.multi_user_wifi_enhancement") public boolean shared;
     field public int status;
     field @Deprecated public String[] wepKeys;
     field @Deprecated public int wepTxKeyIndex;
@@ -466,7 +468,7 @@ package android.net.wifi {
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.WifiInfo.Builder setSubscriptionId(int);
   }
 
-  public class WifiManager {
+  @RestrictedForEnvironment(environments=android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME, from=android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) public class WifiManager {
     method @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public void addLocalOnlyConnectionFailureListener(@NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.WifiManager.LocalOnlyConnectionFailureListener);
     method @Deprecated public int addNetwork(android.net.wifi.WifiConfiguration);
     method @NonNull @RequiresPermission(anyOf={android.Manifest.permission.NETWORK_SETTINGS, android.Manifest.permission.NETWORK_STACK, android.Manifest.permission.NETWORK_SETUP_WIZARD, android.Manifest.permission.NETWORK_MANAGED_PROVISIONING}, conditional=true) public android.net.wifi.WifiManager.AddNetworkResult addNetworkPrivileged(@NonNull android.net.wifi.WifiConfiguration);
@@ -1100,7 +1102,7 @@ package android.net.wifi.aware {
     method @NonNull public android.net.wifi.aware.WifiAwareDataPathSecurityConfig.Builder setPskPassphrase(@NonNull String);
   }
 
-  public class WifiAwareManager {
+  @RestrictedForEnvironment(environments=android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME, from=android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) public class WifiAwareManager {
     method @RequiresPermission(allOf={android.Manifest.permission.ACCESS_WIFI_STATE, android.Manifest.permission.CHANGE_WIFI_STATE}) public void attach(@NonNull android.net.wifi.aware.AttachCallback, @Nullable android.os.Handler);
     method @RequiresPermission(allOf={android.Manifest.permission.ACCESS_WIFI_STATE, android.Manifest.permission.CHANGE_WIFI_STATE, android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.NEARBY_WIFI_DEVICES}, conditional=true) public void attach(@NonNull android.net.wifi.aware.AttachCallback, @NonNull android.net.wifi.aware.IdentityChangedListener, @Nullable android.os.Handler);
     method @Nullable @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public android.net.wifi.aware.AwareResources getAvailableAwareResources();
@@ -1439,7 +1441,7 @@ package android.net.wifi.p2p {
     field public boolean isGroupOwner;
   }
 
-  public class WifiP2pManager {
+  @RestrictedForEnvironment(environments=android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME, from=android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) public class WifiP2pManager {
     method @RequiresPermission(android.Manifest.permission.MANAGE_WIFI_NETWORK_SELECTION) public void addExternalApprover(@NonNull android.net.wifi.p2p.WifiP2pManager.Channel, @NonNull android.net.MacAddress, @NonNull android.net.wifi.p2p.WifiP2pManager.ExternalApproverRequestListener);
     method @RequiresPermission(allOf={android.Manifest.permission.NEARBY_WIFI_DEVICES, android.Manifest.permission.ACCESS_FINE_LOCATION}, conditional=true) public void addLocalService(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.nsd.WifiP2pServiceInfo, android.net.wifi.p2p.WifiP2pManager.ActionListener);
     method public void addServiceRequest(android.net.wifi.p2p.WifiP2pManager.Channel, android.net.wifi.p2p.nsd.WifiP2pServiceRequest, android.net.wifi.p2p.WifiP2pManager.ActionListener);
@@ -1495,6 +1497,7 @@ package android.net.wifi.p2p {
     field public static final String ACTION_WIFI_P2P_REQUEST_RESPONSE_CHANGED = "android.net.wifi.p2p.action.WIFI_P2P_REQUEST_RESPONSE_CHANGED";
     field public static final int BUSY = 2; // 0x2
     field public static final int CONNECTION_REQUEST_ACCEPT = 0; // 0x0
+    field @FlaggedApi("com.android.wifi.flags.external_approver_support_for_wfdr2_password_based_bootstrapping") public static final int CONNECTION_REQUEST_DEFER_SHOW_PASSWORD_TO_SERVICE = 4; // 0x4
     field public static final int CONNECTION_REQUEST_DEFER_SHOW_PIN_TO_SERVICE = 3; // 0x3
     field public static final int CONNECTION_REQUEST_DEFER_TO_SERVICE = 2; // 0x2
     field public static final int CONNECTION_REQUEST_REJECT = 1; // 0x1
@@ -1571,6 +1574,7 @@ package android.net.wifi.p2p {
     method public void onAttached(@NonNull android.net.MacAddress);
     method public void onConnectionRequested(int, @NonNull android.net.wifi.p2p.WifiP2pConfig, @NonNull android.net.wifi.p2p.WifiP2pDevice);
     method public void onDetached(@NonNull android.net.MacAddress, int);
+    method @FlaggedApi("com.android.wifi.flags.external_approver_support_for_wfdr2_password_based_bootstrapping") public default void onPasswordGenerated(@NonNull android.net.MacAddress, @NonNull String);
     method public void onPinGenerated(@NonNull android.net.MacAddress, @NonNull String);
     field public static final int APPROVER_DETACH_REASON_CLOSE = 3; // 0x3
     field public static final int APPROVER_DETACH_REASON_FAILURE = 1; // 0x1
@@ -1625,6 +1629,8 @@ package android.net.wifi.p2p {
   @FlaggedApi("com.android.wifi.flags.wifi_direct_r2") public final class WifiP2pPairingBootstrappingConfig implements android.os.Parcelable {
     ctor public WifiP2pPairingBootstrappingConfig(int, @Nullable String);
     method public int describeContents();
+    method @FlaggedApi("com.android.wifi.flags.external_approver_support_for_wfdr2_password_based_bootstrapping") public int getPairingBootstrappingMethod();
+    method @FlaggedApi("com.android.wifi.flags.external_approver_support_for_wfdr2_password_based_bootstrapping") @Nullable public String getPairingBootstrappingPassword();
     method public void writeToParcel(@NonNull android.os.Parcel, int);
     field @NonNull public static final android.os.Parcelable.Creator<android.net.wifi.p2p.WifiP2pPairingBootstrappingConfig> CREATOR;
     field public static final int PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE = 4; // 0x4
@@ -1970,6 +1976,7 @@ package android.net.wifi.rtt {
     method public int getChannelWidth();
     method @IntRange(from=0) public int getFrequencyMhz();
     method @Nullable public android.net.MacAddress getMacAddress();
+    method @FlaggedApi("com.android.wifi.flags.improve_ranging_api") @Nullable public android.net.wifi.aware.PeerHandle getPeerHandle();
     method public int getPreamble();
     method public int getResponderType();
     method @FlaggedApi("com.android.wifi.flags.secure_ranging") @Nullable public android.net.wifi.rtt.SecureRangingConfig getSecureRangingConfig();
@@ -1983,6 +1990,7 @@ package android.net.wifi.rtt {
 
   public static final class ResponderConfig.Builder {
     ctor public ResponderConfig.Builder();
+    ctor @FlaggedApi("com.android.wifi.flags.improve_ranging_api") public ResponderConfig.Builder(@NonNull android.net.wifi.rtt.ResponderConfig);
     method @NonNull public android.net.wifi.rtt.ResponderConfig build();
     method @FlaggedApi("com.android.wifi.flags.android_v_wifi_api") @NonNull public android.net.wifi.rtt.ResponderConfig.Builder set80211azNtbSupported(boolean);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder set80211mcSupported(boolean);
@@ -1990,7 +1998,8 @@ package android.net.wifi.rtt {
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setCenterFreq1Mhz(@IntRange(from=0) int);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setChannelWidth(int);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setFrequencyMhz(@IntRange(from=0) int);
-    method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setMacAddress(@NonNull android.net.MacAddress);
+    method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setMacAddress(@Nullable android.net.MacAddress);
+    method @FlaggedApi("com.android.wifi.flags.improve_ranging_api") @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setPeerHandle(@Nullable android.net.wifi.aware.PeerHandle);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setPreamble(int);
     method @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setResponderType(int);
     method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.ResponderConfig.Builder setSecureRangingConfig(@NonNull android.net.wifi.rtt.SecureRangingConfig);
@@ -2052,7 +2061,7 @@ package android.net.wifi.rtt {
     method @FlaggedApi("com.android.wifi.flags.secure_ranging") @NonNull public android.net.wifi.rtt.SecureRangingConfig.Builder setSecureHeLtfEnabled(boolean);
   }
 
-  public class WifiRttManager {
+  @RestrictedForEnvironment(environments=android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME, from=android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) public class WifiRttManager {
     method @NonNull @RequiresPermission(android.Manifest.permission.ACCESS_WIFI_STATE) public android.os.Bundle getRttCharacteristics();
     method public boolean isAvailable();
     method @RequiresPermission(allOf={android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.CHANGE_WIFI_STATE, android.Manifest.permission.ACCESS_WIFI_STATE, android.Manifest.permission.NEARBY_WIFI_DEVICES}) public void startRanging(@NonNull android.net.wifi.rtt.RangingRequest, @NonNull java.util.concurrent.Executor, @NonNull android.net.wifi.rtt.RangingResultCallback);

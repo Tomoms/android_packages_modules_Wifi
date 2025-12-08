@@ -75,6 +75,7 @@ import com.android.internal.messages.nano.SystemMessageProto.SystemMessage;
 import com.android.modules.utils.HandlerExecutor;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.entitlement.PseudonymInfo;
+import com.android.wifi.flags.Flags;
 import com.android.wifi.resources.R;
 
 import java.io.FileDescriptor;
@@ -614,8 +615,13 @@ public class WifiCarrierInfoManager {
         mIntentFilter.addAction(NOTIFICATION_USER_ALLOWED_CARRIER_INTENT_ACTION);
         mIntentFilter.addAction(NOTIFICATION_USER_DISALLOWED_CARRIER_INTENT_ACTION);
         mIntentFilter.addAction(NOTIFICATION_USER_CLICKED_INTENT_ACTION);
-
-        mContext.registerReceiver(mBroadcastReceiver, mIntentFilter, NETWORK_SETTINGS, handler);
+        if (Flags.monitorIntentForAllUsers()) {
+            mContext.registerReceiverForAllUsers(mBroadcastReceiver,
+                    mIntentFilter, NETWORK_SETTINGS, handler);
+        } else {
+            mContext.registerReceiver(mBroadcastReceiver,
+                    mIntentFilter, NETWORK_SETTINGS, handler);
+        }
         configStore.registerStoreData(wifiInjector.makeWifiCarrierInfoStoreManagerData(
                 new WifiCarrierInfoStoreManagerDataSource()));
         configStore.registerStoreData(wifiInjector.makeImsiPrivacyProtectionExemptionStoreData(
@@ -629,7 +635,7 @@ public class WifiCarrierInfoManager {
         IntentFilter filter = new IntentFilter();
         filter.addAction(CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED);
         filter.addAction(TelephonyManager.ACTION_DEFAULT_DATA_SUBSCRIPTION_CHANGED);
-        context.registerReceiver(new BroadcastReceiver() {
+        BroadcastReceiver carrierEventReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 if (CarrierConfigManager.ACTION_CARRIER_CONFIG_CHANGED
@@ -663,8 +669,15 @@ public class WifiCarrierInfoManager {
                         }
                     });
                 }
-            }
-        }, filter);
+            }};
+
+        if (Flags.monitorIntentForAllUsers()) {
+            mContext.registerReceiverForAllUsers(carrierEventReceiver,
+                    filter, null, handler);
+        } else {
+            mContext.registerReceiver(carrierEventReceiver,
+                    filter);
+        }
 
         frameworkFacade.registerContentObserver(context, CONTENT_URI, false,
                 new ContentObserver(handler) {

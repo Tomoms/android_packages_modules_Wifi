@@ -22,6 +22,7 @@ import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiEnterpriseConfig;
 import android.os.UserHandle;
 import android.security.KeyChain;
+import android.security.KeyChainException;
 import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.Log;
@@ -280,10 +281,11 @@ public class WifiKeyStore {
             existingKeyId = existingConfig.getKeyIdForCredentials(existingConfig);
         }
 
+        String keyChainAlias = null;
         if (SdkLevel.isAtLeastS()) {
             // If client key is in KeyChain, convert KeyChain alias into a grant string that can be
             // used by the supplicant like a normal alias.
-            final String keyChainAlias = enterpriseConfig.getClientKeyPairAliasInternal();
+            keyChainAlias = enterpriseConfig.getClientKeyPairAliasInternal();
             if (keyChainAlias != null) {
                 final String grantString = mFrameworkFacade.getWifiKeyGrantAsUser(
                         mContext, UserHandle.getUserHandleForUid(config.creatorUid), keyChainAlias);
@@ -353,11 +355,25 @@ public class WifiKeyStore {
             }
 
             Certificate clientCert = null;
-            try {
-                clientCert = mKeyStore.getCertificate(config.enterpriseConfig
-                        .getClientCertificateAlias());
-            } catch (KeyStoreException e) {
-                Log.e(TAG, "Failed to get Suite-B client certificate", e);
+            if (keyChainAlias != null) {
+                try {
+                    X509Certificate[] certs = KeyChain.getCertificateChain(mContext, keyChainAlias);
+                    if (certs == null) {
+                        Log.e(TAG, "certificate chain is null for the requested keychain alias: "
+                                + keyChainAlias);
+                        return false;
+                    }
+                    clientCert = certs[0];
+                } catch (KeyChainException | InterruptedException e) {
+                    Log.e(TAG, "Failed to get Suite-B client certificate from keychain", e);
+                }
+            } else {
+                try {
+                    clientCert = mKeyStore.getCertificate(config.enterpriseConfig
+                            .getClientCertificateAlias());
+                } catch (KeyStoreException e) {
+                    Log.e(TAG, "Failed to get Suite-B client certificate", e);
+                }
             }
             if (clientCert == null || !(clientCert instanceof X509Certificate)) {
                 Log.e(TAG, "Failed reading client certificate for Suite-B");

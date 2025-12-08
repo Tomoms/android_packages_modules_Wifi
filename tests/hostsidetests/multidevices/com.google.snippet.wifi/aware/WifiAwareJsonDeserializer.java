@@ -20,6 +20,8 @@ package com.google.snippet.wifi.aware;
 import android.net.MacAddress;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.wifi.WifiNetworkSpecifier;
+import android.net.wifi.WifiNetworkSuggestion;
 import android.net.wifi.aware.AwarePairingConfig;
 import android.net.wifi.aware.PeerHandle;
 import android.net.wifi.aware.PublishConfig;
@@ -27,6 +29,7 @@ import android.net.wifi.aware.SubscribeConfig;
 import android.net.wifi.aware.WifiAwareDataPathSecurityConfig;
 import android.net.wifi.aware.WifiAwareNetworkSpecifier;
 import android.net.wifi.rtt.RangingRequest;
+import android.os.PatternMatcher;
 import android.util.Base64;
 
 import androidx.annotation.NonNull;
@@ -82,6 +85,21 @@ public class WifiAwareJsonDeserializer {
     private static final String TRANSPORT_TYPE = "transport_type";
     private static final String CAPABILITY = "capability";
     private static final String NETWORK_SPECIFIER_PARCEL = "network_specifier_parcel";
+    private static final String NETWORK_SPECIFIER = "network_specifier";
+    // JSON Keys for NetworkRequest and WifiNetworkSpecifier
+    private static final String BSSID = "bssid";
+    private static final String PSK = "psk";
+    private static final String REMOVE_CAPABILITY = "remove_capability";
+    private static final String SSID = "ssid";
+    private static final String SSID_PATTERN = "ssid_pattern";
+    private static final String PATTERN = "pattern";
+    private static final String PATTERN_TYPE = "pattern_type";
+    private static final String BSSID_PATTERN = "bssid_pattern";
+    private static final String BSSID_MASK = "bssid_mask";
+    // JSON Keys for WifiNetworkSuggestion
+    private static final String IS_HIDDEN_SSID = "is_hidden_ssid";
+    private static final String IS_METERED = "is_metered";
+    private static final String IS_APP_INTERACTION_REQUIRED = "is_app_interaction_required";
     //WifiAwareDataPathSecurityConfig specific
     private static final String CIPHER_SUITE = "cipher_suite";
     private static final String SECURITY_CONFIG_PMK = "pmk";
@@ -304,8 +322,91 @@ public class WifiAwareJsonDeserializer {
                 requestBuilder.addCapability(capability);
             }
             return requestBuilder.build();
+        } else if (transportType == NetworkCapabilities.TRANSPORT_WIFI) {
+            requestBuilder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
+            if (jsonObject.has(NETWORK_SPECIFIER)) {
+                JSONObject specifierJson = jsonObject.getJSONObject(NETWORK_SPECIFIER);
+                WifiNetworkSpecifier.Builder wifiSpecBuilder = new WifiNetworkSpecifier.Builder();
+                if (specifierJson.has(SSID_PATTERN) && specifierJson.has(SSID)) {
+                    throw new JSONException("cannot specify both SSID and SSID_PATTERN.");
+                } else if (specifierJson.has(SSID_PATTERN)) {
+                    JSONObject ssidPattern = specifierJson.getJSONObject(SSID_PATTERN);
+                    String pattern = ssidPattern.getString(PATTERN);
+                    int patternType = ssidPattern.getInt(PATTERN_TYPE);
+                    wifiSpecBuilder.setSsidPattern(new PatternMatcher(
+                                pattern, patternType));
+                } else if (specifierJson.has(SSID)) {
+                    wifiSpecBuilder.setSsid(specifierJson.getString(SSID));
+                }
+                if (specifierJson.has(BSSID_PATTERN) && specifierJson.has(BSSID)) {
+                    throw new JSONException("cannot specify both BSSID and BSSID_PATTERN.");
+                } else if (specifierJson.has(BSSID_PATTERN)) {
+                    JSONObject bssidPattern = specifierJson.getJSONObject(BSSID_PATTERN);
+                    String bssidString = bssidPattern.getString(BSSID);
+                    String bssidMaskString = bssidPattern.getString(BSSID_MASK);
+                    MacAddress bssid = MacAddress.fromString(bssidString);
+                    MacAddress bssidMask = MacAddress.fromString(bssidMaskString);
+                    wifiSpecBuilder.setBssidPattern(bssid, bssidMask);
+                } else if (specifierJson.has(BSSID)) {
+                    try {
+                        wifiSpecBuilder.setBssid(MacAddress.fromString(
+                                specifierJson.getString(BSSID)));
+                    } catch (IllegalArgumentException e) {
+                        throw new JSONException("Error parsing BSSID: " + e.getMessage());
+                    }
+                }
+                if (specifierJson.has(PSK)) {
+                    wifiSpecBuilder.setWpa2Passphrase(specifierJson.getString(PSK));
+                }
+                requestBuilder.setNetworkSpecifier(wifiSpecBuilder.build());
+            }
+            if (jsonObject.has(REMOVE_CAPABILITY)) {
+                int capabilityToRemove = jsonObject.getInt(REMOVE_CAPABILITY);
+                requestBuilder.removeCapability(capabilityToRemove);
+            }
+            return requestBuilder.build();
         }
-        return null;
+        else return null;
+    }
+
+    /**
+     * Converts JSON object to {@link WifiNetworkSuggestion}.
+     *
+     * @param jsonObject corresponding to WifiNetworkSuggestion.
+     * @return WifiNetworkSuggestion object.
+     * @throws JSONException if parsing fails.
+     */
+    public static WifiNetworkSuggestion jsonToWifiNetworkSuggestion(JSONObject jsonObject)
+            throws JSONException {
+        WifiNetworkSuggestion.Builder builder = new WifiNetworkSuggestion.Builder();
+        if (jsonObject == null) {
+            return builder.build();
+        }
+        if (jsonObject.has(SSID)) {
+            builder.setSsid(jsonObject.getString(SSID));
+        }
+        if (jsonObject.has(BSSID)) {
+            try {
+                builder.setBssid(MacAddress.fromString(jsonObject.getString(BSSID)));
+            } catch (IllegalArgumentException e) {
+                throw new JSONException("Error parsing BSSID for WifiNetworkSuggestion: "
+                    + e.getMessage());
+            }
+        }
+        if (jsonObject.has(IS_APP_INTERACTION_REQUIRED)) {
+            builder.setIsAppInteractionRequired(jsonObject.getBoolean(IS_APP_INTERACTION_REQUIRED));
+        }
+        if (jsonObject.has(PSK)) {
+            builder.setWpa2Passphrase(jsonObject.getString(PSK));
+        }
+        if (jsonObject.has(IS_HIDDEN_SSID)) {
+            builder.setIsHiddenSsid(jsonObject.getBoolean(IS_HIDDEN_SSID));
+        }
+        if (jsonObject.has(IS_METERED)) {
+            builder.setIsMetered(jsonObject.getBoolean(IS_METERED));
+        }
+
+        return builder.build();
     }
 
     /**

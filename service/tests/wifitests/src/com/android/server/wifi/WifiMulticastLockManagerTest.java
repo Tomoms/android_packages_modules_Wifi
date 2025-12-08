@@ -216,6 +216,19 @@ public class WifiMulticastLockManagerTest extends WifiBaseTest {
     }
 
     /**
+     * Test that multicast is not enabled when acquireLock fails due to a
+     * dead binder being provided.
+     */
+    @Test
+    public void testAcquireLockFailedDueToBinderDied() throws RemoteException {
+        IBinder binder = mock(IBinder.class);
+        // linkToDeath will throw a RemoteException if the binder is not alive.
+        doThrow(RemoteException.class).when(binder).linkToDeath(any(), anyInt());
+        mManager.acquireLock(TEST_UID, binder, WL_1_TAG, TEST_ATTRIBUTION_TAG, TEST_PACKAGE_NAME);
+        assertFalse(mManager.isMulticastEnabled());
+    }
+
+    /**
      * Test behavior when multiple locks are acquired then released in nesting order.
      */
     @Test

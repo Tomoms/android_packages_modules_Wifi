@@ -44,6 +44,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.withSettings;
 import static org.mockito.Mockito.when;
 
+import android.app.ActivityManager;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.net.MacAddress;
@@ -53,6 +54,7 @@ import android.net.wifi.SoftApConfiguration.Builder;
 import android.net.wifi.SoftApInfo;
 import android.net.wifi.WifiContext;
 import android.net.wifi.WifiInfo;
+import android.net.wifi.util.Environment;
 import android.os.Build;
 import android.os.Handler;
 import android.os.test.TestLooper;
@@ -100,6 +102,7 @@ public class WifiApConfigStoreTest extends WifiBaseTest {
             MacAddress.fromString("d2:11:19:34:a5:20");
     private static final MacAddress TEST_SAP_BSSID_MAC =
             MacAddress.fromString("aa:bb:cc:11:22:33");
+    private static final int TEST_USER_ID = 900;
 
     private final int mBand25G = SoftApConfiguration.BAND_2GHZ | SoftApConfiguration.BAND_5GHZ;
     private final int mBand256G = SoftApConfiguration.BAND_2GHZ | SoftApConfiguration.BAND_5GHZ
@@ -142,9 +145,11 @@ public class WifiApConfigStoreTest extends WifiBaseTest {
         // static mocking
         mSession = ExtendedMockito.mockitoSession()
                 .mockStatic(Flags.class, withSettings().lenient())
+                .mockStatic(ActivityManager.class, withSettings().lenient())
                 .strictness(Strictness.LENIENT)
                 .startMocking();
         mMockApplInfo.targetSdkVersion = Build.VERSION_CODES.P;
+        when(ActivityManager.getCurrentUser()).thenReturn(TEST_USER_ID);
         when(mContext.getApplicationInfo()).thenReturn(mMockApplInfo);
         when(mWifiInjector.getSettingsConfigStore()).thenReturn(mWifiSettingsConfigStore);
         when(mWifiInjector.getHalDeviceManager()).thenReturn(mHalDeviceManager);
@@ -733,6 +738,26 @@ public class WifiApConfigStoreTest extends WifiBaseTest {
         config = store.randomizeBssidIfUnset(mContext, baseConfig);
 
         assertEquals(TEST_RANDOMIZED_MAC, config.getBssid());
+    }
+
+    @Test
+    public void randomizeBssid_randomizesPersistMacPerUser() throws Exception {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(Flags.multiUserWifiEnhancement()).thenReturn(true);
+        ArgumentCaptor<String> randomizedMacKeyArgumentCaptor =
+                ArgumentCaptor.forClass(String.class);
+        mResources.setBoolean(R.bool.config_wifi_ap_mac_randomization_supported, true);
+        SoftApConfiguration baseConfig = new SoftApConfiguration.Builder()
+                .setSsid(TEST_DEFAULT_HOTSPOT_SSID)
+                .setMacRandomizationSetting(RANDOMIZATION_PERSISTENT).build();
+
+        WifiApConfigStore store = createWifiApConfigStore();
+        SoftApConfiguration config = store.randomizeBssidIfUnset(mContext, baseConfig);
+        verify(mMacAddressUtil).calculatePersistentMacForSap(
+                randomizedMacKeyArgumentCaptor.capture(), anyInt());
+        assertTrue(randomizedMacKeyArgumentCaptor.getValue().contains(TEST_DEFAULT_HOTSPOT_SSID));
+        assertTrue(randomizedMacKeyArgumentCaptor.getValue()
+                .contains(String.valueOf(TEST_USER_ID)));
     }
 
     @Test

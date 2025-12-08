@@ -16,11 +16,14 @@
 
 package android.net.wifi.aware;
 
+import android.annotation.FlaggedApi;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 import android.os.Parcel;
 import android.os.Parcelable;
+
+import com.android.wifi.flags.Flags;
 
 /**
  * An object to use with {@link WifiAwareManager#setAwareParams(AwareParams)} specifying
@@ -42,6 +45,13 @@ public final class AwareParams implements Parcelable {
     private int mNumSpatialStreamsInDiscovery = UNSET_PARAMETER;
     private boolean mIsDwEarlyTerminationEnabled = false;
     private int mMacRandomIntervalSec = UNSET_PARAMETER;
+    private int mNdpSessionLimit = NDP_SESSION_LIMIT_UNSET;
+
+    /**
+     * An integer representing the NDP session limit is not set.
+     */
+    @FlaggedApi(Flags.FLAG_ALLOW_OVERRIDE_MAX_NDP_SESSION)
+    public static final int NDP_SESSION_LIMIT_UNSET = 0;
 
     /**
      * Construct an empty {@link AwareParams}.
@@ -57,6 +67,7 @@ public final class AwareParams implements Parcelable {
         mNumSpatialStreamsInDiscovery = in.readInt();
         mIsDwEarlyTerminationEnabled = in.readBoolean();
         mMacRandomIntervalSec = in.readInt();
+        mNdpSessionLimit = in.readInt();
     }
 
     public static final @NonNull Creator<AwareParams> CREATOR = new Creator<AwareParams>() {
@@ -232,6 +243,32 @@ public final class AwareParams implements Parcelable {
         return mMacRandomIntervalSec;
     }
 
+    /**
+     * Set the max number of the NDP session allowed, this will change the result of
+     * {@link Characteristics#getNumberOfSupportedDataPaths()}.
+     * If device already has more than this number of NDP session, the existing
+     * NDP session will not be affected, only new session will be limited by
+     * this number.
+     * @param maxNum Override to the number of the allowed NDP session,
+     *               {@link #NDP_SESSION_LIMIT_UNSET}
+     *               will remove the limit - use the device capabilities
+     */
+    @FlaggedApi(Flags.FLAG_ALLOW_OVERRIDE_MAX_NDP_SESSION)
+    public void setNdpSessionLimit(@IntRange(from = NDP_SESSION_LIMIT_UNSET) int maxNum) {
+        if (maxNum < NDP_SESSION_LIMIT_UNSET) {
+            throw new IllegalArgumentException("Max NDP session number must be at least 0");
+        }
+        mNdpSessionLimit = maxNum;
+    }
+
+    /**
+     * Get the NDP session limit
+     * @return The number of max NDP session allow to use
+     */
+    @FlaggedApi(Flags.FLAG_ALLOW_OVERRIDE_MAX_NDP_SESSION)
+    public int getNdpSessionLimit() {
+        return mNdpSessionLimit;
+    }
 
     @Override
     public int describeContents() {
@@ -247,6 +284,7 @@ public final class AwareParams implements Parcelable {
         dest.writeInt(mNumSpatialStreamsInDiscovery);
         dest.writeBoolean((mIsDwEarlyTerminationEnabled));
         dest.writeInt(mMacRandomIntervalSec);
+        dest.writeInt(mNdpSessionLimit);
     }
 
     /** @hide */
@@ -261,6 +299,7 @@ public final class AwareParams implements Parcelable {
                 .append(", mNumSpatialStreamsInDiscovery=").append(mNumSpatialStreamsInDiscovery)
                 .append(", mIsDwEarlyTerminationEnabled=").append(mIsDwEarlyTerminationEnabled)
                 .append(", mMacRandomIntervalSec=").append(mMacRandomIntervalSec)
+                .append(", mOverrideMaxNdpSession").append(mNdpSessionLimit)
                 .append("]");
         return sbf.toString();
     }

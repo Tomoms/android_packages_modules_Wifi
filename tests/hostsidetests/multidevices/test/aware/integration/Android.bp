@@ -247,6 +247,46 @@ python_test_host {
 }
 
 python_test_host {
+    name: "WifiAwareThroughputTestCases",
+    main: "wifi_aware_throughput_test.py",
+    srcs: ["wifi_aware_throughput_test.py"],
+    device_common_data: [":wifi_aware_snippet_new"],
+    libs: [
+        "aware_lib_utils",
+        "mobly",
+        "wifi_aware_constants",
+        "platform-test-py-annotations",
+    ],
+    test_suites: [
+        "general-tests",
+    ],
+    test_options: {
+        unit_test: false,
+        tags: ["mobly"],
+    },
+}
+
+python_test_host {
+    name: "WifiAwarelatencytest",
+    main: "wifi_aware_latencytest_test.py",
+    srcs: ["wifi_aware_latencytest_test.py"],
+    device_common_data: [":wifi_aware_snippet_new"],
+    libs: [
+        "aware_lib_utils",
+        "mobly",
+        "wifi_aware_constants",
+        "platform-test-py-annotations",
+    ],
+    test_suites: [
+        "general-tests",
+    ],
+    test_options: {
+        unit_test: false,
+        tags: ["mobly"],
+    },
+}
+
+python_test_host {
     name: "WifiAwareIntegrationTestSuite",
     main: "wifi_aware_integration_test_suite.py",
     srcs: [

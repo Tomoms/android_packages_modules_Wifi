@@ -74,6 +74,7 @@ import androidx.test.filters.SmallTest;
 import com.android.modules.utils.ParceledListSlice;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.coex.CoexManager;
+import com.android.server.wifi.nl80211.Nl80211Native;
 
 import org.junit.After;
 import org.junit.Before;
@@ -120,6 +121,7 @@ public class WifiShellCommandTest extends WifiBaseTest {
     @Mock WifiDialogManager.DialogHandle mDialogHandle;
     @Mock WifiDialogManager.DialogHandle mLegacyDialogHandle;
     @Mock WifiScanner mWifiScanner;
+    @Mock Nl80211Native mNl80211Native;
     WifiShellCommand mWifiShellCommand;
     TestLooper mLooper;
 
@@ -149,6 +151,7 @@ public class WifiShellCommandTest extends WifiBaseTest {
         when(mWifiInjector.getWifiDiagnostics()).thenReturn(mWifiDiagnostics);
         when(mWifiInjector.getDeviceConfigFacade()).thenReturn(mDeviceConfig);
         when(mWifiInjector.getWifiDialogManager()).thenReturn(mWifiDialogManager);
+        when(mWifiInjector.getNl80211Native()).thenReturn(mNl80211Native);
         when(mWifiDialogManager.createSimpleDialogBuilder()).thenReturn(mDialogBuilder);
         when(mWifiDialogManager.createLegacySimpleDialogWithUrl(any(), any(), any(), anyInt(),
                 anyInt(), any(), any(), any(), any(), any())).thenReturn(mLegacyDialogHandle);
@@ -1222,5 +1225,35 @@ public class WifiShellCommandTest extends WifiBaseTest {
                 any(),
                 any());
         verify(mLegacyDialogHandle).launchDialog();
+    }
+
+    @Test
+    public void testListInterfaceNames_success() {
+        BinderUtil.setUid(Process.ROOT_UID);
+        when(mNl80211Native.getInterfaceNames()).thenReturn(List.of("wlan0"));
+        assertEquals(
+                0,
+                mWifiShellCommand.exec(
+                        new Binder(),
+                        new FileDescriptor(),
+                        new FileDescriptor(),
+                        new FileDescriptor(),
+                        new String[] {"list-interface-names"}));
+        verify(mNl80211Native).getInterfaceNames();
+    }
+
+    @Test
+    public void testListInterfaceNames_failed() {
+        BinderUtil.setUid(Process.ROOT_UID);
+        when(mNl80211Native.getInterfaceNames()).thenReturn(null);
+        assertEquals(
+                -1,
+                mWifiShellCommand.exec(
+                        new Binder(),
+                        new FileDescriptor(),
+                        new FileDescriptor(),
+                        new FileDescriptor(),
+                        new String[] {"list-interface-names"}));
+        verify(mNl80211Native).getInterfaceNames();
     }
 }

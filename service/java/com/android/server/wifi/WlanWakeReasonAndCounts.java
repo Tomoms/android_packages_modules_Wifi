@@ -91,7 +91,7 @@ public class WlanWakeReasonAndCounts implements Parcelable {
     }
 
     /* Implement the Parcelable interface
-     * {@hide}
+     * @hide
      */
     @Override
     public int describeContents() {
@@ -99,7 +99,7 @@ public class WlanWakeReasonAndCounts implements Parcelable {
     }
 
     /* Implement the Parcelable interface
-     * {@hide}
+     * @hide
      */
     @Override
     public void writeToParcel(Parcel dest, int flags) {
@@ -125,7 +125,7 @@ public class WlanWakeReasonAndCounts implements Parcelable {
     }
 
     /* Implement the Parcelable interface
-     * {@hide}
+     * @hide
      */
     public static final Creator<WlanWakeReasonAndCounts> CREATOR =
             new Creator<WlanWakeReasonAndCounts>() {
@@ -154,7 +154,7 @@ public class WlanWakeReasonAndCounts implements Parcelable {
                 }
 
                 /* Implement the Parcelable interface
-                 * {@hide}
+                 * @hide
                  */
                 @Override
                 public WlanWakeReasonAndCounts[] newArray(int size) {

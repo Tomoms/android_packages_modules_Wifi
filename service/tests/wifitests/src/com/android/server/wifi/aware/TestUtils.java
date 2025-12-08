@@ -107,7 +107,8 @@ public class TestUtils {
         public boolean initiateDataPath(short transactionId, int peerId, int channelRequestType,
                 int channel, byte[] peer, String interfaceName,
                 boolean isOutOfBand, byte[] appInfo, Capabilities capabilities,
-                WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId) {
+                WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId,
+                boolean frameProtectionEnabled) {
             addTransactionId(transactionId);
             return true;
         }
@@ -115,7 +116,8 @@ public class TestUtils {
         public boolean respondToDataPathRequest(short transactionId, boolean accept, int ndpId,
                 String interfaceName, byte[] appInfo,
                 boolean isOutOfBand, Capabilities capabilities,
-                WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId) {
+                WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId,
+                boolean frameProtectionEnabled) {
             addTransactionId(transactionId);
             return true;
         }
@@ -140,7 +142,7 @@ public class TestUtils {
         }
 
         public boolean respondToBootstrappingRequest(short transactionId, int bootstrappingId,
-                boolean accept, byte pubSubId) {
+                boolean accept, byte pubSubId, int method) {
             addTransactionId(transactionId);
             return true;
         }

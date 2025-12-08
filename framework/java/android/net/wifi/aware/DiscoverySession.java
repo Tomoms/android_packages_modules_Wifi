@@ -382,8 +382,8 @@ public class DiscoverySession implements AutoCloseable {
      * @param peerHandle The peer's handle for the pairing request. Must be a result of an
      * {@link DiscoverySessionCallback#onServiceDiscovered(ServiceDiscoveryInfo)} or
      * {@link DiscoverySessionCallback#onMessageReceived(PeerHandle, byte[])} events.
-     * @param method one of the AwarePairingConfig#PAIRING_BOOTSTRAPPING_ values, should be one of
-     *               the methods received from {@link ServiceDiscoveryInfo#getPairingConfig()}
+     * @param method one of the AwarePairingConfig#PAIRING_BOOTSTRAPPING_ values, should match one
+     *               of the methods received from {@link ServiceDiscoveryInfo#getPairingConfig()}
      *               {@link AwarePairingConfig#getBootstrappingMethods()}
      */
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)

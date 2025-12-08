@@ -16,7 +16,9 @@
 
 package com.android.server.wifi;
 
+import static com.android.dx.mockito.inline.extended.ExtendedMockito.mockitoSession;
 import static com.android.server.wifi.WifiConfigurationTestUtil.TEST_UID;
+import static com.android.server.wifi.WifiConfigurationTestUtil.TEST_USER_HANDLE;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -26,6 +28,7 @@ import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
@@ -36,6 +39,7 @@ import android.content.Context;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiEnterpriseConfig;
 import android.os.UserHandle;
+import android.security.KeyChain;
 
 import androidx.test.filters.SmallTest;
 
@@ -46,6 +50,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.MockitoSession;
 
 import java.security.KeyStore;
 import java.security.cert.X509Certificate;
@@ -60,6 +65,7 @@ public class WifiKeyStoreTest extends WifiBaseTest {
     @Mock private KeyStore mKeyStore;
     @Mock private Context mContext;
     @Mock private FrameworkFacade mFrameworkFacade;
+    private MockitoSession mStaticMockSession = null;
 
     private WifiKeyStore mWifiKeyStore;
     private static final String TEST_KEY_ID = "blah";
@@ -70,7 +76,6 @@ public class WifiKeyStoreTest extends WifiBaseTest {
     private static final String TEST_PACKAGE_NAME = "TestApp";
     private static final String KEYCHAIN_ALIAS = "kc-alias";
     private static final String KEYCHAIN_KEY_GRANT = "kc-grant";
-    public static final UserHandle TEST_USER_HANDLE = UserHandle.getUserHandleForUid(TEST_UID);
 
     /**
      * Setup the mocks and an instance of WifiConfigManager before each test.
@@ -78,6 +83,12 @@ public class WifiKeyStoreTest extends WifiBaseTest {
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
+
+        mStaticMockSession = mockitoSession()
+                .mockStatic(KeyChain.class)
+                .startMocking();
+        lenient().when(KeyChain.getCertificateChain(any(Context.class), any(String.class)))
+                .thenReturn(new X509Certificate[]{FakeKeys.CLIENT_SUITE_B_ECDSA_CERT});
         mWifiKeyStore = new WifiKeyStore(mContext, mKeyStore, mFrameworkFacade);
 
         when(mWifiEnterpriseConfig.getClientCertificateAlias()).thenReturn(USER_CERT_ALIAS);
@@ -99,6 +110,7 @@ public class WifiKeyStoreTest extends WifiBaseTest {
      */
     @After
     public void cleanup() {
+        mStaticMockSession.finishMocking();
         validateMockitoUsage();
     }
 
@@ -297,6 +309,32 @@ public class WifiKeyStoreTest extends WifiBaseTest {
                 .thenReturn(new X509Certificate[]{FakeKeys.CA_SUITE_B_ECDSA_CERT});
         when(mKeyStore.getCertificate(eq(USER_CERT_ALIAS))).thenReturn(
                 FakeKeys.CLIENT_SUITE_B_ECDSA_CERT);
+        when(mKeyStore.getCertificate(eq(USER_CA_CERT_ALIASES[0]))).thenReturn(
+                FakeKeys.CA_SUITE_B_ECDSA_CERT);
+        WifiConfiguration savedNetwork = WifiConfigurationTestUtil.createEapSuiteBNetwork(
+                WifiConfiguration.SuiteBCipher.ECDHE_ECDSA);
+        savedNetwork.enterpriseConfig = mWifiEnterpriseConfig;
+        assertTrue(mWifiKeyStore.updateNetworkKeys(savedNetwork, null));
+        assertTrue(
+                savedNetwork.allowedSuiteBCiphers.get(WifiConfiguration.SuiteBCipher.ECDHE_ECDSA));
+    }
+
+    /**
+     * Test configuring WPA3-Enterprise in 192-bit mode for ECDSA correctly when CA and client
+     * certificates are of ECDSA type and the client certificate is in the keychain.
+     */
+    @Test
+    public void testConfigureSuiteBEcdsaWhereClientCertificateInKeychain() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastS());
+        when(mWifiEnterpriseConfig.getCaCertificateAliases())
+                .thenReturn(new String[]{USER_CA_CERT_ALIAS});
+        when(mWifiEnterpriseConfig.getCaCertificate()).thenReturn(FakeKeys.CA_SUITE_B_ECDSA_CERT);
+        when(mWifiEnterpriseConfig.getClientKeyPairAliasInternal()).thenReturn(KEYCHAIN_ALIAS);
+        when(mFrameworkFacade.getWifiKeyGrantAsUser(
+                any(Context.class), eq(TEST_USER_HANDLE), eq(KEYCHAIN_ALIAS)))
+                .thenReturn(KEYCHAIN_KEY_GRANT);
+        when(mWifiEnterpriseConfig.getCaCertificates())
+                .thenReturn(new X509Certificate[]{FakeKeys.CA_SUITE_B_ECDSA_CERT});
         when(mKeyStore.getCertificate(eq(USER_CA_CERT_ALIASES[0]))).thenReturn(
                 FakeKeys.CA_SUITE_B_ECDSA_CERT);
         WifiConfiguration savedNetwork = WifiConfigurationTestUtil.createEapSuiteBNetwork(

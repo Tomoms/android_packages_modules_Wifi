@@ -118,13 +118,37 @@ public final class WifiP2pPairingBootstrappingConfig implements Parcelable {
         }
     }
 
-    /** @hide */
-    public int getPairingBootstrappingMethod() {
+    /**
+     * Gets the current pairing bootstrapping method.
+     *
+     * @return The current pairing bootstrapping method.
+     */
+    @RequiresApi(37)
+    @FlaggedApi(Flags.FLAG_EXTERNAL_APPROVER_SUPPORT_FOR_WFDR2_PASSWORD_BASED_BOOTSTRAPPING)
+    public @PairingBootstrappingMethod int getPairingBootstrappingMethod() {
         return mPairingBootstrappingMethod;
     }
 
-    /** @hide */
-    public String getPairingBootstrappingPassword() {
+    /**
+     * Retrieves the PIN or password used for the current pairing bootstrapping method.
+     *
+     * <p> The specific type and format of the returned value depend on the active pairing
+     * bootstrapping method:
+     * <p>
+     * If the method is {@link #PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PINCODE} or
+     * {@link #PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PINCODE}, this method returns a PIN.
+     * A PIN is a string consisting of 4 or more digits (0-9).
+     * <p>
+     * If the method is {@link #PAIRING_BOOTSTRAPPING_METHOD_DISPLAY_PASSPHRASE} or
+     * {@link #PAIRING_BOOTSTRAPPING_METHOD_KEYPAD_PASSPHRASE} this method returns a password.
+     * A password is a UTF-8 encoded string with a minimum length of 1 character.
+     *
+     * @return The PIN or password as a {@link String}, or {@code null} if not applicable
+     *         for the current pairing bootstrapping method.
+     */
+    @RequiresApi(37)
+    @FlaggedApi(Flags.FLAG_EXTERNAL_APPROVER_SUPPORT_FOR_WFDR2_PASSWORD_BASED_BOOTSTRAPPING)
+    public @Nullable String getPairingBootstrappingPassword() {
         return mPassword;
     }
 

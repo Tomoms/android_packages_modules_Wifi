@@ -404,8 +404,14 @@ def wait_for_aware_network(
         The callback event for network capabilities changed event, providing
         information of the new network connection.
     """
-    network_callback_event = request_network_handler.waitAndGet(
+    def is_unavailable_or_capabilities_changed_event(event):
+        return event.data[_CALLBACK_NAME] in (
+            constants.NetworkCbName.ON_UNAVAILABLE,
+            constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
+        )
+    network_callback_event = request_network_handler.waitForEvent(
         event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
+        predicate=is_unavailable_or_capabilities_changed_event,
         timeout=_DEFAULT_TIMEOUT,
     )
     callback_name = network_callback_event.data[_CALLBACK_NAME]

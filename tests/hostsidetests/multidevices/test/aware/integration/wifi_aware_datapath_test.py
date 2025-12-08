@@ -31,6 +31,8 @@ from mobly import utils
 from mobly.controllers import android_device
 from mobly.controllers.android_device_lib import callback_handler_v2
 from mobly.snippet import callback_event
+from queue import Empty
+
 
 RUNTIME_PERMISSIONS = (
     'android.permission.ACCESS_FINE_LOCATION',
@@ -56,7 +58,8 @@ _TRANSPORT_TYPE_WIFI_AWARE = (
 
 _NETWORK_CB_KEY_NETWORK_SPECIFIER = "network_specifier"
 
-_NETWORK_CB_LINK_PROPERTIES_CHANGED = constants.NetworkCbName.ON_PROPERTIES_CHANGED
+_NETWORK_CB_LINK_PROPERTIES_CHANGED = (
+    constants.NetworkCbName.ON_PROPERTIES_CHANGED)
 _NETWORK_CB_KEY_INTERFACE_NAME = "interfaceName"
 _CAP_MAX_NDI_INTERFACES = "maxNdiInterfaces"
 
@@ -97,9 +100,11 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     PASSPHRASE = "This is some random passphrase - very very secure!!"
     PASSPHRASE_MIN = "01234567"
-    PASSPHRASE_MAX = "012345678901234567890123456789012345678901234567890123456789012"
+    PASSPHRASE_MAX = (
+        "012345678901234567890123456789012345678901234567890123456789012")
     PMK = "ODU0YjE3YzdmNDJiNWI4NTQ2NDJjNDI3M2VkZTQyZGU="
-    PASSPHRASE2 = "This is some random passphrase - very very secure - but diff!!"
+    PASSPHRASE2 = (
+        "This is some random passphrase - very very secure - but diff!!")
     PMK2 = "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="
 
     PING_MSG = "ping"
@@ -203,7 +208,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         discovery_session: str,
         peer: int,
         net_work_request_id: str,
-        network_specifier_params: constants.WifiAwareNetworkSpecifier | None = None,
+        network_specifier_params:
+        constants.WifiAwareNetworkSpecifier | None = None,
         is_accept_any_peer: bool = False,
     ) -> callback_handler_v2.CallbackHandlerV2:
         """Requests and configures a Wi-Fi Aware network connection."""
@@ -212,7 +218,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 discovery_session,
                 peer,
                 is_accept_any_peer,
-                network_specifier_params.to_dict() if network_specifier_params else None,
+                network_specifier_params.to_dict()
+                if network_specifier_params else None,
             )
         )
         network_request_dict = constants.NetworkRequest(
@@ -311,7 +318,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             discovered_event.data[constants.WifiAwareSnippetParams.PEER_ID])
         peer_id_on_pub = None
         if get_peer_id:  # only need message to receive peer ID
-            # Subscriber: send message to peer (Publisher - so it knows our address)
+            # Subscriber: send message to peer (
+            # Publisher - so it knows our address)
             s_dut.wifi_aware_snippet.wifiAwareSendMessage(
                 s_disc_id.callback_id,
                 peer_id_on_sub,
@@ -408,11 +416,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         received_message = receiver_ad.wifi_aware_snippet.connectivityReadSocket(
             receiver_callback_id, len(msg)
         )
-        logging.info("msg: %s,received_message: %s",msg, received_message)
+        logging.info(
+            "msg: %s,received_message: %s",msg, received_message)
         asserts.assert_equal(
             received_message,
             msg,
-            f'{receiver_ad} received message mismatched.Failure:Expected {msg} but got '
+            f'{receiver_ad} received message mismatched.'+
+            'Failure:Expected {msg} but got '
             f'{received_message}.'
         )
         receiver_ad.log.info('Read data from the socket.')
@@ -454,6 +464,69 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         logging.info('Communicated through socket connection of'+
             'Wi-Fi Aware network successfully.')
 
+    def natwark_callback_even(self,
+                             key,
+                             name,
+                             timeout = 5):
+        """
+        Attempts to collect up to 3 events from a queue.
+
+        This function will loop a maximum of three times, trying to fetch an
+        event in each iteration. The loop will exit early if the queue is
+        empty or if an unexpected error occurs.
+
+        Args:
+            key: The object with the waitAndGet method.
+            name: The name of the event to wait for.
+            timeout: The timeout in seconds for each wait attempt.
+
+        Returns:
+            A list of the events that were successfully collected.
+        """
+        all_available_events = []
+        # Loop a maximum of 3 times.
+        # The underscore '_' is used as the variable name because we don't
+        # need to use the loop counter itself.
+        for _ in range(3):
+            try:
+                event = key.waitAndGet(
+                event_name = name,
+                timeout = timeout
+                )
+                all_available_events.append(event)
+                logging.info(f"Collected event: {event}")
+            except Empty:
+                # The queue is empty, so we can't get any more events.
+                # Stop trying.
+                logging.info(
+                    "No more events in the queue. Exiting collection loop.")
+                break
+            except Exception as e:
+                # An unexpected error occurred. Log it and stop trying.
+                logging.error(f"An unexpected error occurred: {e}")
+                break
+        return all_available_events
+
+    def find_callback_name(self, events, name):
+        """Finds the first event in a list by its callback name.
+
+        Args:
+            events: A list of event objects to search.
+            name: The callback name to find.
+
+        Returns:
+            The first matching event object.
+
+        Raises:
+            ValueError: If no event with the specified name is found.
+        """
+        for event in events:
+            if event.data[_CALLBACK_NAME] == name:
+                return event
+        # If the loop completes without finding a match, raise an error.
+        raise ValueError(f"Callback with name '{name}' not found.")
+
+
     def run_ib_data_path_test(self,
                               ptype,
                               stype,
@@ -482,7 +555,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         """
         (p_dut, s_dut, p_id, s_id, p_disc_id, s_disc_id, peer_id_on_sub,
                 peer_id_on_pub) = self.set_up_discovery(
-             ptype, stype, use_peer_id, pub_on_both=pub_on_both, pub_on_both_same=pub_on_both_same)
+             ptype, stype, use_peer_id,
+            pub_on_both=pub_on_both, pub_on_both_same=pub_on_both_same)
         passphrase = None
         pmk = None
 
@@ -496,7 +570,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         transport_protocol = 6  # TCP/IP
 
         # Publisher: request network
-        pub_accept_handler = p_dut.wifi_aware_snippet.connectivityServerSocketAccept()
+        pub_accept_handler = (
+            p_dut.wifi_aware_snippet.connectivityServerSocketAccept())
         network_id = pub_accept_handler.callback_id
         pub_local_port = pub_accept_handler.ret_value
         self.publish_session = p_disc_id.callback_id
@@ -530,135 +605,152 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 )
         # Subscriber: request network
         s_req_key = self._request_network(
-                ad=s_dut,
-                discovery_session=self.subscribe_session,
-                peer=peer_id_on_sub,
-                net_work_request_id=network_id,
-                network_specifier_params=constants.WifiAwareNetworkSpecifier(
-                    psk_passphrase=passphrase,
-                    pmk=pmk,
-                    ),
-                )
-        p_network_callback_event = p_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
+            ad=s_dut,
+            discovery_session=self.subscribe_session,
+            peer=peer_id_on_sub,
+            net_work_request_id=network_id,
+            network_specifier_params=constants.WifiAwareNetworkSpecifier(
+                psk_passphrase=passphrase,
+                pmk=pmk,
+                ),
             )
-        p_callback_name = p_network_callback_event.data[_CALLBACK_NAME]
-        s_network_callback_event = s_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
+        collected_events = self.natwark_callback_even(
+            p_req_key, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        # After the loop, the list will contain all successfully collected events.
+        logging.info(
+            f"Finished collection. Total events saved: {len(collected_events)}"
+        )
+        p_callback_name = (
+            self.find_callback_name(
+                collected_events,
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED))
+        all_available_events =self.natwark_callback_even(
+            s_req_key, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        s_callback_name=(
+            self.find_callback_name(
+                all_available_events,
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED))
+        if s_callback_name:
+            logging.info(
+                f"Successfully found the ON_CAPABILITIES_CHANGED event.")
+            # Now you can access its data.
+            # For example, if the event data is in a 'data' key:
+            s_callback_data = s_callback_name.data
+            logging.info(f"s_callback_data data: {s_callback_data}")
+        else:
+            logging.warning(
+                "Could not find the ON_CAPABILITIES_CHANGED event in the list."
             )
-        s_callback_name = s_network_callback_event.data[_CALLBACK_NAME]
-
 
         if expect_failure:
             asserts.assert_equal(
-                p_callback_name, constants.NetworkCbName.ON_UNAVAILABLE,
-                f'{p_dut} failed to request the network, got callback'
+                p_callback_name.data[_CALLBACK_NAME],
+                constants.NetworkCbName.ON_UNAVAILABLE,
+                f'{p_dut} failed .to request the network, got callback'
                 f' {p_callback_name}.'
                 )
             asserts.assert_equal(
-                s_callback_name, constants.NetworkCbName.ON_UNAVAILABLE,
+                s_callback_name.data[_CALLBACK_NAME],
+                constants.NetworkCbName.ON_UNAVAILABLE,
                 f'{s_dut} failed to request the network, got callback'
                 f' {s_callback_name}.'
                 )
         else:
-            # # Publisher & Subscriber: wait for network formation
+            # Publisher & Subscriber: wait for network formation
             asserts.assert_equal(
-                p_callback_name, constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
+                p_callback_name.data[_CALLBACK_NAME],
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
                 f'{p_dut} succeeded to request the network, got callback'
                 f' {p_callback_name}.'
                 )
-            network = p_network_callback_event.data[
+            network = p_callback_name.data[
                 constants.NetworkCbEventKey.NETWORK]
-            network_capabilities = p_network_callback_event.data[
+            network_capabilities = p_callback_name.data[
                 constants.NetworkCbEventKey.NETWORK_CAPABILITIES]
             asserts.assert_true(
                 network and network_capabilities,
                 f'{p_dut} received a null Network or NetworkCapabilities!?.'
             )
             asserts.assert_equal(
-                s_callback_name, constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
+                s_callback_name.data[_CALLBACK_NAME],
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
                 f'{s_dut} succeeded to request the network, got callback'
                 f' {s_callback_name}.'
                 )
-            network = s_network_callback_event.data[
+            network = s_callback_name.data[
                 constants.NetworkCbEventKey.NETWORK]
-            network_capabilities = s_network_callback_event.data[
+            network_capabilities = s_callback_name.data[
                 constants.NetworkCbEventKey.NETWORK_CAPABILITIES]
             asserts.assert_true(
                 network and network_capabilities,
                 f'{s_dut} received a null Network or NetworkCapabilities!?.'
             )
-            p_net_event_nc = p_network_callback_event.data
-            s_net_event_nc = s_network_callback_event.data
+            p_net_event_nc = p_callback_name.data
+            s_net_event_nc = s_callback_name.data
+            # validate no leak of information
+            asserts.assert_false(
+                _NETWORK_CB_KEY_NETWORK_SPECIFIER in p_net_event_nc,
+                "Network specifier leak!")
+            asserts.assert_false(
+                _NETWORK_CB_KEY_NETWORK_SPECIFIER in s_net_event_nc,
+                "Network specifier leak!")
 
-        # validate no leak of information
-        asserts.assert_false(
-            _NETWORK_CB_KEY_NETWORK_SPECIFIER in p_net_event_nc,
-             "Network specifier leak!")
-        asserts.assert_false(
-            _NETWORK_CB_KEY_NETWORK_SPECIFIER in s_net_event_nc,
-             "Network specifier leak!")
-
-        #To get ipv6 ip address
-        s_ipv6= p_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
-        p_ipv6 = s_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
-        # note that Pub <-> Sub since IPv6 are of peer's!
-        self.verify_network_info(
-            p_network_callback_event.data,
-            s_network_callback_event.data,
-            encr_type == self.ENCR_TYPE_OPEN,
-            port = pub_local_port,
-            transport_protocol = transport_protocol)
-
-        p_network_callback_LINK = p_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        asserts.assert_equal(
+            #To get ipv6 ip address
+            s_ipv6= p_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
+            p_ipv6 = s_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
+            # note that Pub <-> Sub since IPv6 are of peer's!
+            self.verify_network_info(
+                p_callback_name.data,
+                s_callback_name.data,
+                encr_type == self.ENCR_TYPE_OPEN,
+                port = pub_local_port,
+                transport_protocol = transport_protocol)
+            p_network_callback_LINK = (
+                self.find_callback_name(
+                    collected_events, _NETWORK_CB_LINK_PROPERTIES_CHANGED)
+                )
+            asserts.assert_equal(
                 p_network_callback_LINK.data[_CALLBACK_NAME],
                 _NETWORK_CB_LINK_PROPERTIES_CHANGED,
                 f'{p_dut} succeeded to request the LinkPropertiesChanged,'+
                 ' got callback'
                 f' {p_network_callback_LINK.data[_CALLBACK_NAME]}.'
-                )
-
-        s_network_callback_LINK = s_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
             )
-        asserts.assert_equal(
+            s_network_callback_LINK = (
+                self.find_callback_name(
+                    all_available_events, _NETWORK_CB_LINK_PROPERTIES_CHANGED)
+            )
+            asserts.assert_equal(
                 s_network_callback_LINK.data[_CALLBACK_NAME],
                 _NETWORK_CB_LINK_PROPERTIES_CHANGED,
                 f'{s_dut} succeeded to request the LinkPropertiesChanged,'+
                 ' got callback'
                 f' {s_network_callback_LINK.data[_CALLBACK_NAME]}.'
                 )
-        p_aware_if = p_network_callback_LINK.data[
+            p_aware_if = p_network_callback_LINK.data[
                                 _NETWORK_CB_KEY_INTERFACE_NAME]
-        s_aware_if = s_network_callback_LINK.data[
+            s_aware_if = s_network_callback_LINK.data[
                                 _NETWORK_CB_KEY_INTERFACE_NAME]
 
-        logging.info("Interface names: p=%s, s=%s", p_aware_if,
-                      s_aware_if)
-        logging.info("Interface addresses (IPv6): p=%s, s=%s", p_ipv6,
-                      s_ipv6)
-        self._establish_socket_and_send_msg(
-            pub_accept_handler=pub_accept_handler,
-            network_id=network_id,
-            pub_local_port=pub_local_port
-            )
+            logging.info("Interface names: p=%s, s=%s", p_aware_if,
+                        s_aware_if)
+            logging.info("Interface addresses (IPv6): p=%s, s=%s", p_ipv6,
+                        s_ipv6)
+            self._establish_socket_and_send_msg(
+                pub_accept_handler=pub_accept_handler,
+                network_id=network_id,
+                pub_local_port=pub_local_port
+                )
 
-        # terminate sessions and wait for ON_LOST callbacks
-        p_dut.wifi_aware_snippet.wifiAwareDetach(p_id)
-        s_dut.wifi_aware_snippet.wifiAwareDetach(s_id)
-        time.sleep(10)
-        p_network_callback_lost = p_req_key.waitAndGet(
+            # terminate sessions and wait for ON_LOST callbacks
+            p_dut.wifi_aware_snippet.wifiAwareDetach(p_id)
+            s_dut.wifi_aware_snippet.wifiAwareDetach(s_id)
+            time.sleep(10)
+            p_network_callback_lost = p_req_key.waitAndGet(
                 event_name=constants.NetworkCbEventName.NETWORK_CB_LOST,
                 timeout=_DEFAULT_TIMEOUT,
             )
-        s_network_callback_lost = s_req_key.waitAndGet(
+            s_network_callback_lost = s_req_key.waitAndGet(
                 event_name=constants.NetworkCbEventName.NETWORK_CB_LOST,
                 timeout=_DEFAULT_TIMEOUT,
             )
@@ -699,12 +791,15 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         )
         logging.info("network_specifier_parcel: %s", network_specifier_parcel)
         network_request_dict = constants.NetworkRequest(
-            transport_type=constants.NetworkCapabilities.Transport.TRANSPORT_WIFI_AWARE,
+            transport_type=(
+                constants.NetworkCapabilities.Transport.TRANSPORT_WIFI_AWARE),
             network_specifier_parcel=network_specifier_parcel["result"],
         ).to_dict()
         logging.info("network_request_dict: %s", network_request_dict)
         return ad.wifi_aware_snippet.connectivityRequestNetwork(
-            net_work_request_id, network_request_dict, _REQUEST_NETWORK_TIMEOUT_MS
+            net_work_request_id,
+            network_request_dict,
+            _REQUEST_NETWORK_TIMEOUT_MS
         )
 
 
@@ -783,7 +878,6 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             passphrase = self.PASSPHRASE
         elif encr_type == self.ENCR_TYPE_PMK:
             pmk = self.PMK
-
         # Responder: request network
         init_dut_accept_handler =(
             init_dut.wifi_aware_snippet.connectivityServerSocketAccept())
@@ -798,7 +892,6 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             pmk,
             network_id
             )
-
         # Initiator: request network
         init_req_key = self.request_oob_network(
             init_dut,
@@ -809,38 +902,54 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             pmk,
             network_id
             )
-        init_callback_event = init_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        init_name = init_callback_event.data[_CALLBACK_NAME]
-        resp_callback_event = resp_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        resp_name = resp_callback_event.data[_CALLBACK_NAME]
-
+        init_callback_event = self.natwark_callback_even(
+            init_req_key,
+            constants.NetworkCbEventName.NETWORK_CALLBACK,
+            timeout=_DEFAULT_TIMEOUT
+        )
+        init_name_data =(
+            self.find_callback_name(init_callback_event,
+                               constants.NetworkCbName.ON_CAPABILITIES_CHANGED))
+        init_name = init_name_data.data[_CALLBACK_NAME]
+        resp_callback_event = self.natwark_callback_even(
+            resp_req_key,
+            constants.NetworkCbEventName.NETWORK_CALLBACK,
+            timeout=_DEFAULT_TIMEOUT
+        )
+        resp_name_data =(
+            self.find_callback_name(resp_callback_event,
+                               constants.NetworkCbName.ON_CAPABILITIES_CHANGED)
+        )
+        resp_name= resp_name_data.data[_CALLBACK_NAME]
         if expect_failure:
+            init_name =(
+                self.find_callback_name(init_callback_event,
+                                   constants.NetworkCbName.ON_UNAVAILABLE))
+            resp_name =(
+                self.find_callback_name(resp_callback_event,
+                                   constants.NetworkCbName.ON_UNAVAILABLE))
             asserts.assert_equal(
-                init_name, constants.NetworkCbName.ON_UNAVAILABLE,
+                init_name.data[_CALLBACK_NAME],
+                constants.NetworkCbName.ON_UNAVAILABLE,
                 f'{init_dut} failed to request the network, got callback'
-                f' {init_name}.'
+                f' {init_name.data[_CALLBACK_NAME]}.'
                 )
             asserts.assert_equal(
-                resp_name, constants.NetworkCbName.ON_UNAVAILABLE,
+                resp_name.data[_CALLBACK_NAME],
+                constants.NetworkCbName.ON_UNAVAILABLE,
                 f'{resp_dut} failed to request the network, got callback'
-                f' {resp_name}.'
+                f' {resp_name.data[_CALLBACK_NAME]}.'
                 )
         else:
-            # # Publisher & Subscriber: wait for network formation
+            # Publisher & Subscriber: wait for network formation
             asserts.assert_equal(
                 init_name, constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
                 f'{init_dut} succeeded to request the network, got callback'
                 f' {init_name}.'
                 )
-            network = init_callback_event.data[
+            network = init_name_data.data[
                 constants.NetworkCbEventKey.NETWORK]
-            network_capabilities = init_callback_event.data[
+            network_capabilities = init_name_data.data[
                 constants.NetworkCbEventKey.NETWORK_CAPABILITIES]
             asserts.assert_true(
                 network and network_capabilities,
@@ -851,16 +960,16 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 f'{resp_dut} succeeded to request the network, got callback'
                 f' {resp_name}.'
                 )
-            network = resp_callback_event.data[
+            network = resp_name_data.data[
                 constants.NetworkCbEventKey.NETWORK]
-            network_capabilities = resp_callback_event.data[
+            network_capabilities = resp_name_data.data[
                 constants.NetworkCbEventKey.NETWORK_CAPABILITIES]
             asserts.assert_true(
                 network and network_capabilities,
                 f'{resp_dut} received a null Network or NetworkCapabilities!?.'
             )
-            init_net_event_nc = init_callback_event.data
-            resp_net_event_nc = resp_callback_event.data
+            init_net_event_nc = init_name_data.data
+            resp_net_event_nc = resp_name_data.data
             # validate no leak of information
             asserts.assert_false(
                 _NETWORK_CB_KEY_NETWORK_SPECIFIER in init_net_event_nc,
@@ -873,37 +982,36 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             resp_ipv6= init_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
             init_ipv6 = resp_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
             # note that Pub <-> Sub since IPv6 are of peer's!
-            init_callback_LINK = init_req_key.waitAndGet(
-                    event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                    timeout=_DEFAULT_TIMEOUT,
-                )
-            asserts.assert_equal(
-                    init_callback_LINK.data[_CALLBACK_NAME],
-                    _NETWORK_CB_LINK_PROPERTIES_CHANGED,
-                    f'{init_dut} succeeded to request the'+
-                    ' LinkPropertiesChanged, got callback'
-                    f' {init_callback_LINK.data[_CALLBACK_NAME]}.'
-                    )
 
-            resp_callback_LINK = resp_req_key.waitAndGet(
-                    event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                    timeout=_DEFAULT_TIMEOUT,
-                )
+            init_callback_link =(
+                self.find_callback_name(init_callback_event,
+                                   _NETWORK_CB_LINK_PROPERTIES_CHANGED))
             asserts.assert_equal(
-                    resp_callback_LINK.data[_CALLBACK_NAME],
-                    _NETWORK_CB_LINK_PROPERTIES_CHANGED,
-                    f'{resp_dut} succeeded to request the'+
-                    'LinkPropertiesChanged, got callback'
-                    f' {resp_callback_LINK.data[_CALLBACK_NAME]}.'
-                    )
-            init_aware_if = init_callback_LINK.data[
+                init_callback_link.data[_CALLBACK_NAME],
+                _NETWORK_CB_LINK_PROPERTIES_CHANGED,
+                f'{init_dut} succeeded to request the'+
+                ' LinkPropertiesChanged, got callback'
+                f' {init_callback_link.data[_CALLBACK_NAME]}.'
+                )
+            resp_callback_link =(
+                self.find_callback_name(resp_callback_event,
+                                   _NETWORK_CB_LINK_PROPERTIES_CHANGED))
+            asserts.assert_equal(
+                resp_callback_link.data[_CALLBACK_NAME],
+                _NETWORK_CB_LINK_PROPERTIES_CHANGED,
+                f'{resp_dut} succeeded to request the'+
+                'LinkPropertiesChanged, got callback'
+                f' {resp_callback_link.data[_CALLBACK_NAME]}.'
+            )
+
+            init_aware_if = init_callback_link.data[
                 _NETWORK_CB_KEY_INTERFACE_NAME]
-            resp_aware_if = resp_callback_LINK.data[
+            resp_aware_if = resp_callback_link.data[
                 _NETWORK_CB_KEY_INTERFACE_NAME]
 
-            logging.info("Interface names: p=%s, s=%s", init_aware_if,
+            logging.info("Interface names: p=%s , s=%s ", init_aware_if,
                         resp_aware_if)
-            logging.info("Interface addresses (IPv6): p=%s, s=%s", init_ipv6,
+            logging.info("Interface addresses (IPv6): p=%s , s=%s ", init_ipv6,
                         resp_ipv6)
             self._establish_socket_and_send_msg(
                 pub_accept_handler=init_dut_accept_handler,
@@ -923,8 +1031,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                     event_name=constants.NetworkCbEventName.NETWORK_CB_LOST,
                     timeout=_DEFAULT_TIMEOUT,
                 )
-        init_dut.wifi_aware_snippet.connectivityUnregisterNetwork(init_callback_event.callback_id)
-        resp_dut.wifi_aware_snippet.connectivityUnregisterNetwork(resp_callback_event.callback_id)
+        init_dut.wifi_aware_snippet.connectivityUnregisterNetwork(
+            init_callback_link.callback_id)
+        resp_dut.wifi_aware_snippet.connectivityUnregisterNetwork(
+            resp_callback_link.callback_id)
 
     def wait_for_request_responses(self, dut, req_keys, aware_ifs, aware_ipv6):
         """Wait for network request confirmation for all request keys.
@@ -936,36 +1046,37 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             aware_ipv6: (out) A list into which to append the network ipv6
             address
         """
-        network_callback_event = req_keys.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
-            # network_callback_event=req_keys[0]
-        if network_callback_event.data[_CALLBACK_NAME] == _NETWORK_CB_LINK_PROPERTIES_CHANGED:
-            if network_callback_event.callback_id:
-                aware_ifs.append(network_callback_event.data["interfaceName"])
-            else:
-                logging.info(
-                    "Received an unexpected connectivity, the revoked "+
-                    "network request probably went through -- %s", network_callback_event)
-        elif network_callback_event.data[_CALLBACK_NAME] == (
-            constants.NetworkCbName.ON_CAPABILITIES_CHANGED) :
-            if network_callback_event.callback_id:
-                aware_ipv6.append(network_callback_event.data[
-                    constants.NetworkCbName.NET_CAP_IPV6])
-            else:
-                logging.info(
-                    "Received an unexpected connectivity, the revoked "+
-                    "network request probably went through -- %s",
-                    network_callback_event)
-                asserts.assert_false(
-                     _NETWORK_CB_KEY_NETWORK_SPECIFIER in
-                    network_callback_event.data,
-                     "Network specifier leak!")
+        network_callback_events =self.natwark_callback_even(
+            req_keys, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        for network_callback_event in network_callback_events:
+            if network_callback_event.data[_CALLBACK_NAME] == (
+                    _NETWORK_CB_LINK_PROPERTIES_CHANGED):
+                if network_callback_event.callback_id:
+                    aware_ifs.append(network_callback_event.data["interfaceName"])
+                else:
+                    logging.info(
+                        "Received an unexpected connectivity, the revoked "+
+                        "network request probably went through -- %s",
+                        network_callback_event)
+            elif network_callback_event.data[_CALLBACK_NAME] == (
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED) :
+                if network_callback_event.callback_id:
+                    aware_ipv6.append(network_callback_event.data[
+                        constants.NetworkCbName.NET_CAP_IPV6])
+                else:
+                    logging.info(
+                        "Received an unexpected connectivity, the revoked "+
+                        "network request probably went through -- %s",
+                        network_callback_event)
+                    asserts.assert_false(
+                        _NETWORK_CB_KEY_NETWORK_SPECIFIER in
+                        network_callback_event.data,
+                        "Network specifier leak!")
 
     def get_ipv6_addr(self, device, interface):
-        """Get the IPv6 address of the specified interface. Uses ifconfig and parses
-        its output. Returns a None if the interface does not have an IPv6 address
+        """Get the IPv6 address of the specified interface.
+         Uses ifconfig and parses its output.
+         Returns a None if the interface does not have an IPv6 address
         (indicating it is not UP).
 
         Args:
@@ -983,8 +1094,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                                           resp_mismatch_mac=False,
                                           init_encr_type=ENCR_TYPE_OPEN,
                                           resp_encr_type=ENCR_TYPE_OPEN):
-        """Runs the negative out-of-band data-path tests: mismatched information
-        between Responder and Initiator.
+        """Runs the negative out-of-band data-path tests:
+        mismatched information between Responder and Initiator.
 
         Args:
             init_mismatch_mac: True to mismatch the Initiator MAC address
@@ -1007,8 +1118,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             resp_mac = "00" + resp_mac[2:]
 
         # wait for devices to synchronize with each other - there are no other
-        # mechanisms to make sure this happens for OOB discovery (except retrying
-        # to execute the data-path request)
+        # mechanisms to make sure this happens for OOB discovery (
+        # except retrying to execute the data-path request)
         time.sleep(self.WAIT_FOR_CLUSTER)
 
         # set up separate keys: even if types are the same we want a mismatch
@@ -1026,7 +1137,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             resp_pmk = self.PMK2
 
         # Responder: request network
-        init_dut_accept_handler = init_dut.wifi_aware_snippet.connectivityServerSocketAccept()
+        init_dut_accept_handler =(
+            init_dut.wifi_aware_snippet.connectivityServerSocketAccept())
         network_id = init_dut_accept_handler.callback_id
         init_local_port = init_dut_accept_handler.ret_value
         resp_req_key = self.request_oob_network(
@@ -1085,7 +1197,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         init_dut.wifi_aware_snippet.connectivityUnregisterNetwork(network_id)
         resp_dut.wifi_aware_snippet.connectivityUnregisterNetwork(network_id)
 
-    def get_network_specifier(self, dut, id, dev_type, peer_mac, sec, net_work_request_id):
+    def get_network_specifier(
+            self, dut, id, dev_type, peer_mac, sec, net_work_request_id):
         """Create a network specifier for the device based on the security
         configuration.
 
@@ -1112,11 +1225,14 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 id, dev_type, peer_mac, None, sec)
                 )
         network_request_dict = constants.NetworkRequest(
-            transport_type=constants.NetworkCapabilities.Transport.TRANSPORT_WIFI_AWARE,
+            transport_type=(
+                constants.NetworkCapabilities.Transport.TRANSPORT_WIFI_AWARE),
             network_specifier_parcel=network_specifier_parcel["result"],
         ).to_dict()
         return dut.wifi_aware_snippet.connectivityRequestNetwork(
-            net_work_request_id, network_request_dict, _REQUEST_NETWORK_TIMEOUT_MS
+            net_work_request_id,
+            network_request_dict,
+            _REQUEST_NETWORK_TIMEOUT_MS
         )
 
     def run_mix_ib_oob(self, same_request, ib_first, inits_on_same_dut):
@@ -1131,7 +1247,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             same_request: Issue canonically identical requests (same NMI peer,
             same passphrase) if True, if False use different passphrases.
             ib_first: If True then the in-band network is requested first,
-            otherwise (if False) then the out-of-band network is requested first.
+            otherwise (if False) then the out-of-band network is requested
+            first.
             inits_on_same_dut: If True then the Initiators are run on the same
             device, otherwise (if False) then the Initiators are run on
             different devices. Note that Subscribe == Initiator.
@@ -1380,7 +1497,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                                    init_mac,
                                    resp_id,
                                    resp_mac):
-        """Create an NDP on top of existing Aware sessions (using OOB discovery)
+        """Create an NDP on top of existing Aware sessions (
+        using OOB discovery)
 
         Args:
             init_dut: Initiator device
@@ -1398,7 +1516,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             resp_ipv6: Responder IPv6 address
         """
         # Responder: request network
-        init_dut_accept_handler = init_dut.wifi_aware_snippet.connectivityServerSocketAccept()
+        init_dut_accept_handler = (
+            init_dut.wifi_aware_snippet.connectivityServerSocketAccept()
+        )
         network_id = init_dut_accept_handler.callback_id
         init_local_port = init_dut_accept_handler.ret_value
         resp_req_key = self.request_oob_network(
@@ -1421,16 +1541,26 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             network_id
             )
         time.sleep(5)
-        init_callback_event = init_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        init_name = init_callback_event.data[_CALLBACK_NAME]
-        resp_callback_event = resp_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        resp_name = resp_callback_event.data[_CALLBACK_NAME]
+        init_callback_event = self.natwark_callback_even(
+            init_req_key,
+            constants.NetworkCbEventName.NETWORK_CALLBACK,
+            timeout=_DEFAULT_TIMEOUT
+        )
+        init_name_data =(
+            self.find_callback_name(init_callback_event,
+                               constants.NetworkCbName.ON_CAPABILITIES_CHANGED)
+        )
+        init_name = init_name_data.data[_CALLBACK_NAME]
+        resp_callback_event = self.natwark_callback_even(
+            resp_req_key,
+            constants.NetworkCbEventName.NETWORK_CALLBACK,
+            timeout=_DEFAULT_TIMEOUT
+        )
+        resp_name_data =(
+            self.find_callback_name(resp_callback_event,
+                               constants.NetworkCbName.ON_CAPABILITIES_CHANGED)
+        )
+        resp_name = resp_name_data.data[_CALLBACK_NAME]
         asserts.assert_equal(
             init_name, constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
             f'{init_dut} succeeded to request the network, got callback'
@@ -1441,8 +1571,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             f'{resp_dut} succeeded to request the network, got callback'
             f' {resp_name}.'
             )
-        init_net_event_nc = init_callback_event.data
-        resp_net_event_nc = resp_callback_event.data
+        init_net_event_nc = init_name_data.data
+        resp_net_event_nc = resp_name_data.data
             # validate no leak of information
         asserts.assert_false(
             _NETWORK_CB_KEY_NETWORK_SPECIFIER in init_net_event_nc,
@@ -1455,10 +1585,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         resp_ipv6= init_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
         init_ipv6 = resp_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
         # note that Pub <-> Sub since IPv6 are of peer's!
-        init_callback_LINK = init_req_key.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
+        init_callback_LINK =(
+            self.find_callback_name(init_callback_event,
+                               _NETWORK_CB_LINK_PROPERTIES_CHANGED))
         asserts.assert_equal(
             init_callback_LINK.data[_CALLBACK_NAME],
             _NETWORK_CB_LINK_PROPERTIES_CHANGED,
@@ -1466,10 +1595,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             ' LinkPropertiesChanged, got callback'
             f' {init_callback_LINK.data[_CALLBACK_NAME]}.'
                 )
-        resp_callback_LINK = resp_req_key.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
+        resp_callback_LINK =(
+            self.find_callback_name(resp_callback_event,
+                               _NETWORK_CB_LINK_PROPERTIES_CHANGED))
         asserts.assert_equal(
             resp_callback_LINK.data[_CALLBACK_NAME],
             _NETWORK_CB_LINK_PROPERTIES_CHANGED,
@@ -1497,7 +1625,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             An RpcException if unable to set the country code.
         """
         try:
-            ad.adb.shell("cmd wifi force-country-code enabled %s" % country_code)
+            ad.adb.shell(
+                "cmd wifi force-country-code enabled %s" % country_code)
         except Exception as e:
             ad.log.info(f"ADB command execution failed: {e}")
 
@@ -1550,46 +1679,39 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             peer=peer_id_on_sub,
             net_work_request_id=network_id,
         )
-        resp_net_event_nc = sub_network_cb_handler.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        # time.sleep(5)
-        init_net_event_nc = pub_network_cb_handler.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
+        resp_callback_event = self.natwark_callback_even(
+            sub_network_cb_handler,
+            constants.NetworkCbEventName.NETWORK_CALLBACK,
+            timeout=_DEFAULT_TIMEOUT
+        )
+        init_callback_event = self.natwark_callback_even(
+            pub_network_cb_handler,
+            constants.NetworkCbEventName.NETWORK_CALLBACK,
+            timeout=_DEFAULT_TIMEOUT
+        )
+        init_net_event_nc = self.find_callback_name(
+            init_callback_event,constants.NetworkCbName.ON_CAPABILITIES_CHANGED
+        )
+        resp_net_event_nc = self.find_callback_name(
+            resp_callback_event,constants.NetworkCbName.ON_CAPABILITIES_CHANGED
+        )
         s_ipv6 = resp_net_event_nc.data[constants.NetworkCbName.NET_CAP_IPV6]
         p_ipv6 = init_net_event_nc.data[constants.NetworkCbName.NET_CAP_IPV6]
-        p_network_callback_LINK = pub_network_cb_handler.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        s_network_callback_LINK = sub_network_cb_handler.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
+
+        p_network_callback_LINK = self.find_callback_name(
+            init_callback_event,_NETWORK_CB_LINK_PROPERTIES_CHANGED)
+
+        s_network_callback_LINK = self.find_callback_name(
+            resp_callback_event,_NETWORK_CB_LINK_PROPERTIES_CHANGED)
         s_aware_if = s_network_callback_LINK.data[
             _NETWORK_CB_KEY_INTERFACE_NAME]
         p_aware_if = p_network_callback_LINK.data[
             _NETWORK_CB_KEY_INTERFACE_NAME]
-        pub_network_cap = autils.wait_for_network(
-            ad=p_dut,
-            request_network_cb_handler=pub_network_cb_handler,
-            expected_channel=None,
-        )
-        sub_network_cap = autils.wait_for_network(
-            ad=s_dut,
-            request_network_cb_handler=sub_network_cb_handler,
-            expected_channel=None,
-        )
-
         p_dut.log.info('interfaceName = %s, ipv6=%s', p_aware_if, p_ipv6)
-
         s_dut.log.info('interfaceName = %s, ipv6=%s', s_aware_if, s_ipv6)
         return (
-            pub_network_cap,
-            sub_network_cap,
+            init_net_event_nc,
+            resp_net_event_nc,
             p_aware_if,
             s_aware_if,
             p_ipv6,
@@ -1628,8 +1750,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             resp_id, resp_mac = self.attach_with_identity(resp_dut)
             time.sleep(self.WAIT_FOR_CLUSTER)
             (init_req_key, resp_req_key, init_aware_if, resp_aware_if, init_ipv6,
-             resp_ipv6) = self.create_oob_ndp_on_sessions(init_dut, resp_dut, init_id,
-                                                          init_mac, resp_id, resp_mac)
+             resp_ipv6) = self.create_oob_ndp_on_sessions(
+                init_dut, resp_dut, init_id, init_mac, resp_id, resp_mac)
         logging.info("Interface names: I=%s, R=%s", init_aware_if,
                       resp_aware_if)
         logging.info("Interface addresses (IPv6): I=%s, R=%s", init_ipv6,
@@ -1659,8 +1781,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1678,8 +1802,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1697,8 +1823,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPskPassphrase(String)',
         ]
@@ -1717,8 +1845,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPskPassphrase(String)',
         ]
@@ -1737,8 +1867,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPmk(byte[])',
         ]
@@ -1757,8 +1889,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPmk(byte[])',
         ]
@@ -1777,8 +1911,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_SOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_SOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1796,8 +1932,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_SOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_SOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1815,8 +1953,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_SOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_SOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPskPassphrase(String)',
         ]
@@ -1835,8 +1975,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_SOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_SOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPskPassphrase(String)',
         ]
@@ -1855,8 +1997,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_SOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_SOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPmk(byte[])',
         ]
@@ -1875,8 +2019,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_SOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_SOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_ACTIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPmk(byte[])',
         ]
@@ -1915,8 +2061,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1940,8 +2088,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1965,8 +2115,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -1990,8 +2142,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         ]
     )
@@ -2016,7 +2170,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareSession#subscrible(android.net.wifi.aware.SubscribeConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#subscrible('
+        'android.net.wifi.aware.SubscribeConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPskPassphrase(String)',
         ]
@@ -2036,7 +2193,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareSession#subscrible(android.net.wifi.aware.SubscribeConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#subscrible('
+        'android.net.wifi.aware.SubscribeConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#setPskPassphrase(String)',
         ]
@@ -2056,7 +2216,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        ' android.net.wifi.aware.IdentityChangedListener,'
+        ' android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
     )
@@ -2068,7 +2231,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
     )
@@ -2080,7 +2246,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
     )
@@ -2093,7 +2262,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -2109,7 +2281,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -2125,7 +2300,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         ]
     )
@@ -2138,7 +2316,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         ]
@@ -2152,7 +2332,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -2166,7 +2348,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         ]
@@ -2180,7 +2365,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener,'
+        'android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         ]
@@ -2210,7 +2398,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
     )
@@ -2225,7 +2415,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
     )
@@ -2240,7 +2432,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         ]
     )
@@ -2255,9 +2449,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
     )
@@ -2275,7 +2473,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2341,9 +2541,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 network_id
                 )
             resp_req_keys.append(resp_ini_key)
-            self.wait_for_request_responses(init_dut, init_req_keys[i],
+        self.wait_for_request_responses(init_dut, init_req_keys[i],
              init_aware_ifs, resp_aware_ipv6)
-            self.wait_for_request_responses(resp_dut,
+        self.wait_for_request_responses(resp_dut,
              resp_req_keys[i], resp_aware_ifs, init_aware_ipv6)
         for i in range(M):
             init_req_key = self.request_oob_network(
@@ -2366,9 +2566,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 network_id
                 )
             resp_req_keys.append(resp_ini_key)
-            self.wait_for_request_responses(init_dut, init_req_keys[i],
+        self.wait_for_request_responses(init_dut, init_req_keys[i],
              init_aware_ifs, resp_aware_ipv6)
-            self.wait_for_request_responses(resp_dut, resp_req_keys[i],
+        self.wait_for_request_responses(resp_dut, resp_req_keys[i],
              resp_aware_ifs, init_aware_ipv6)
         # determine whether all interfaces and ipv6 addresses are identical
         # (single NDP)
@@ -2376,8 +2576,10 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         resp_aware_ifs = list(set(resp_aware_ifs))
         init_aware_ipv6 = list(set(init_aware_ipv6))
         resp_aware_ipv6 = list(set(resp_aware_ipv6))
-        logging.info("Interface names: I=%s, R=%s", init_aware_ifs, resp_aware_ifs)
-        logging.info("Interface IPv6: I=%s, R=%s", init_aware_ipv6, resp_aware_ipv6)
+        logging.info(
+            "Interface names: I=%s, R=%s", init_aware_ifs, resp_aware_ifs)
+        logging.info(
+            "Interface IPv6: I=%s, R=%s", init_aware_ipv6, resp_aware_ipv6)
         logging.info("Initiator requests: %s", init_req_keys)
         logging.info("Responder requests: %s", resp_req_keys)
         asserts.assert_equal(
@@ -2401,6 +2603,8 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
                 asserts.assert_equal(
                     resp_ipv6 is None, if_name not in resp_aware_ifs,
                     "Responder interface %s in unexpected state" % if_name)
+        resp_dut.wifi_aware_snippet.connectivityUnregisterNetwork(
+            network_id)
         for resp_req_key in resp_req_keys:
             resp_req_callback_event = resp_req_key.waitAndGet(
                 event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
@@ -2408,17 +2612,23 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             )
             resp_dut.wifi_aware_snippet.connectivityUnregisterNetwork(
                 resp_req_callback_event.callback_id)
+        init_dut.wifi_aware_snippet.connectivityUnregisterNetwork(
+            network_id)
+        logging.info("init_req_key %S",init_req_keys)
         for init_req_key in init_req_keys:
             init_req_callback_event = init_req_key.waitAndGet(
                 event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
                 timeout=_DEFAULT_TIMEOUT,
             )
+            logging.info("init_req_key %S",init_req_key)
             init_dut.wifi_aware_snippet.connectivityUnregisterNetwork(
                 init_req_callback_event.callback_id)
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2460,15 +2670,19 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             None,
             network_id
             )
-        i_network_callback_event_a = init_req_key_a.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
+        init_req_collected_events = self.natwark_callback_even(
+            init_req_key_a, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        i_network_callback_event_a = (
+            self.find_callback_name(
+                init_req_collected_events,
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED))
         i_callback_name_a = i_network_callback_event_a.data[_CALLBACK_NAME]
-        r_network_callback_event_a = resp_req_key_a.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
+        resp_req_collected_events = self.natwark_callback_even(
+            resp_req_key_a, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        r_network_callback_event_a = (
+            self.find_callback_name(
+                resp_req_collected_events,
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED))
         r_callback_name_a = r_network_callback_event_a.data[_CALLBACK_NAME]
 
         asserts.assert_equal(
@@ -2511,10 +2725,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         i_ipv6_1= i_net_event_nc_a[constants.NetworkCbName.NET_CAP_IPV6]
         r_ipv6_1 = r_net_event_nc_a[constants.NetworkCbName.NET_CAP_IPV6]
         # note that Pub <-> Sub since IPv6 are of peer's!
-        i_network_callback_LINK_a = init_req_key_a.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
+        i_network_callback_LINK_a = (
+            self.find_callback_name(init_req_collected_events,
+                               _NETWORK_CB_LINK_PROPERTIES_CHANGED))
         asserts.assert_equal(
             i_network_callback_LINK_a.data[_CALLBACK_NAME],
             _NETWORK_CB_LINK_PROPERTIES_CHANGED,
@@ -2522,11 +2735,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             ' got callback'
             f' {i_network_callback_LINK_a.data[_CALLBACK_NAME]}.'
             )
-
-        r_network_callback_LINK_a = resp_req_key_a.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
+        r_network_callback_LINK_a = (
+            self.find_callback_name(resp_req_collected_events,
+                               _NETWORK_CB_LINK_PROPERTIES_CHANGED))
         asserts.assert_equal(
             r_network_callback_LINK_a.data[_CALLBACK_NAME],
             _NETWORK_CB_LINK_PROPERTIES_CHANGED,
@@ -2562,17 +2773,22 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             None,
             network_id
             )
-        i_network_callback_event = init_req_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
+        i_network_callback_events = self.natwark_callback_even(
+            init_req_key, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        i_network_callback_event = (
+            self.find_callback_name(
+                i_network_callback_events,
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED)
+        )
         i_callback_name = i_network_callback_event.data[_CALLBACK_NAME]
-        r_network_callback_event = resp_ini_key.waitAndGet(
-                event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-                timeout=_DEFAULT_TIMEOUT,
-            )
-        r_callback_name = r_network_callback_event.data[_CALLBACK_NAME]
-
+        r_network_callback_events = self.natwark_callback_even(
+            resp_ini_key, constants.NetworkCbEventName.NETWORK_CALLBACK)
+        r_network_callback_event = (
+            self.find_callback_name(
+                r_network_callback_events,
+                constants.NetworkCbName.ON_CAPABILITIES_CHANGED)
+        )
+        r_callback_name = i_network_callback_event.data[_CALLBACK_NAME]
         asserts.assert_equal(
                 i_callback_name,
                 constants.NetworkCbName.ON_CAPABILITIES_CHANGED,
@@ -2613,10 +2829,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         i_ipv6_2 = i_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
         r_ipv6_2 = r_net_event_nc[constants.NetworkCbName.NET_CAP_IPV6]
         # note that Pub <-> Sub since IPv6 are of peer's!
-        i_network_callback_LINK = init_req_key.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
+        i_network_callback_LINK = (
+            self.find_callback_name(i_network_callback_events,
+                               _NETWORK_CB_LINK_PROPERTIES_CHANGED))
         asserts.assert_equal(
             i_network_callback_LINK.data[_CALLBACK_NAME],
             _NETWORK_CB_LINK_PROPERTIES_CHANGED,
@@ -2624,11 +2839,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
             ' got callback'
             f' {i_network_callback_LINK.data[_CALLBACK_NAME]}.'
             )
-
-        r_network_callback_LINK = resp_ini_key.waitAndGet(
-            event_name=constants.NetworkCbEventName.NETWORK_CALLBACK,
-            timeout=_DEFAULT_TIMEOUT,
-            )
+        r_network_callback_LINK = (
+            self.find_callback_name(r_network_callback_events,
+                               _NETWORK_CB_LINK_PROPERTIES_CHANGED))
         asserts.assert_equal(
             r_network_callback_LINK.data[_CALLBACK_NAME],
             _NETWORK_CB_LINK_PROPERTIES_CHANGED,
@@ -2827,7 +3040,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2839,12 +3054,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
         configuration (one open, one using passphrase). The result should use
         twodifferent NDIs
         """
-        # self.run_multiple_ndi(self.PASSPHRASE)
         self.run_multiple_ndi([None, self.PASSPHRASE])
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
         ]
@@ -2859,7 +3075,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2877,7 +3095,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
         ]
@@ -2895,7 +3115,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2911,7 +3133,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2927,7 +3151,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
         ]
@@ -2942,7 +3168,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2960,7 +3188,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
@@ -2978,7 +3208,9 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPmk(byte[],string)',
         'android.net.NetworkCapabilities#TRANSPORT_WIFI_AWARE',
         ]
@@ -3012,9 +3244,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3033,9 +3269,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3055,9 +3295,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3076,9 +3320,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3097,9 +3345,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -3119,9 +3371,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -3140,9 +3396,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -3161,9 +3421,13 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.PublishConfig.Builder#setPublishType(PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
-        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType(SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.PublishConfig.Builder#setPublishType('
+        'PublishConfig.PUBLISH_TYPE_UNSOLICITED)',
+        'android.net.wifi.aware.SubscribeConfig.Builder#setSubscribeType('
+        'SubscribeConfig.SUBSCRIBE_TYPE_PASSIVE)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build()',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierPassphrase(byte[],string)',
         ]
@@ -3191,9 +3455,15 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#publish(android.net.wifi.aware.PublishConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#subscrible(android.net.wifi.aware.SubscribeConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#publish('
+        'android.net.wifi.aware.PublishConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#subscrible('
+        'android.net.wifi.aware.SubscribeConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3212,9 +3482,15 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#publish(android.net.wifi.aware.PublishConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#subscrible(android.net.wifi.aware.SubscribeConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#publish('
+        'android.net.wifi.aware.PublishConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#subscrible('
+        'android.net.wifi.aware.SubscribeConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3233,9 +3509,15 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#publish(android.net.wifi.aware.PublishConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#subscrible(android.net.wifi.aware.SubscribeConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#publish('
+        'android.net.wifi.aware.PublishConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#subscrible('
+        'android.net.wifi.aware.SubscribeConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]
@@ -3254,9 +3536,15 @@ class WifiAwareDatapathTest(base_test.BaseTestClass):
 
     @ApiTest(
     apis=[
-        'android.net.wifi.aware.WifiAwareManager#attach(android.net.wifi.aware.AttachCallback, android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#publish(android.net.wifi.aware.PublishConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
-        'android.net.wifi.aware.WifiAwareSession#subscrible(android.net.wifi.aware.SubscribeConfig, android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareManager#attach('
+        'android.net.wifi.aware.AttachCallback,'
+        'android.net.wifi.aware.IdentityChangedListener, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#publish('
+        'android.net.wifi.aware.PublishConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
+        'android.net.wifi.aware.WifiAwareSession#subscrible('
+        'android.net.wifi.aware.SubscribeConfig,'
+        'android.net.wifi.aware.DiscoverySessionCallback, android.os.Handler)',
         'android.net.wifi.aware.WifiAwareNetworkSpecifier.Builder#build',
         'android.net.wifi.aware.WifiAwareSession#createNetworkSpecifierOpen(byte[])',
         ]

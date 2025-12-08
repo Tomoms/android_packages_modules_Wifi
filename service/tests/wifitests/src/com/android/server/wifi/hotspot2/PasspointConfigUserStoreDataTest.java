@@ -75,6 +75,7 @@ public class PasspointConfigUserStoreDataTest extends WifiBaseTest {
     private static final long TEST_PROVIDER_ID = 1;
     private static final long TEST_PROVIDER_ID_2 = 2;
     private static final int TEST_CREATOR_UID = 1234;
+    private static final int TEST_CREATOR_USER_ID = 5678;
     private static final boolean TEST_HAS_EVER_CONNECTED = true;
     private static final boolean TEST_SHARED = false;
 
@@ -258,13 +259,13 @@ public class PasspointConfigUserStoreDataTest extends WifiBaseTest {
                 mKeyStore, mWifiCarrierInfoManager, TEST_PROVIDER_ID, TEST_CREATOR_UID,
                 TEST_CREATOR_PACKAGE, false, Arrays.asList(TEST_CA_CERTIFICATE_ALIAS),
                 TEST_CLIENT_PRIVATE_KEY_AND_CERT_ALIAS, null,
-                TEST_HAS_EVER_CONNECTED, TEST_SHARED, mClock);
+                TEST_HAS_EVER_CONNECTED, TEST_SHARED, mClock, TEST_CREATOR_USER_ID);
         PasspointProvider provider2 = new PasspointProvider(createFullPasspointConfiguration(),
                 mKeyStore, mWifiCarrierInfoManager, TEST_PROVIDER_ID_2, TEST_CREATOR_UID,
                 TEST_CREATOR_PACKAGE, true,
                 Arrays.asList(TEST_CA_CERTIFICATE_ALIAS, TEST_CA_CERTIFICATE_ALIAS_2),
                 TEST_CLIENT_PRIVATE_KEY_AND_CERT_ALIAS, TEST_REMEDIATION_CA_CERTIFICATE_ALIAS,
-                TEST_HAS_EVER_CONNECTED, TEST_SHARED, mClock);
+                TEST_HAS_EVER_CONNECTED, TEST_SHARED, mClock, TEST_CREATOR_USER_ID);
         provider2.setAutojoinEnabled(false);
         provider2.setMacRandomizationEnabled(false);
         provider2.setMeteredOverride(METERED_OVERRIDE_METERED);

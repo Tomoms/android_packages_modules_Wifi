@@ -22,8 +22,11 @@ import static com.android.server.wifi.nl80211.NetlinkConstants.GENL_ID_CTRL;
 import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_MULTICAST_GROUP_MLME;
 import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_MULTICAST_GROUP_REG;
 import static com.android.server.wifi.nl80211.NetlinkConstants.NL80211_MULTICAST_GROUP_SCAN;
+import static com.android.server.wifi.nl80211.NetlinkConstants.NLMSG_DONE;
+import static com.android.server.wifi.nl80211.NetlinkConstants.NLMSG_ERROR;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -32,18 +35,24 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.validateMockitoUsage;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 import android.net.util.SocketUtils;
 import android.net.wifi.SynchronousExecutor;
-import android.os.HandlerThread;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.MessageQueue;
 import android.os.test.TestLooper;
 import android.system.Os;
 
 import com.android.dx.mockito.inline.extended.ExtendedMockito;
+import com.android.modules.utils.BackgroundThread;
 import com.android.net.module.util.netlink.NetlinkUtils;
 import com.android.net.module.util.netlink.StructNlAttr;
+import com.android.net.module.util.netlink.StructNlMsgHdr;
+import com.android.wifi.flags.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -69,11 +78,15 @@ public class Nl80211ProxyTest {
 
     private Nl80211Proxy mDut;
     private MockitoSession mSession;
-    private TestLooper mLooper;
+    private TestLooper mWifiLooper;
+    private Handler mWifiHandler;
 
     @Mock FileDescriptor mFileDescriptor;
     @Mock Nl80211Proxy.NetlinkResponseListener mResponseListener;
-    @Mock HandlerThread mAsyncHandlerThread;
+    @Mock Handler mBackgroundHandler;
+    @Mock Looper mBackgroundLooper;
+    @Mock MessageQueue mBackgroundMessageQueue;
+    @Mock Nl80211BroadcastMonitor.Nl80211BroadcastCallback mBroadcastCallback;
 
     @Captor ArgumentCaptor<List<GenericNetlinkMsg>> mMessageListCaptor;
 
@@ -82,16 +95,25 @@ public class Nl80211ProxyTest {
         MockitoAnnotations.initMocks(this);
         mSession = ExtendedMockito.mockitoSession()
                 .strictness(Strictness.LENIENT)
+                .mockStatic(BackgroundThread.class, withSettings().lenient())
+                .mockStatic(Flags.class, withSettings().lenient())
                 .mockStatic(NetlinkUtils.class, withSettings().lenient())
                 .mockStatic(Os.class)
                 .mockStatic(SocketUtils.class)
                 .startMocking();
         when(NetlinkUtils.netlinkSocketForProto(anyInt())).thenReturn(mFileDescriptor);
+        when(Flags.nl80211ProxyEnabled()).thenReturn(true);
 
-        mLooper = new TestLooper();
-        when(mAsyncHandlerThread.getLooper()).thenReturn(mLooper.getLooper());
+        // Use a test looper to dispatch events in the tests.
+        mWifiLooper = new TestLooper();
+        mWifiHandler = new Handler(mWifiLooper.getLooper());
 
-        mDut = new Nl80211Proxy(mAsyncHandlerThread);
+        // Mock the background thread to avoid running the broadcast monitor.
+        when(BackgroundThread.getHandler()).thenReturn(mBackgroundHandler);
+        when(mBackgroundHandler.getLooper()).thenReturn(mBackgroundLooper);
+        when(mBackgroundLooper.getQueue()).thenReturn(mBackgroundMessageQueue);
+
+        mDut = new Nl80211Proxy(mWifiHandler);
         initializeDut();
     }
 
@@ -114,14 +136,40 @@ public class Nl80211ProxyTest {
     }
 
     /**
-     * Set the response returned by {@link NetlinkUtils#recvMessage(FileDescriptor, int, long)}
+     * Convert GenericNetlinkMsg to ByteBuffer.
      */
-    private void setResponseMessage(GenericNetlinkMsg responseMessage) throws Exception {
+    private ByteBuffer genericNetlinkMsgToByteBuffer(
+            GenericNetlinkMsg responseMessage) throws Exception {
         ByteBuffer responseMsgBuffer =
                 Nl80211TestUtils.createByteBuffer(responseMessage.nlHeader.nlmsg_len);
         responseMessage.pack(responseMsgBuffer);
         responseMsgBuffer.position(0); // reset to the beginning of the buffer
+        return responseMsgBuffer;
+    }
+
+    /**
+     * Set the response returned by {@link NetlinkUtils#recvMessage(FileDescriptor, int, long)}
+     */
+    private void setResponseMessage(GenericNetlinkMsg responseMessage) throws Exception {
+        ByteBuffer responseMsgBuffer = genericNetlinkMsgToByteBuffer(responseMessage);
         when(NetlinkUtils.recvMessage(any(), anyInt(), anyLong())).thenReturn(responseMsgBuffer);
+    }
+
+    /**
+     * Test that the initialization logic is only run once, even if the initialize
+     * method is called several times.
+     */
+    @Test
+    public void testRepeatedInitialization() {
+        // Verify that the broadcast monitor was started on the
+        // background thread during the first initialization.
+        verify(mBackgroundHandler).post(any());
+        verify(mBackgroundHandler).getLooper();
+
+        // Rerunning initialize should not result in starting
+        // a new broadcast monitor on the background thread.
+        assertTrue(mDut.initialize());
+        verifyNoMoreInteractions(mBackgroundHandler);
     }
 
     /**
@@ -133,13 +181,66 @@ public class Nl80211ProxyTest {
         // Use a non-default command id to identify this as the response message
         GenericNetlinkMsg expectedResponse = new GenericNetlinkMsg(
                 (short) (Nl80211TestUtils.TEST_COMMAND + 15),
-                Nl80211TestUtils.TEST_FLAGS,
                 Nl80211TestUtils.TEST_TYPE,
+                Nl80211TestUtils.TEST_FLAGS,
                 Nl80211TestUtils.TEST_SEQUENCE);
         setResponseMessage(expectedResponse);
         GenericNetlinkMsg requestMsg = Nl80211TestUtils.createTestMessage();
         GenericNetlinkMsg receivedResponse = mDut.sendMessageAndReceiveResponse(requestMsg);
         assertTrue(expectedResponse.equals(receivedResponse));
+    }
+
+    /**
+     * Test that the messages after the error response are ignored.
+     */
+    @Test
+    public void testSendAndReceiveMessage_errorResponse() throws Exception {
+        // Use a non-default command id to identify this as the response message
+        GenericNetlinkMsg errorResponse = new GenericNetlinkMsg(
+                (short) (Nl80211TestUtils.TEST_COMMAND + 15),
+                NLMSG_ERROR,
+                Nl80211TestUtils.TEST_FLAGS,
+                Nl80211TestUtils.TEST_SEQUENCE);
+        // Message after the error response should be ignored.
+        GenericNetlinkMsg extraResponse = new GenericNetlinkMsg(
+                (short) (Nl80211TestUtils.TEST_COMMAND + 15),
+                Nl80211TestUtils.TEST_TYPE,
+                StructNlMsgHdr.NLM_F_MULTI,
+                Nl80211TestUtils.TEST_SEQUENCE + 1);
+        when(NetlinkUtils.recvMessage(any(), anyInt(), anyLong()))
+                .thenReturn(genericNetlinkMsgToByteBuffer(errorResponse))
+                .thenReturn(genericNetlinkMsgToByteBuffer(extraResponse));
+        GenericNetlinkMsg requestMsg = Nl80211TestUtils.createTestMessage();
+        List<GenericNetlinkMsg> receivedResponses = mDut.sendMessageAndReceiveResponses(requestMsg);
+        assertEquals(1, receivedResponses.size());
+        assertTrue(errorResponse.equals(receivedResponses.get(0)));
+    }
+
+    /**
+     * Test that we can successfully send an Nl80211 message and receive multi part response using
+     * the synchronous send/receive method.
+     */
+    @Test
+    public void testSendAndReceiveMessage_multiPartResponse() throws Exception {
+        GenericNetlinkMsg response1 = new GenericNetlinkMsg(
+                (short) (Nl80211TestUtils.TEST_COMMAND + 15),
+                Nl80211TestUtils.TEST_TYPE,
+                StructNlMsgHdr.NLM_F_MULTI,
+                Nl80211TestUtils.TEST_SEQUENCE);
+        // Message with NLMSG_DONE marks the end of the multipart response
+        // and should not be returned to the framework caller
+        GenericNetlinkMsg response2 = new GenericNetlinkMsg(
+                (short) (Nl80211TestUtils.TEST_COMMAND + 16),
+                NLMSG_DONE,
+                StructNlMsgHdr.NLM_F_MULTI,
+                Nl80211TestUtils.TEST_SEQUENCE);
+        when(NetlinkUtils.recvMessage(any(), anyInt(), anyLong()))
+                .thenReturn(genericNetlinkMsgToByteBuffer(response1))
+                .thenReturn(genericNetlinkMsgToByteBuffer(response2));
+        GenericNetlinkMsg requestMsg = Nl80211TestUtils.createTestMessage();
+        List<GenericNetlinkMsg> receivedResponses = mDut.sendMessageAndReceiveResponses(requestMsg);
+        assertEquals(1, receivedResponses.size());
+        assertTrue(response1.equals(receivedResponses.get(0)));
     }
 
     /**
@@ -158,7 +259,7 @@ public class Nl80211ProxyTest {
         // Send and receive messages on the async handler
         GenericNetlinkMsg response = Nl80211TestUtils.createTestMessage();
         setResponseMessage(response);
-        mLooper.dispatchAll();
+        mWifiLooper.dispatchAll();
 
         verify(mResponseListener).onResponse(mMessageListCaptor.capture());
         assertTrue(response.equals(mMessageListCaptor.getValue().get(0)));
@@ -170,7 +271,7 @@ public class Nl80211ProxyTest {
     @Test
     public void testCreateNl80211Request() throws Exception {
         // Expect failure if the Nl80211Proxy has not been initialized
-        mDut = new Nl80211Proxy(mAsyncHandlerThread);
+        mDut = new Nl80211Proxy(mWifiHandler);
         assertNull(mDut.createNl80211Request(Nl80211TestUtils.TEST_COMMAND));
 
         // Expect that the message can be created after initialization,
@@ -193,5 +294,24 @@ public class Nl80211ProxyTest {
         assertTrue(parsedMulticastGroups.containsKey(NL80211_MULTICAST_GROUP_SCAN));
         assertTrue(parsedMulticastGroups.containsKey(NL80211_MULTICAST_GROUP_REG));
         assertTrue(parsedMulticastGroups.containsKey(NL80211_MULTICAST_GROUP_MLME));
+    }
+
+    /**
+     * Test that a broadcast callback can be successfully registered and unregistered
+     * after this instance has been initialized;
+     */
+    @Test
+    public void testRegisterAndUnregisterBroadcastCallback() throws Exception {
+        short eventType = 123;
+        mDut = new Nl80211Proxy(mWifiHandler);
+
+        // Expect failure before initialization
+        assertFalse(mDut.registerBroadcastCallback(eventType, mBroadcastCallback));
+        assertFalse(mDut.unregisterBroadcastCallback(eventType, mBroadcastCallback));
+
+        // Registration should succeed after initialization
+        initializeDut();
+        assertTrue(mDut.registerBroadcastCallback(eventType, mBroadcastCallback));
+        assertTrue(mDut.unregisterBroadcastCallback(eventType, mBroadcastCallback));
     }
 }

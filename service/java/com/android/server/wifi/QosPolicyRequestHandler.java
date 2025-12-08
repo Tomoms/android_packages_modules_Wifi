@@ -28,6 +28,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.modules.utils.build.SdkLevel;
 import com.android.server.wifi.SupplicantStaIfaceHal.QosPolicyRequest;
 import com.android.server.wifi.SupplicantStaIfaceHal.QosPolicyStatus;
+import com.android.server.wifi.proto.WifiStatsLog;
 
 import java.io.FileDescriptor;
 import java.io.PrintWriter;
@@ -215,10 +216,15 @@ public class QosPolicyRequestHandler {
         }
 
         if (SdkLevel.isAtLeastT()) {
+            int numAddRequests = 0;
+            // Track whether any policy in the batch uses the following classifiers.
+            boolean usesSrcIp, usesDstIp, usesDstPortRange, usesSrcPort, usesProtocol;
+            usesSrcIp = usesDstIp = usesDstPortRange = usesSrcPort = usesProtocol = false;
             for (QosPolicyRequest policy : policies) {
                 if (policy.isRemoveRequest()) {
                     mNetworkAgent.sendRemoveDscpPolicy(policy.policyId);
                 } else if (policy.isAddRequest()) {
+                    numAddRequests++;
                     if (!policy.classifierParams.isValid) {
                         rejectQosPolicy(policy.policyId);
                         continue;
@@ -232,9 +238,22 @@ public class QosPolicyRequestHandler {
                     // Only set src and dest IP if a value exists in classifierParams.
                     if (policy.classifierParams.hasSrcIp) {
                         builder.setSourceAddress(policy.classifierParams.srcIp);
+                        usesSrcIp = true;
                     }
                     if (policy.classifierParams.hasDstIp) {
                         builder.setDestinationAddress(policy.classifierParams.dstIp);
+                        usesDstIp = true;
+                    }
+
+                    // Note whether any other classifiers are used.
+                    if (policy.classifierParams.srcPort != DscpPolicy.SOURCE_PORT_ANY) {
+                        usesSrcPort = true;
+                    }
+                    if (policy.classifierParams.protocol != DscpPolicy.PROTOCOL_ANY) {
+                        usesProtocol = true;
+                    }
+                    if (policy.classifierParams.dstPortRange != null) {
+                        usesDstPortRange = true;
                     }
 
                     try {
@@ -252,6 +271,11 @@ public class QosPolicyRequestHandler {
             }
             mHandler.postDelayed(() -> checkForProcessingStall(dialogToken),
                     PROCESSING_TIMEOUT_MILLIS);
+            if (numAddRequests != 0) {
+                WifiStatsLog.write(WifiStatsLog.WIFI_QOS_POLICIES_FROM_ACCESS_POINT_REQUESTED,
+                        numAddRequests, usesSrcIp, usesDstIp, usesDstPortRange, usesSrcPort,
+                        usesProtocol);
+            }
         }
     }
 }

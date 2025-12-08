@@ -14,6 +14,7 @@
 
 # Lint as: python3
 import logging
+import time
 
 
 from android.platform.test.annotations import ApiTest
@@ -89,6 +90,7 @@ class WifiSoftApThreeDevicesTest(base_test.BaseTestClass):
   def teardown_test(self):
     for ad in self.ads:
       sutils._stop_tethering(self.host)
+      self.host.wifi.wifiUnregisterSoftApCallback()
       ad.wifi.wifiClearConfiguredNetworks()
       ad.wifi.wifiDisableAllSavedNetworks()
       ad.wifi.wifiEnable()
@@ -200,6 +202,10 @@ class WifiSoftApThreeDevicesTest(base_test.BaseTestClass):
       asserts.assert_true(ret != -1, "Add network %r failed" % config)
       self.client.wifi.wifiEnableNetwork(ret, 0)
     self.confirm_softap_in_scan_results(config[constants.WiFiTethering.SSID_KEY])
+    config = {
+      "SSID": config[constants.WiFiTethering.SSID_KEY],
+      "password": config[constants.WiFiTethering.PWD_KEY],
+    }
     if test_ping:
       self.validate_ping_between_softap_and_client(config)
     if test_clients:
@@ -409,6 +415,247 @@ class WifiSoftApThreeDevicesTest(base_test.BaseTestClass):
     """
     self.validate_full_tether_startup(
       constants.WiFiHotspotBand.WIFI_CONFIG_SOFTAP_BAND_2G_5G, cIsolatEnabled=True)
+
+  @ApiTest(
+    apis=[
+      'android.net.wifi.WifiManager#isPortableHotspotSupported()',
+      'android.net.ConnectivityManage#isTetheringSupported()',
+      'android.net.wifi.WifiManager.getWifiState()',
+      'android.net.TetheringManage.startTethering(int type,'+
+      ' @NonNull final Executor executor,final StartTetheringCallback callback)',
+      'android.net.wifi.WifiManager.SCAN_RESULTS_AVAILABLE_ACTION',
+      'android.net.wifi.WifiManager.startScan()',
+      'android.net.wifi.WifiManager.getScanResults()',
+      'android.net.wifi.WifiManager.addNetwork(android.net.wifi.WifiConfiguration(json))',
+      'android.net.wifi.WifiManager.enableNetwork(netId, disableOthers)',
+      'android.net.wifi.WifiManager.connect(android.net.wifi.WifiConfiguration(json))',
+      'android.net.wifi.WifiManager.getConnectionInfo().getWifiStandard()',
+      ]
+  )
+
+  def test_softap_max_client_setting(self):
+    """Test Client Control feature
+        1. Check device number and capability to make sure feature is supported
+        2. Backup config
+        3. Setup configuration which used to start softap
+        4. Register callback after softap enabled
+        5. Trigger client connect to softap
+        6. Verify blocking event
+        7. Extend max client setting
+        8. Verify client connected
+        9. Restore Config
+    """
+    self.host.wifi.tetheringStartTrackingTetherStateChange()
+    callbackId = self.host.wifi.wifiRegisterSoftApCallback()
+    capability = callbackId.waitAndGet(
+      constants.SoftApCallbackEventName.SOFTAP_CAPABILITY_CHANGED,
+      10
+    )
+    asserts.skip_if(
+      not capability.data[
+        constants.SoftApCallbackEventName.SOFTAP_CAPABILITY_FEATURE_CLIENT_CONTROL],
+      "Client control isn't supported, ignore test")
+    # Unregister callback before start test to avoid
+    # unnecessary callback impact the test
+    self.host.wifi.tetheringStopTethering()
+    self.host.wifi.wifiUnregisterSoftApCallback()
+    time.sleep(1)
+    self.host.wifi.tetheringStartTrackingTetherStateChange()
+    callbackId = self.host.wifi.wifiRegisterSoftApCallback()
+    # Backup config
+    original_softap_config = self.host.wifi.wifiGetSapConfiguration()
+    sutils.save_wifi_soft_ap_config(
+      self.host,
+      {"SSID":"ACTS_TEST"},
+      band=constants.WiFiHotspotBand.WIFI_CONFIG_SOFTAP_BAND_2G_5G,
+      hidden=False,
+      security=constants.SoftApSecurityType.WPA2,
+      password="12345678",
+      max_clients=1)
+    sutils.start_wifi_tethering_saved_config(self.host)
+    current_softap_config = self.host.wifi.wifiGetSapConfiguration()
+    # impact the test
+    asserts.assert_equal(self.host.wifi.wifiGetSoftApConnectedClientsCount(),
+                        0)
+    self.host.wifi.tetheringStartTetheringWithProvisioning(0, False)
+    asserts.assert_true(self.host.wifi.wifiIsApEnabled(),
+                        "SoftAp is not reported as running")
+    # Trigger client connection
+    self.client_2 = self.ads[2]
+    config = {
+      "SSID": current_softap_config[constants.WiFiTethering.SSID_KEY],
+      "password": current_softap_config[constants.WiFiTethering.PWD_KEY],
+    }
+    sutils._wifi_connect(self.client, config, check_connectivity=False)
+    time.sleep(1)
+    sutils._wifi_connect(self.client_2, config, check_connectivity=False)
+    time.sleep(3)
+    blockerClient = callbackId.waitAndGet(
+      constants.SoftApCallbackEventName.SOFTAP_BLOCKING_CLIENT_CONNECTING,
+      10
+    )
+    asserts.assert_equal(self.host.wifi.wifiGetSoftApConnectedClientsCount(),
+                        1)
+    sutils.save_wifi_soft_ap_config(
+      self.host,
+      {"SSID":"ACTS_TEST"},
+      band=constants.WiFiHotspotBand.WIFI_CONFIG_SOFTAP_BAND_2G_5G,
+      hidden=False,
+      security=constants.SoftApSecurityType.WPA2,
+      password="12345678",
+      max_clients=2)
+    sutils.start_wifi_tethering_saved_config(self.host)
+    softap_config = self.host.wifi.wifiGetSapConfiguration()
+    config = {
+      "SSID": softap_config[constants.WiFiTethering.SSID_KEY],
+      "password": softap_config[constants.WiFiTethering.PWD_KEY],
+    }
+    sutils._wifi_connect(self.client_2, config, check_connectivity=False)
+    asserts.assert_equal(self.host.wifi.wifiGetSoftApConnectedClientsCount(),
+                        2)
+    config = {
+      "SSID": original_softap_config[constants.WiFiTethering.SSID_KEY],
+      "password": original_softap_config[constants.WiFiTethering.PWD_KEY],
+    }
+    sutils.save_wifi_soft_ap_config(
+      self.host,
+      config)
+    self.host.wifi.tetheringStopTethering()
+    self.host.wifi.wifiUnregisterSoftApCallback()
+
+  @ApiTest(
+    apis=[
+      'android.net.wifi.WifiManager#isPortableHotspotSupported()',
+      'android.net.ConnectivityManage#isTetheringSupported()',
+      'android.net.wifi.WifiManager.getWifiState()',
+      'android.net.TetheringManage.startTethering(int type,'+
+      ' @NonNull final Executor executor,final StartTetheringCallback callback)',
+      'android.net.wifi.WifiManager.SCAN_RESULTS_AVAILABLE_ACTION',
+      'android.net.wifi.WifiManager.startScan()',
+      'android.net.wifi.WifiManager.getScanResults()',
+      'android.net.wifi.WifiManager.addNetwork(android.net.wifi.WifiConfiguration(json))',
+      'android.net.wifi.WifiManager.enableNetwork(netId, disableOthers)',
+      'android.net.wifi.WifiManager.connect(android.net.wifi.WifiConfiguration(json))',
+      'android.net.wifi.WifiManager.getConnectionInfo().getWifiStandard()',
+      ]
+  )
+
+  def test_softp_2g_channel_when_connected_to_chan_13(self):
+    """Verify softAp 2G channel when connected to network on channel 13.
+
+        Steps:
+            1. Configure AP in channel 13 on 2G band and connect DUT to it.
+            2. Start softAp on DUT on 2G band.
+            3. Verify softAp is started on channel 13.
+    """
+    self.client_2 = self.ads[2]
+    sutils.set_wifi_country_code(self.host, "JP")
+    sutils.set_wifi_country_code(self.client, "JP")
+    self.host.wifi.tetheringStartTrackingTetherStateChange()
+    callbackId = self.host.wifi.wifiRegisterSoftApCallback()
+    sutils.save_wifi_soft_ap_config(
+      self.host, {"SSID":"ACTS_TEST"},
+      band=constants.WiFiHotspotBand.WIFI_CONFIG_SOFTAP_BAND_2G,
+      security=constants.SoftApSecurityType.WPA2,
+      password="12345678",
+      channel=13)
+    current_softap_config = self.host.wifi.wifiGetSapConfiguration()
+    self.host.wifi.tetheringStartTrackingTetherStateChange()
+    self.host.wifi.tetheringStartTetheringWithProvisioning(0, False)
+    asserts.assert_true(self.host.wifi.wifiIsApEnabled(),
+                        "SoftAp is not reported as running")
+    config = {
+      "SSID": current_softap_config[constants.WiFiTethering.SSID_KEY],
+      "password": current_softap_config[constants.WiFiTethering.PWD_KEY],
+    }
+    time.sleep(5)
+    sutils._wifi_connect(self.client, config, check_connectivity=False)
+    config2 = sutils.create_softap_config()
+    config2[constants.WiFiTethering.AP_BAND_KEY] = (
+      constants.WiFiHotspotBand.WIFI_CONFIG_SOFTAP_BAND_2G)
+    asserts.assert_true(
+      self.client.wifi.wifiSetWifiApConfiguration(config2),
+      "Failed to set WifiAp Configuration")
+    sutils.start_wifi_tethering_saved_config(self.client)
+    softap_conf = self.client.wifi.wifiGetSapConfiguration()
+    time.sleep(2)
+    self.client.wifi.tetheringStartTrackingTetherStateChange()
+    self.client.wifi.tetheringStartTetheringWithProvisioning(0, False)
+    asserts.assert_true(self.client.wifi.wifiIsApEnabled(),
+                        "SoftAp is not reported as running")
+    config2 = {
+      "SSID": softap_conf[constants.WiFiTethering.SSID_KEY],
+      "password": softap_conf[constants.WiFiTethering.PWD_KEY],
+    }
+    sutils._wifi_connect(self.client_2, config2, check_connectivity=False)
+    softap_channel = self.client_2.wifi.wifiGetConnectionInfo()
+    channel = constants.WifiEnums.freq_to_channel[softap_channel["mFrequency"]]
+    asserts.assert_true(channel == 13,
+                        "Dut client did not connect to softAp on channel 13"
+                      )
+
+  @ApiTest(
+    apis=[
+      'android.net.wifi.WifiManager#isPortableHotspotSupported()',
+      'android.net.ConnectivityManage#isTetheringSupported()',
+      'android.net.wifi.WifiManager.getWifiState()',
+      'android.net.TetheringManage.startTethering(int type,'+
+      ' @NonNull final Executor executor,final StartTetheringCallback callback)',
+      'android.net.wifi.WifiManager.SCAN_RESULTS_AVAILABLE_ACTION',
+      'android.net.wifi.WifiManager.startScan()',
+      'android.net.wifi.WifiManager.getScanResults()',
+      'android.net.wifi.WifiManager.addNetwork(android.net.wifi.WifiConfiguration(json))',
+      'android.net.wifi.WifiManager.enableNetwork(netId, disableOthers)',
+      'android.net.wifi.WifiManager.connect(android.net.wifi.WifiConfiguration(json))',
+      'android.net.wifi.WifiManager.getConnectionInfo().getWifiStandard()',
+      ]
+  )
+
+  def test_number_of_softap_clients(self):
+    """Test for number of softap clients to be updated correctly
+
+        1. Turn of hotspot
+        2. Register softap callback
+        3. Let client connect to the hotspot
+        4. Register second softap callback
+        5. Force client connect/disconnect to hotspot
+        6. Unregister second softap callback
+        7. Force second client connect to hotspot (if supported)
+        8. Turn off hotspot
+        9. Verify second softap callback doesn't respond after unregister
+    """
+    config = sutils.start_softap_and_verify(
+      self.host, self.client,
+      constants.WiFiHotspotBand.WIFI_CONFIG_SOFTAP_BAND_2G_5G)
+      # Register callback after softap enabled to avoid unnecessary callback
+      # impact the test
+    self.host.wifi.tetheringStartTrackingTetherStateChange()
+    callbackId = self.host.wifi.wifiRegisterSoftApCallback()
+    asserts.assert_equal(self.host.wifi.wifiGetSoftApConnectedClientsCount(),
+                         0)
+    self.host.wifi.tetheringStartTetheringWithProvisioning(0, False)
+    asserts.assert_true(self.host.wifi.wifiIsApEnabled(),
+                        "SoftAp is not reported as running")
+    asserts.skip_if(sutils.is_SIM_network_active(self.host) is False,
+                    "DUT does not support Data ")
+    # Force DUTs connect to Network
+    config = {
+      "SSID": config[constants.WiFiTethering.SSID_KEY],
+      "password": config[constants.WiFiTethering.PWD],
+    }
+    sutils._wifi_connect(self.client, config, check_connectivity=False)
+    asserts.assert_equal(self.host.wifi.wifiGetSoftApConnectedClientsCount(),
+                         1)
+    sutils.toggle_wifi_and_wait_for_reconnection(self.client, config)
+    self.client_2 = self.ads[2]
+    sutils._wifi_connect(self.client_2, config, check_connectivity=False)
+    asserts.assert_equal(self.host.wifi.wifiGetSoftApConnectedClientsCount(),
+                         2)
+    self.host.wifi.tetheringStopTethering()
+    self.host.wifi.wifiUnregisterSoftApCallback()
+    sutils.wait_for_disconnect(self.client, 10)
+    sutils.wait_for_disconnect(self.client_2, 10)
+
 
 if __name__ == '__main__':
   test_runner.main()

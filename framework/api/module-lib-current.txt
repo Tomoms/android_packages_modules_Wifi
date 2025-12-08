@@ -1,7 +1,7 @@
 // Signature format: 2.0
 package android.net.wifi {
 
-  public class WifiManager {
+  @RestrictedForEnvironment(environments=android.annotation.RestrictedForEnvironment.ENVIRONMENT_SDK_RUNTIME, from=android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) public class WifiManager {
     method @RequiresPermission(anyOf={android.Manifest.permission.NETWORK_SETTINGS, android.Manifest.permission.OVERRIDE_WIFI_CONFIG}) public void addCustomDhcpOptions(@NonNull android.net.wifi.WifiSsid, @NonNull byte[], @NonNull java.util.List<android.net.DhcpOption>);
     method @RequiresPermission(anyOf={android.Manifest.permission.NETWORK_SETTINGS, android.Manifest.permission.OVERRIDE_WIFI_CONFIG}) public void removeCustomDhcpOptions(@NonNull android.net.wifi.WifiSsid, @NonNull byte[]);
   }

@@ -41,6 +41,7 @@ import android.net.wifi.IOnWifiDriverCountryCodeChangedListener;
 import android.net.wifi.IOnWifiUsabilityStatsListener;
 import android.net.wifi.IPnoScanResultsCallback;
 import android.net.wifi.IPrivilegedConfiguredNetworksListener;
+import android.net.wifi.IRestrictAutoJoinToSubIdCallback;
 import android.net.wifi.IScanResultsCallback;
 import android.net.wifi.ISoftApCallback;
 import android.net.wifi.IStringListener;
@@ -83,7 +84,7 @@ import com.android.modules.utils.StringParceledListSlice;
 /**
  * Interface that allows controlling and querying Wi-Fi connectivity.
  *
- * {@hide}
+ * @hide
  */
 interface IWifiManager {
     boolean isFeatureSupported(int feature);
@@ -433,6 +434,10 @@ interface IWifiManager {
 
     void stopRestrictingAutoJoinToSubscriptionId();
 
+    void addRestrictAutoJoinToSubIdCallback(in IRestrictAutoJoinToSubIdCallback callback);
+
+    void removeRestrictAutoJoinToSubIdCallback(in IRestrictAutoJoinToSubIdCallback callback);
+
     void setCarrierNetworkOffloadEnabled(int subscriptionId, boolean merged, boolean enabled);
 
     boolean isCarrierNetworkOffloadEnabled(int subscriptionId, boolean merged);
@@ -558,10 +563,21 @@ interface IWifiManager {
     void storeCapturedData(int triggerType, boolean isFullCapture, long triggerStartTimeMillis,
             long triggerStopTimeMillis, in IIntegerListener listener);
 
+    void setScreenOffScanSchedule(int movingScanInterval, int stationaryScanInterval,
+            int scanIterations, int scanMultiplier);
+
     boolean isUsdSubscriberSupported();
 
     boolean isUsdPublisherSupported();
 
     void queryPrivilegedConfiguredNetworks(
             in IPrivilegedConfiguredNetworksListener listener, in Bundle extras);
+
+    void refreshMacRandomization(int netId);
+
+    void setOpenNetworkNotifierEnabled(boolean enable);
+
+    void isOpenNetworkNotifierEnabled(in IBooleanListener listener);
+
+    void getSupportedInterfaceNames(in IListListener listener);
 }

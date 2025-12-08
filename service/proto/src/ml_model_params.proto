@@ -1,0 +1,38 @@
+syntax = "proto2";
+
+package com_android_server_wifi;
+
+option java_package = "com.android.server.wifi.ml_connected_scorer";
+
+// Contains decision tree params.
+message DecisionTreeModel {
+  // Contains decision tree node params.
+  message Node {
+    // Index of left child in the list.
+    optional int32 left_child = 1;
+    // Index of right child in the list.
+    optional int32 right_child = 2;
+    // Probability of positive label.
+    optional double positive_probability = 3;
+    // Decision function feature index.
+    optional int32 split_feature = 4;
+    // Decision function threshold. Should use left child if feature value <=
+    // threshold, right one otherwise (feature value > threshold).
+    optional double split_threshold = 5;
+  }
+
+  // Params for all nodes.
+  repeated Node nodes = 1;
+}
+
+// Random forest model params.
+message RandomForestModel {
+  // The decision trees.
+  repeated DecisionTreeModel decision_trees = 1;
+  // The version of the model file.
+  optional int32 wifi_scorer_model_version = 2;
+  // The vector containing the mean of each feature.
+  repeated double feature_norm_means = 3;
+  // The vector containing the std of each feature.
+  repeated double feature_norm_stds = 4;
+}

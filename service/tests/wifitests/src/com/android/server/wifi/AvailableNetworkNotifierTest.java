@@ -17,7 +17,11 @@
 package com.android.server.wifi;
 
 import static com.android.server.wifi.ConnectToNetworkNotificationBuilder.ACTION_CONNECT_TO_NETWORK;
+import static com.android.server.wifi.ConnectToNetworkNotificationBuilder.ACTION_PICK_WIFI_NETWORK;
+import static com.android.server.wifi.ConnectToNetworkNotificationBuilder.ACTION_PICK_WIFI_NETWORK_AFTER_CONNECT_FAILURE;
+import static com.android.server.wifi.ConnectToNetworkNotificationBuilder.ACTION_USER_DISMISSED_NOTIFICATION;
 
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.*;
 
 import android.content.BroadcastReceiver;
@@ -31,6 +35,7 @@ import android.os.Looper;
 import androidx.test.filters.SmallTest;
 
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -59,6 +64,8 @@ public class AvailableNetworkNotifierTest extends WifiBaseTest {
     @Mock MakeBeforeBreakManager mMakeBeforeBreakManager;
     @Mock WifiNotificationManager mWifiNotificationManager;
     @Mock WifiPermissionsUtil mWifiPermissionsUtil;
+    @Mock WifiSettingsConfigStore mWifiSettingsConfigStore;
+    @Mock FeatureFlags mFeatureFlags;
 
     BroadcastReceiver mBroadcastReceiver;
 
@@ -73,6 +80,7 @@ public class AvailableNetworkNotifierTest extends WifiBaseTest {
                 "AvailableNetworkNotifierTest",
                 "storeDataIdentifier",
                 "toggleSettingsName",
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
                 1, // notificationIdentifier
                 1, // nominatorId
                 mContext,
@@ -86,7 +94,9 @@ public class AvailableNetworkNotifierTest extends WifiBaseTest {
                 mConnectToNetworkNotificationBuilder,
                 mMakeBeforeBreakManager,
                 mWifiNotificationManager,
-                mWifiPermissionsUtil);
+                mWifiPermissionsUtil,
+                mWifiSettingsConfigStore,
+                mFeatureFlags);
 
         ArgumentCaptor<BroadcastReceiver> captor = ArgumentCaptor.forClass(BroadcastReceiver.class);
         verify(mContext).registerReceiver(captor.capture(), any(), any(), any());
@@ -127,5 +137,40 @@ public class AvailableNetworkNotifierTest extends WifiBaseTest {
         intent.setAction(ACTION_CONNECT_TO_NETWORK);
         mBroadcastReceiver.onReceive(mContext, intent);
         verify(mWifiConfigManager, never()).addOrUpdateNetwork(any(), anyInt());
+    }
+
+    @Test
+    public void testUsingRegisterReceiverForAllUsersWhenFlagEnabled() throws Exception {
+        when(mFeatureFlags.monitorIntentForAllUsers()).thenReturn(true);
+        reset(mContext);
+        mAvailableNetworkNotifier = new AvailableNetworkNotifier(
+                "AvailableNetworkNotifierTest",
+                "storeDataIdentifier",
+                "toggleSettingsName",
+                WifiSettingsConfigStore.WIFI_NETWORKS_AVAILABLE_NOTIFICATION_ON,
+                1, // notificationIdentifier
+                1, // nominatorId
+                mContext,
+                mLooper,
+                mFrameworkFacade,
+                mClock,
+                mWifiMetrics,
+                mWifiConfigManager,
+                mWifiConfigStore,
+                mConnectHelper,
+                mConnectToNetworkNotificationBuilder,
+                mMakeBeforeBreakManager,
+                mWifiNotificationManager,
+                mWifiPermissionsUtil,
+                mWifiSettingsConfigStore,
+                mFeatureFlags);
+        verify(mContext).registerReceiverForAllUsers(any(BroadcastReceiver.class),
+                argThat(filter -> filter.hasAction(ACTION_USER_DISMISSED_NOTIFICATION)
+                        && filter.hasAction(ACTION_CONNECT_TO_NETWORK)
+                        && filter.hasAction(ACTION_PICK_WIFI_NETWORK)
+                        && filter.hasAction(ACTION_PICK_WIFI_NETWORK_AFTER_CONNECT_FAILURE)),
+                eq(null), any());
+        verify(mContext, never()).registerReceiver(any(), any(), any(), any());
+
     }
 }

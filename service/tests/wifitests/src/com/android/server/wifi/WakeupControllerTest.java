@@ -21,10 +21,13 @@ import static com.android.server.wifi.TestUtil.createCapabilityBitset;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -39,6 +42,7 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.WifiNetworkSuggestion;
 import android.net.wifi.WifiScanner;
 import android.net.wifi.WifiSsid;
+import android.net.wifi.util.Environment;
 import android.net.wifi.util.ScanResultUtil;
 import android.os.Handler;
 import android.os.Process;
@@ -51,6 +55,8 @@ import com.android.server.wifi.ActiveModeWarden.PrimaryClientModeManagerChangedC
 import com.android.server.wifi.util.LastCallerInfoManager;
 import com.android.server.wifi.util.WifiConfigStoreEncryptionUtil;
 import com.android.server.wifi.util.WifiPermissionsUtil;
+import com.android.wifi.flags.FeatureFlags;
+import com.android.wifi.flags.Flags;
 
 import org.junit.After;
 import org.junit.Before;
@@ -59,7 +65,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.MockitoSession;
 import org.mockito.quality.Strictness;
@@ -104,6 +109,8 @@ public class WakeupControllerTest extends WifiBaseTest {
     @Mock private ConcreteClientModeManager mPrimaryClientModeManager;
     @Mock private WifiGlobals mWifiGlobals;
     @Mock private LastCallerInfoManager mLastCallerInfoManager;
+    @Mock private WifiSettingsConfigStore mWifiSettingsConfigStore;
+    @Mock private FeatureFlags mFeatureFlags;
 
     @Captor private ArgumentCaptor<PrimaryClientModeManagerChangedCallback> mPrimaryChangedCaptor;
 
@@ -124,9 +131,11 @@ public class WakeupControllerTest extends WifiBaseTest {
                 .strictness(Strictness.LENIENT)
                 .startMocking();
 
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(false);
         when(WifiInjector.getInstance()).thenReturn(mWifiInjector);
         when(mWifiInjector.getWifiScanner()).thenReturn(mWifiScanner);
         when(mWifiInjector.getWifiSettingsStore()).thenReturn(mWifiSettingsStore);
+        when(mWifiInjector.getSettingsConfigStore()).thenReturn(mWifiSettingsConfigStore);
         when(mWifiInjector.getActiveModeWarden()).thenReturn(mActiveModeWarden);
         when(mActiveModeWarden.getPrimaryClientModeManager()).thenReturn(mPrimaryClientModeManager);
         when(mPrimaryClientModeManager.getSupportedFeaturesBitSet()).thenReturn(
@@ -186,6 +195,8 @@ public class WakeupControllerTest extends WifiBaseTest {
         int settingsValue = enabled ? 1 : 0;
         when(mFrameworkFacade.getIntegerSetting(mContext,
                 Settings.Global.WIFI_WAKEUP_ENABLED, 0)).thenReturn(settingsValue);
+        when(mWifiSettingsConfigStore.get(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED)).thenReturn(
+                enabled);
         when(mWakeupOnboarding.isOnboarded()).thenReturn(true);
         mWakeupController = new WakeupController(mContext,
                 new Handler(mLooper.getLooper()),
@@ -198,7 +209,8 @@ public class WakeupControllerTest extends WifiBaseTest {
                 mWifiWakeMetrics,
                 mWifiInjector,
                 mFrameworkFacade,
-                mClock, mActiveModeWarden);
+                mClock, mActiveModeWarden,
+                mFeatureFlags);
         mWakeupController.enableVerboseLogging(true);
 
         verify(mActiveModeWarden).registerPrimaryClientModeManagerChangedCallback(
@@ -245,6 +257,36 @@ public class WakeupControllerTest extends WifiBaseTest {
         verify(mWifiSettingsStore, never()).handleWifiToggled(true /* wifiEnabled */);
         verify(mLastCallerInfoManager, never()).put(eq(WifiManager.API_WIFI_ENABLED),
                 anyInt(), anyInt(), anyInt(), any(), anyBoolean());
+    }
+
+    /**
+     * Verify {@link WakeupController#setEnabled(boolean)} sets the value to both Settings.Global
+     * and WifiSettingsConfigStore.
+     */
+    @Test
+    public void verifyToggleSetter() {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+
+        initializeWakeupController(false /* enabled */);
+        InOrder inOrder = inOrder(mWakeupOnboarding);
+        mWakeupController.setEnabled(true);
+        verify(mWifiSettingsConfigStore).put(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED),
+                eq(true /* new value synced to WifiSettingsConfigStore */));
+        verify(mFrameworkFacade).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED),
+                eq(1 /* new value synced to Settings.Global */));
+        inOrder.verify(mWakeupOnboarding).setOnboarded();
+
+        mWakeupController.setEnabled(false);
+        verify(mWifiSettingsConfigStore).put(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED),
+                eq(false /* new value synced to WifiSettingsConfigStore */));
+        verify(mFrameworkFacade).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED),
+                eq(0 /* new value synced to Settings.Global */));
+        inOrder.verify(mWakeupOnboarding).setOnboarded();
     }
 
     /**
@@ -360,8 +402,8 @@ public class WakeupControllerTest extends WifiBaseTest {
     @Test
     public void startIsIgnoredIfAlreadyActive() {
         initializeWakeupController(true /* enabled */);
-        InOrder lockInOrder = Mockito.inOrder(mWakeupLock);
-        InOrder metricsInOrder = Mockito.inOrder(mWifiWakeMetrics);
+        InOrder lockInOrder = inOrder(mWakeupLock);
+        InOrder metricsInOrder = inOrder(mWifiWakeMetrics);
 
         mWakeupController.start();
         lockInOrder.verify(mWakeupLock).setLock(any());
@@ -404,8 +446,8 @@ public class WakeupControllerTest extends WifiBaseTest {
     @Test
     public void resetSetsActiveToFalse() {
         initializeWakeupController(true /* enabled */);
-        InOrder lockInOrder = Mockito.inOrder(mWakeupLock);
-        InOrder metricsInOrder = Mockito.inOrder(mWifiWakeMetrics);
+        InOrder lockInOrder = inOrder(mWakeupLock);
+        InOrder metricsInOrder = inOrder(mWifiWakeMetrics);
 
         mWakeupController.start();
         lockInOrder.verify(mWakeupLock).setLock(any());
@@ -836,8 +878,16 @@ public class WakeupControllerTest extends WifiBaseTest {
         verify(mWakeupOnboarding, never()).setOnboarded();
     }
 
+
+    /**
+     * Legacy test case that verifies the user will be onboarded when toggling from Settings.Global
+     * as the single source of change. When flag {@link Flags#FLAG_MULTI_USER_WIFI_ENHANCEMENT} is
+     * enabled and cleaned, this test can be partially replaced by
+     * {@link #userIsOnboardedBySettingChange} and refactored to cover the case where sdk version is
+     * equal or lower than B.
+     */
     @Test
-    public void userIsOnboardedBySettingChange() {
+    public void userIsOnboardedBySettingChangeAsSharedSetting() {
         initializeWakeupController(true /* enabled */);
         ArgumentCaptor<ContentObserver> argumentCaptor =
                 ArgumentCaptor.forClass(ContentObserver.class);
@@ -846,6 +896,148 @@ public class WakeupControllerTest extends WifiBaseTest {
         ContentObserver contentObserver = argumentCaptor.getValue();
         contentObserver.onChange(false /* selfChange */);
         verify(mWakeupOnboarding).setOnboarded();
+    }
+
+    @Test
+    public void userIsOnboardedBySettingChange() {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+
+        // Initialize as disabled and capture the ContentObserver for its onChange listener.
+        initializeWakeupController(/* enabled= */ false);
+        ArgumentCaptor<ContentObserver> argumentCaptor =
+                ArgumentCaptor.forClass(ContentObserver.class);
+        verify(mFrameworkFacade).registerContentObserver(any(), any(), eq(true),
+                argumentCaptor.capture());
+        ContentObserver contentObserver = argumentCaptor.getValue();
+        InOrder inOrder = inOrder(mWakeupOnboarding, mWifiSettingsConfigStore);
+
+        // 1. Initial value is false, update to the same value and the user will not be onboarded.
+        assertFalse(mWakeupController.isEnabled());
+        when(mWifiSettingsConfigStore.get(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED)).thenReturn(
+                false /* initial value */);
+        when(mFrameworkFacade.getIntegerSetting(mContext, Settings.Global.WIFI_WAKEUP_ENABLED, 0))
+                .thenReturn(0 /* new value */);
+        contentObserver.onChange(false /* selfChange */);
+        inOrder.verify(mWifiSettingsConfigStore, never()).put(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED), anyBoolean());
+        inOrder.verify(mWakeupOnboarding, never()).setOnboarded();
+
+        // 2. Initial value is false, update to the different value and the user will be onboarded.
+        assertFalse(mWakeupController.isEnabled());
+        when(mWifiSettingsConfigStore.get(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED)).thenReturn(
+                false /* initial value */);
+        when(mFrameworkFacade.getIntegerSetting(mContext, Settings.Global.WIFI_WAKEUP_ENABLED, 0))
+                .thenReturn(1 /* new value */);
+        contentObserver.onChange(false /* selfChange */);
+        inOrder.verify(mWifiSettingsConfigStore).put(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED),
+                eq(true /* new value synced to WifiSettingsConfigStore */));
+        inOrder.verify(mWakeupOnboarding).setOnboarded();
+
+        // 3. Initial value is true, update to the same value and the user will not be onboarded.
+        assertTrue(mWakeupController.isEnabled());
+        when(mWifiSettingsConfigStore.get(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED)).thenReturn(
+                true /* initial value */);
+        when(mFrameworkFacade.getIntegerSetting(mContext, Settings.Global.WIFI_WAKEUP_ENABLED, 0))
+                .thenReturn(1 /* new value */);
+        contentObserver.onChange(false /* selfChange */);
+        inOrder.verify(mWifiSettingsConfigStore, never()).put(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED), anyBoolean());
+        inOrder.verify(mWakeupOnboarding, never()).setOnboarded();
+
+        // 4. Initial value is true, update to the different value and the user will be onboarded.
+        assertTrue(mWakeupController.isEnabled());
+        when(mWifiSettingsConfigStore.get(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED)).thenReturn(
+                true /* initial value */);
+        when(mFrameworkFacade.getIntegerSetting(mContext, Settings.Global.WIFI_WAKEUP_ENABLED, 0))
+                .thenReturn(0 /* new value */);
+        contentObserver.onChange(false /* selfChange */);
+        inOrder.verify(mWifiSettingsConfigStore).put(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED),
+                eq(false /* new value synced to WifiSettingsConfigStore */));
+        inOrder.verify(mWakeupOnboarding).setOnboarded();
+    }
+
+    @Test
+    public void userIsOnboardedByWifiSettingsConfigStoreChange()
+            throws Settings.SettingNotFoundException {
+        assumeTrue(Environment.isSdkNewerThanB());
+        when(mFeatureFlags.multiUserWifiEnhancement()).thenReturn(true);
+
+        // Initialize as disabled and capture the WifiSettingsConfigStore listener.
+        initializeWakeupController(/* enabled= */ false);
+        ArgumentCaptor<WifiSettingsConfigStore.OnSettingsChangedListener> argumentCaptor =
+                ArgumentCaptor.forClass(WifiSettingsConfigStore.OnSettingsChangedListener.class);
+        verify(mWifiSettingsConfigStore).registerChangeListener(
+                eq(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED), argumentCaptor.capture(), any());
+        WifiSettingsConfigStore.OnSettingsChangedListener listener = argumentCaptor.getValue();
+        InOrder inOrder = inOrder(mFrameworkFacade);
+
+        // 1. Initial value is false, update to the same value and the user will not be onboarded.
+        assertFalse(mWakeupController.isEnabled());
+        when(mFrameworkFacade.getIntegerSetting(any(), eq(Settings.Global.WIFI_WAKEUP_ENABLED)))
+                .thenReturn(0 /* initial value */);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                false /* newValue */);
+        inOrder.verify(mFrameworkFacade, never()).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED), anyInt());
+
+        // 2. Initial value is false, update to the different value and the user will be onboarded.
+        assertFalse(mWakeupController.isEnabled());
+        when(mFrameworkFacade.getIntegerSetting(any(), eq(Settings.Global.WIFI_WAKEUP_ENABLED)))
+                .thenReturn(0 /* initial value */);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                true /* newValue */);
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED),
+                eq(1 /* new value synced to Settings.Global */));
+
+        // 3. Initial value is true, update to the same value and the user will not be onboarded.
+        assertTrue(mWakeupController.isEnabled());
+        when(mFrameworkFacade.getIntegerSetting(any(), eq(Settings.Global.WIFI_WAKEUP_ENABLED)))
+                .thenReturn(1 /* initial value */);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                true /* newValue */);
+        inOrder.verify(mFrameworkFacade, never()).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED), anyInt());
+
+        // 4. Initial value is true, update to the different value and the user will be onboarded.
+        assertTrue(mWakeupController.isEnabled());
+        when(mFrameworkFacade.getIntegerSetting(any(), eq(Settings.Global.WIFI_WAKEUP_ENABLED)))
+                .thenReturn(1 /* initial value */);
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                false /* newValue */);
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED),
+                eq(0 /* new value synced to Settings.Global */));
+
+        // 5. Update to "disabled" when Settings.Global has no pre-configured value. When Settings
+        // has no pre-configured value, the default value is 0 from getIntegerSetting.
+        assertFalse(mWakeupController.isEnabled());
+        doThrow(Settings.SettingNotFoundException.class)
+                .when(mFrameworkFacade)
+                .getIntegerSetting(any(), eq(Settings.Global.WIFI_WAKEUP_ENABLED));
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                false /* newValue */);
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED),
+                eq(0 /* new value synced to Settings.Global */));
+
+        // 6. Update to "enabled" when Settings.Global has no pre-configured value. When Settings
+        // has no pre-configured value, the default value is 0 from getIntegerSetting.
+        assertFalse(mWakeupController.isEnabled());
+        doThrow(Settings.SettingNotFoundException.class)
+                .when(mFrameworkFacade)
+                .getIntegerSetting(any(), eq(Settings.Global.WIFI_WAKEUP_ENABLED));
+        listener.onSettingsChanged(WifiSettingsConfigStore.WIFI_WAKEUP_ENABLED,
+                true /* newValue */);
+        inOrder.verify(mFrameworkFacade).setIntegerSetting(
+                eq(mContext), eq(Settings.Global.WIFI_WAKEUP_ENABLED),
+                eq(1 /* new value synced to Settings.Global */));
+
+        // setOnboarded has been moved to setter so never expected to be invoked here.
+        verify(mWakeupOnboarding, never()).setOnboarded();
     }
 
     /**

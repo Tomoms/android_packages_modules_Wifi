@@ -275,12 +275,18 @@ public class WifiP2pServiceInfo implements Parcelable {
         return result;
     }
 
-    /** Implement the Parcelable interface {@hide} */
+    /**
+     * Implement the Parcelable interface
+     * @hide
+     */
     public int describeContents() {
         return 0;
     }
 
-    /** Implement the Parcelable interface {@hide} */
+    /**
+     * Implement the Parcelable interface
+     * @hide
+     */
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeStringList(mQueryList);
         if (Environment.isSdkAtLeastB() && Flags.wifiDirectR2()) {
@@ -289,7 +295,10 @@ public class WifiP2pServiceInfo implements Parcelable {
         }
     }
 
-    /** Implement the Parcelable interface {@hide} */
+    /**
+     * Implement the Parcelable interface
+     * @hide
+     */
     @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
     public static final @android.annotation.NonNull Creator<WifiP2pServiceInfo> CREATOR =
             new Creator<WifiP2pServiceInfo>() {

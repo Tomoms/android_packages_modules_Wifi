@@ -26,7 +26,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyInt;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -671,8 +670,7 @@ public class WifiCountryCodeTest extends WifiBaseTest {
         verify(mSoftApManager, never()).updateCountryCode(anyString());
         mWifiCountryCode.setTelephonyCountryCodeAndUpdate(mTelephonyCountryCode);
         verify(mSoftApManager).getSoftApModeConfiguration();
-        verify(mActiveModeWarden).stopSoftAp(anyInt());
-        verify(mActiveModeWarden).startSoftAp(softApModeConfigCaptor.capture(), any());
+        verify(mActiveModeWarden).restartSoftApForCcChange(softApModeConfigCaptor.capture(), any());
         assertEquals(softApModeConfigCaptor.getValue().getCountryCode(), mTelephonyCountryCode);
     }
 

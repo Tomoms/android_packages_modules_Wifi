@@ -359,14 +359,17 @@ public class WifiDialogActivity extends Activity  {
                 dialog = createP2pInvitationSentDialog(
                         dialogId,
                         intent.getStringExtra(WifiManager.EXTRA_P2P_DEVICE_NAME),
-                        intent.getStringExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN));
+                        intent.getStringExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN),
+                        intent.getStringExtra(WifiManager.EXTRA_P2P_DISPLAY_PASSWORD));
                 break;
             case WifiManager.DIALOG_TYPE_P2P_INVITATION_RECEIVED:
                 dialog = createP2pInvitationReceivedDialog(
                         dialogId,
                         intent.getStringExtra(WifiManager.EXTRA_P2P_DEVICE_NAME),
                         intent.getBooleanExtra(WifiManager.EXTRA_P2P_PIN_REQUESTED, false),
+                        intent.getBooleanExtra(WifiManager.EXTRA_P2P_PASSWORD_REQUESTED, false),
                         intent.getStringExtra(WifiManager.EXTRA_P2P_DISPLAY_PIN),
+                        intent.getStringExtra(WifiManager.EXTRA_P2P_DISPLAY_PASSWORD),
                         intent.getIntExtra(WifiManager.EXTRA_DIALOG_TIMEOUT_MS, 0));
                 break;
             default:
@@ -585,9 +588,11 @@ public class WifiDialogActivity extends Activity  {
     private @NonNull AlertDialog createP2pInvitationSentDialog(
             final int dialogId,
             @Nullable final String deviceName,
-            @Nullable final String displayPin) {
+            @Nullable final String displayPin,
+            @Nullable final String displayPassword) {
         if (Flags.p2pDialog2()) {
-            return createP2pInvitationSentDialog2(dialogId, deviceName, displayPin);
+            return createP2pInvitationSentDialog2(dialogId, deviceName, displayPin,
+                    displayPassword);
         }
 
         final View textEntryView = getWifiLayoutInflater()
@@ -632,12 +637,14 @@ public class WifiDialogActivity extends Activity  {
     private @NonNull AlertDialog createP2pInvitationSentDialog2(
             final int dialogId,
             @Nullable final String deviceName,
-            @Nullable final String displayPin) {
+            @Nullable final String displayPin,
+            @Nullable final String displayPassword) {
         if (TextUtils.isEmpty(deviceName)) {
             Log.w(TAG, "P2P Invitation Sent dialog device name is null or empty."
                     + " id=" + dialogId
                     + " deviceName=" + deviceName
-                    + " displayPin=" + displayPin);
+                    + " displayPin=" + displayPin
+                    + " displayPassword=" + displayPassword);
         }
         final View customView;
         final String title;
@@ -649,6 +656,14 @@ public class WifiDialogActivity extends Activity  {
                     .setText(displayPin);
             title = getWifiString("wifi_p2p_dialog2_sent_title_display_pin", deviceName);
             message = getWifiString("wifi_p2p_dialog2_sent_message_display_pin", deviceName);
+        } else if (displayPassword != null) {
+            customView = getWifiLayoutInflater()
+                    .inflate(getWifiLayoutId("wifi_p2p_dialog2_display_password"), null);
+            ((TextView) customView.findViewById(getWifiViewId(
+                    "wifi_p2p_dialog2_display_password")))
+                    .setText(displayPassword);
+            title = getWifiString("wifi_p2p_dialog2_sent_title_display_password", deviceName);
+            message = getWifiString("wifi_p2p_dialog2_sent_message_display_password", deviceName);
         } else {
             customView = null;
             title = getWifiString("wifi_p2p_dialog2_sent_title", deviceName);
@@ -674,7 +689,8 @@ public class WifiDialogActivity extends Activity  {
             Log.v(TAG, "Created P2P Invitation Sent dialog."
                     + " id=" + dialogId
                     + " deviceName=" + deviceName
-                    + " displayPin=" + displayPin);
+                    + " displayPin=" + displayPin
+                    + " displayPassword=" + displayPassword);
         }
         return dialog;
     }
@@ -686,11 +702,13 @@ public class WifiDialogActivity extends Activity  {
             final int dialogId,
             @Nullable final String deviceName,
             final boolean isPinRequested,
+            final boolean isPasswordRequested,
             @Nullable final String displayPin,
+            @Nullable final String displayPassword,
             int timeoutMs) {
         if (Flags.p2pDialog2()) {
             return createP2pInvitationReceivedDialog2(dialogId, deviceName, isPinRequested,
-                    displayPin, timeoutMs);
+                    isPasswordRequested, displayPin, displayPassword, timeoutMs);
         }
 
         if (TextUtils.isEmpty(deviceName)) {
@@ -876,7 +894,9 @@ public class WifiDialogActivity extends Activity  {
             final int dialogId,
             @Nullable final String deviceName,
             final boolean isPinRequested,
+            final boolean isPasswordRequested,
             @Nullable final String displayPin,
+            @Nullable final String displayPassword,
             final int timeoutMs) {
         if (TextUtils.isEmpty(deviceName)) {
             Log.w(TAG, "P2P Invitation Received dialog device name is null or empty."
@@ -897,6 +917,17 @@ public class WifiDialogActivity extends Activity  {
             message = getWifiString("wifi_p2p_dialog2_received_message_enter_pin", deviceName);
             timeoutMessage = getWifiString("wifi_p2p_dialog2_received_message_enter_pin_countdown",
                     deviceName);
+        } else if (isPasswordRequested) {
+            customView = getWifiLayoutInflater()
+                    .inflate(getWifiLayoutId("wifi_p2p_dialog2_enter_password"), null);
+            pinEditText = customView.findViewById(getWifiViewId(
+                    "wifi_p2p_dialog2_enter_password"));
+            title = getWifiString("wifi_p2p_dialog2_received_title_enter_password",
+                    deviceName);
+            message = getWifiString("wifi_p2p_dialog2_received_message_enter_password",
+                    deviceName);
+            timeoutMessage = getWifiString(
+                    "wifi_p2p_dialog2_received_message_enter_password_countdown", deviceName);
         } else {
             pinEditText = null;
             if (!TextUtils.isEmpty(displayPin)) {
@@ -909,6 +940,19 @@ public class WifiDialogActivity extends Activity  {
                         deviceName);
                 timeoutMessage = getWifiString(
                         "wifi_p2p_dialog2_received_message_display_pin_countdown", deviceName);
+            } else if (!TextUtils.isEmpty(displayPassword)) {
+                customView = getWifiLayoutInflater()
+                        .inflate(getWifiLayoutId("wifi_p2p_dialog2_display_password"), null);
+                ((TextView) customView.findViewById(getWifiViewId(
+                        "wifi_p2p_dialog2_display_password")))
+                        .setText(displayPassword);
+                title = getWifiString("wifi_p2p_dialog2_received_title_display_password",
+                        deviceName);
+                message = getWifiString("wifi_p2p_dialog2_received_message_display_password",
+                        deviceName);
+                timeoutMessage = getWifiString(
+                        "wifi_p2p_dialog2_received_message_display_password_countdown",
+                        deviceName);
             } else {
                 customView = null;
                 message = getWifiString("wifi_p2p_dialog2_received_message", deviceName);
@@ -953,7 +997,7 @@ public class WifiDialogActivity extends Activity  {
             builder.setView(customView);
         }
         AlertDialog dialog = builder.create();
-        if (isPinRequested) {
+        if (isPinRequested || isPasswordRequested) {
             dialog.getWindow().setSoftInputMode(
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
                         | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN);
@@ -976,8 +1020,13 @@ public class WifiDialogActivity extends Activity  {
                     pinEditText.requestFocus();
                     pinEditText.setSelection(pinEditText.getText().length());
                 }
-                dialog.getButton(Dialog.BUTTON_POSITIVE).setEnabled(
-                        pinEditText.length() == 4 || pinEditText.length() == 8);
+                if (isPinRequested) {
+                    dialog.getButton(Dialog.BUTTON_POSITIVE).setEnabled(
+                            pinEditText.length() == 4 || pinEditText.length() == 8);
+                } else {
+                    dialog.getButton(Dialog.BUTTON_POSITIVE).setEnabled(
+                            pinEditText.length() >= 1 && pinEditText.length() <= 63);
+                }
             });
             pinEditText.addTextChangedListener(new TextWatcher() {
                 @Override
@@ -998,8 +1047,13 @@ public class WifiDialogActivity extends Activity  {
                         // configuration change.
                         intent.putExtra(EXTRA_DIALOG_P2P_PIN_INPUT, s);
                     }
-                    dialog.getButton(Dialog.BUTTON_POSITIVE).setEnabled(
-                            s.length() == 4 || s.length() == 8);
+                    if (isPinRequested) {
+                        dialog.getButton(Dialog.BUTTON_POSITIVE).setEnabled(
+                                s.length() == 4 || s.length() == 8);
+                    } else {
+                        dialog.getButton(Dialog.BUTTON_POSITIVE).setEnabled(
+                                s.length() >= 1 && s.length() <= 63);
+                    }
                 }
             });
         } else {
@@ -1056,7 +1110,9 @@ public class WifiDialogActivity extends Activity  {
                     + " id=" + dialogId
                     + " deviceName=" + deviceName
                     + " isPinRequested=" + isPinRequested
-                    + " displayPin=" + displayPin);
+                    + " isPasswordRequested=" + isPasswordRequested
+                    + " displayPin=" + displayPin
+                    + " displayPassword=" + displayPassword);
         }
         return dialog;
     }

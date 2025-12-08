@@ -19,11 +19,13 @@ package com.android.server.wifi;
 import static com.android.server.wifi.WifiConfigStore.ENCRYPT_CREDENTIALS_CONFIG_STORE_DATA_VERSION;
 
 import android.annotation.Nullable;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.net.IpConfiguration;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiConfiguration.NetworkSelectionStatus;
 import android.net.wifi.WifiEnterpriseConfig;
+import android.net.wifi.util.Environment;
 import android.os.Process;
 import android.text.TextUtils;
 import android.util.Log;
@@ -35,6 +37,7 @@ import com.android.server.wifi.util.XmlUtil.IpConfigurationXmlUtil;
 import com.android.server.wifi.util.XmlUtil.NetworkSelectionStatusXmlUtil;
 import com.android.server.wifi.util.XmlUtil.WifiConfigurationXmlUtil;
 import com.android.server.wifi.util.XmlUtil.WifiEnterpriseConfigXmlUtil;
+import com.android.wifi.flags.Flags;
 
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
@@ -311,6 +314,9 @@ public abstract class NetworkListStoreData implements WifiConfigStore.StoreData 
             configuration.creatorUid = Process.SYSTEM_UID;
             configuration.creatorName =
                     mContext.getPackageManager().getNameForUid(Process.SYSTEM_UID);
+            if (Environment.isSdkNewerThanB() && Flags.multiUserWifiEnhancement()) {
+                configuration.setCreatorUserId(ActivityManager.getCurrentUser());
+            }
         } else if (!TextUtils.equals(creatorName, configuration.creatorName)) {
             Log.w(TAG, "Invalid creatorName for saved network " + configuration.getKey()
                     + ", creatorUid=" + configuration.creatorUid

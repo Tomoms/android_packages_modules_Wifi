@@ -2574,6 +2574,35 @@ public class SupplicantStaIfaceHalHidlImplTest extends WifiBaseTest {
     }
 
     /**
+     * Tests that the PMK cache is removed on receiving the disconnection with reason code
+     * "previous authentication not valid".
+     */
+    @Test
+    public void testRemovePmkEntryOnReceivingDisconnectWithReasonCodePrevAuthNotValid() throws
+            Exception {
+        WifiConfiguration config = new WifiConfiguration();
+        config.networkId = SUPPLICANT_NETWORK_ID;
+        config.setSecurityParams(WifiConfiguration.SECURITY_TYPE_EAP);
+
+        setupMocksForHalV1_3();
+        setupMocksForPmkCache(true);
+        setupMocksForConnectSequence(false);
+
+        executeAndValidateInitializationSequenceV1_3();
+        assertTrue(mDut.connectToNetwork(WLAN0_IFACE_NAME, config));
+        mISupplicantStaIfaceCallbackV13.onStateChanged(
+                ISupplicantStaIfaceCallback.State.ASSOCIATED,
+                NativeUtil.macAddressToByteArray(BSSID),
+                SUPPLICANT_NETWORK_ID,
+                NativeUtil.decodeSsid(SUPPLICANT_SSID));
+
+        mISupplicantStaIfaceCallbackV13.onDisconnected(
+                NativeUtil.macAddressToByteArray(BSSID), false,
+                ISupplicantStaIfaceCallback.ReasonCode.PREV_AUTH_NOT_VALID);
+        verify(mPmkCacheManager).remove(eq(SUPPLICANT_NETWORK_ID));
+    }
+
+    /**
      * Test getConnectionCapabilities
      * Should fail if running HAL lower than V1_3
      */

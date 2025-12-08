@@ -208,7 +208,8 @@ public class WifiNanIfaceHidlImpl implements IWifiNanIface {
     public boolean initiateDataPath(short transactionId, int peerId, int channelRequestType,
             int channel, MacAddress peer, String interfaceName,
             boolean isOutOfBand, byte[] appInfo, Capabilities capabilities,
-            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId) {
+            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId,
+        boolean frameProtectionEnabled) {
         final String methodStr = "initiateDataPath";
         return validateAndCall(methodStr, false,
                 () -> initiateDataPathInternal(methodStr, transactionId, peerId, channelRequestType,
@@ -222,7 +223,8 @@ public class WifiNanIfaceHidlImpl implements IWifiNanIface {
      */
     public boolean respondToDataPathRequest(short transactionId, boolean accept, int ndpId,
             String interfaceName, byte[] appInfo, boolean isOutOfBand, Capabilities capabilities,
-            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId) {
+            WifiAwareDataPathSecurityConfig securityConfig, byte pubSubId,
+        boolean frameProtectionEnabled) {
         final String methodStr = "respondToDataPathRequest";
         return validateAndCall(methodStr, false,
                 () -> respondToDataPathRequestInternal(methodStr, transactionId, accept, ndpId,
@@ -265,7 +267,7 @@ public class WifiNanIfaceHidlImpl implements IWifiNanIface {
 
     @Override
     public boolean respondToNanBootstrappingRequest(short transactionId, int bootstrappingId,
-            boolean accept, byte pubSubId) {
+            boolean accept, byte pubSubId, int method) {
         return false;
     }
 

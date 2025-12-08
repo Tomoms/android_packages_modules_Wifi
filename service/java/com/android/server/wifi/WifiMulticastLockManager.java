@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * WifiMulticastLockManager tracks holders of multicast locks and
@@ -107,18 +108,15 @@ public class WifiMulticastLockManager {
         long mAcquireTime;
 
         Multicaster(int uid, IBinder binder, String tag, String attributionTag,
-                String packageName) {
+                String packageName) throws RemoteException {
             mTag = tag;
             mUid = uid;
             mBinder = binder;
             mAttributionTag = attributionTag;
             mPackageName = packageName;
             mAcquireTime = mClock.getElapsedSinceBootMillis();
-            try {
-                mBinder.linkToDeath(this, 0);
-            } catch (RemoteException e) {
-                binderDied();
-            }
+            // linkToDeath will throw a RemoteException if the binder is not alive.
+            mBinder.linkToDeath(this, 0);
         }
 
         @Override
@@ -135,7 +133,11 @@ public class WifiMulticastLockManager {
         }
 
         void unlinkDeathRecipient() {
-            mBinder.unlinkToDeath(this, 0);
+            try {
+                mBinder.unlinkToDeath(this, 0);
+            } catch (NoSuchElementException e) {
+                Log.e(TAG, "Unable to unlink death recipient " + e);
+            }
         }
 
         public int getUid() {
@@ -281,7 +283,14 @@ public class WifiMulticastLockManager {
     public void acquireLock(int uid, IBinder binder, String lockTag, String attributionTag,
             String packageName) {
         synchronized (mLock) {
-            mMulticastEnabled++;
+            Multicaster multicaster;
+            try {
+                // Construction can fail if the provided binder is not alive.
+                multicaster = new Multicaster(uid, binder, lockTag, attributionTag, packageName);
+            } catch (RemoteException e) {
+                Log.e(TAG, "Unable to create new multicaster " + e);
+                return;
+            }
 
             // Assume that the application is active if it is requesting a lock
             if (mNumLocksPerInactiveOwner.containsKey(uid)) {
@@ -289,7 +298,8 @@ public class WifiMulticastLockManager {
             }
             int numLocksHeldByUid = mNumLocksPerActiveOwner.getOrDefault(uid, 0);
             mNumLocksPerActiveOwner.put(uid, numLocksHeldByUid + 1);
-            mMulticasters.add(new Multicaster(uid, binder, lockTag, attributionTag, packageName));
+            mMulticasters.add(multicaster);
+            mMulticastEnabled++;
 
             // Note that we could call stopFilteringMulticastPackets only when
             // our new size == 1 (first call), but this function won't

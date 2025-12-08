@@ -263,6 +263,18 @@ public class NativeUtilTest extends WifiBaseTest {
     }
 
     /**
+     * Test that PMF is disabled for a WPA2/WPA3 Enterprise transition mode network
+     * configuration even when the default value is enabled.
+     */
+    @Test
+    public void testPmfIsDisableWhenPmfEnabledForWpa2Wpa3EnterpriseNetwork() throws Exception {
+        WifiGlobals globals = mock(WifiGlobals.class);
+        assertFalse(NativeUtil.getOptimalPmfSettingForConfig(
+                WifiConfigurationTestUtil.createWpa2Wpa3EnterpriseNetwork(),
+                true, globals));
+    }
+
+    /**
      * Test pairwise & group cihpers are merged when SAE auto-upgrade offload is supported.
      */
     @Test
@@ -326,5 +338,101 @@ public class NativeUtilTest extends WifiBaseTest {
                 WifiConfigurationTestUtil.createPskSaeNetwork(),
                 saeParams.getAllowedGroupCiphers(), globals);
         assertEquals(expectedGroupCiphers, optimalGroupCiphers);
+    }
+
+    /**
+     * Verifies that a valid WPS device type byte array is correctly converted to a string.
+     * Uses the example provided in the method's documentation.
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_validInput_documentationExample() {
+        // Example from documentation: { 0, 1, 2, -1, 4, 5, 6, 7 } --> "1-02FF0405-1543"
+        byte[] devType = {0, 1, 2, (byte) 0xFF, 4, 5, 6, 7};
+        String expected = "1-02FF0405-1543"; // Assumes HexEncoding produces uppercase
+        String actual = NativeUtil.wpsDevTypeStringFromByteArray(devType);
+        assertEquals(expected, actual);
+    }
+
+    /**
+     * Verifies conversion with a different set of valid WPS device type bytes.
+     * Example: Category: 6 (Computer), OUI: 0050F204, Sub Category: 1 (PC)
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_validInput_computerPcExample() {
+        byte[] devType = {(byte) 0x00, (byte) 0x06, // Primary Category ID = 6
+                (byte) 0x00, (byte) 0x50, (byte) 0xF2, (byte) 0x04, // OUI = 0050F204
+                (byte) 0x00, (byte) 0x01  // Sub Category ID = 1
+        };
+        String expected = "6-0050F204-1"; // Assumes HexEncoding produces uppercase
+        String actual = NativeUtil.wpsDevTypeStringFromByteArray(devType);
+        assertEquals(expected, actual);
+    }
+
+    /**
+     * Verifies conversion when all bytes in the device type array are zero.
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_allZeroesInput() {
+        byte[] devType = {0, 0, 0, 0, 0, 0, 0, 0};
+        String expected = "0-00000000-0"; // Assumes HexEncoding produces uppercase
+        String actual = NativeUtil.wpsDevTypeStringFromByteArray(devType);
+        assertEquals(expected, actual);
+    }
+
+    /**
+     * Verifies conversion when all bytes in the device type array are set to their maximum value
+     * (0xFF).
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_maxValuesInput() {
+        byte[] devType =
+                {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF,
+                        (byte) 0xFF, (byte) 0xFF};
+        String expected = "65535-FFFFFFFF-65535"; // Assumes HexEncoding produces uppercase
+        String actual = NativeUtil.wpsDevTypeStringFromByteArray(devType);
+        assertEquals(expected, actual);
+    }
+
+    /**
+     * Verifies that passing a null device type array throws an IllegalArgumentException.
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_nullInput_throwsIllegalArgumentException() {
+        try {
+            NativeUtil.wpsDevTypeStringFromByteArray(null);
+            fail("Expected IllegalArgumentException was not thrown for null input.");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Device type array must be non-null and 8 bytes long", e.getMessage());
+        }
+    }
+
+    /**
+     * Verifies that passing a device type array shorter than 8 bytes throws an
+     * IllegalArgumentException.
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_inputTooShort_throwsIllegalArgumentException() {
+        byte[] devType = {0, 1, 2, 3, 4, 5, 6}; // 7 bytes
+        try {
+            NativeUtil.wpsDevTypeStringFromByteArray(devType);
+            fail("Expected IllegalArgumentException was not thrown for short input array.");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Device type array must be non-null and 8 bytes long", e.getMessage());
+        }
+    }
+
+    /**
+     * Verifies that passing a device type array longer than 8 bytes throws an
+     * IllegalArgumentException.
+     */
+    @Test
+    public void testWpsDevTypeStringFromByteArray_inputTooLong_throwsIllegalArgumentException() {
+        byte[] devType = {0, 1, 2, 3, 4, 5, 6, 7, 8}; // 9 bytes
+        try {
+            NativeUtil.wpsDevTypeStringFromByteArray(devType);
+            fail("Expected IllegalArgumentException was not thrown for long input array.");
+        } catch (IllegalArgumentException e) {
+            assertEquals("Device type array must be non-null and 8 bytes long", e.getMessage());
+        }
     }
 }
