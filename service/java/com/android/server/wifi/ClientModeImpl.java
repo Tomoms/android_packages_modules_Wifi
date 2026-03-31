@@ -3802,6 +3802,7 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
         mWifiScoreReport.reset();
         mWifiBlocklistMonitor.removeAffiliatedBssids(mWifiInfo.getBSSID());
         mWifiInfo.reset();
+        updateCurrentConnectionInfo();
         /* Reset roaming parameters */
         mIsAutoRoaming = false;
 
@@ -3832,7 +3833,6 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
         if (!newConnectionInProgress) {
             mIsUserSelected = false;
         }
-        updateCurrentConnectionInfo();
     }
 
     void handlePreDhcpSetup() {
@@ -4959,6 +4959,7 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
             }
             mWifiInfo.reset();
             mWifiInfo.setSupplicantState(SupplicantState.DISCONNECTED);
+            updateCurrentConnectionInfo();
 
             sendNetworkChangeBroadcast(DetailedState.DISCONNECTED);
 
@@ -4966,7 +4967,6 @@ public class ClientModeImpl extends StateMachine implements ClientMode {
             mWifiMetrics.setWifiState(mInterfaceName, WifiMetricsProto.WifiLog.WIFI_DISCONNECTED);
             mWifiMetrics.logStaEvent(mInterfaceName, StaEvent.TYPE_WIFI_ENABLED);
             mWifiScoreCard.noteSupplicantStateChanged(mWifiInfo);
-            updateCurrentConnectionInfo();
         }
 
         @Override
