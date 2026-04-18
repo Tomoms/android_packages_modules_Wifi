@@ -211,7 +211,7 @@ public class WifiSettingsConfigStore {
     /**
      * Whether the WEP network is allowed or not.
      */
-    public static final Key<Boolean> WIFI_WEP_ALLOWED = new Key<>("wep_allowed", true);
+    public static final Key<Boolean> WIFI_WEP_ALLOWED = new Key<>("wep_allowed", false);
 
     /**
      * Store wiphy capability for 11be support.
