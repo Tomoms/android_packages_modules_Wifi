@@ -94,6 +94,8 @@ public class WifiChipAidlImpl implements IWifiChip {
     private Context mContext;
     private SsidTranslator mSsidTranslator;
     private long mHalFeatureSet;
+    private boolean mIsGetUsableChannelsSupported = true;
+    private boolean mIsEnableStaChannelForPeerNetworkSupported = true;
 
     public WifiChipAidlImpl(@NonNull android.hardware.wifi.IWifiChip chip,
             @NonNull Context context, @NonNull SsidTranslator ssidTranslator) {
@@ -711,7 +713,9 @@ public class WifiChipAidlImpl implements IWifiChip {
         final String methodStr = "getUsableChannels";
         synchronized (mLock) {
             try {
-                if (!checkIfaceAndLogFailure(methodStr)) return null;
+                if (!mIsGetUsableChannelsSupported || !checkIfaceAndLogFailure(methodStr)) {
+                    return null;
+                }
                 WifiUsableChannel[] halChannels = mWifiChip.getUsableChannels(
                         frameworkToHalWifiBand(band),
                         frameworkToHalIfaceMode(mode),
@@ -726,6 +730,12 @@ public class WifiChipAidlImpl implements IWifiChip {
             } catch (RemoteException e) {
                 handleRemoteException(e, methodStr);
             } catch (ServiceSpecificException e) {
+                if (e.errorCode == WifiStatusCode.ERROR_NOT_SUPPORTED) {
+                    Log.i(TAG, "getUsableChannels is not supported on this device. "
+                            + "Disabling for subsequent calls.");
+                    mIsGetUsableChannelsSupported = false;
+                    return null;
+                }
                 handleServiceSpecificException(e, methodStr);
             } catch (IllegalArgumentException e) {
                 handleIllegalArgumentException(e, methodStr);
@@ -1161,7 +1171,10 @@ public class WifiChipAidlImpl implements IWifiChip {
         final String methodStr = "enableStaChannelForPeerNetwork";
         synchronized (mLock) {
             try {
-                if (!checkIfaceAndLogFailure(methodStr)) return false;
+                if (!mIsEnableStaChannelForPeerNetworkSupported
+                        || !checkIfaceAndLogFailure(methodStr)) {
+                    return false;
+                }
                 int halChannelCategoryEnableFlag = 0;
                 if (enableIndoorChannel) {
                     halChannelCategoryEnableFlag |= ChannelCategoryMask.INDOOR_CHANNEL;
@@ -1174,6 +1187,12 @@ public class WifiChipAidlImpl implements IWifiChip {
             } catch (RemoteException e) {
                 handleRemoteException(e, methodStr);
             } catch (ServiceSpecificException e) {
+                if (e.errorCode == WifiStatusCode.ERROR_NOT_SUPPORTED) {
+                    Log.i(TAG, "enableStaChannelForPeerNetwork is not supported on this device. "
+                            + "Disabling for subsequent calls.");
+                    mIsEnableStaChannelForPeerNetworkSupported = false;
+                    return false;
+                }
                 handleServiceSpecificException(e, methodStr);
             }
             return false;

@@ -98,6 +98,8 @@ public class WifiStaIfaceAidlImpl implements IWifiStaIface {
 
     private final boolean mWifiLinkLayerAllRadiosStatsAggregationEnabled;
     private boolean mIsGetCachedScanDataSupported = true;
+    private boolean mIsGetBackgroundScanCapabilitiesSupported = true;
+    private boolean mIsGetTwtCapabilitiesSupported = true;
 
     public WifiStaIfaceAidlImpl(@NonNull android.hardware.wifi.IWifiStaIface staIface,
             @NonNull Context context, @NonNull SsidTranslator ssidTranslator) {
@@ -257,7 +259,7 @@ public class WifiStaIfaceAidlImpl implements IWifiStaIface {
     public WifiNative.ScanCapabilities getBackgroundScanCapabilities() {
         final String methodStr = "getBackgroundScanCapabilities";
         synchronized (mLock) {
-            if (!checkIfaceAndLogFailure(methodStr)) {
+            if (!mIsGetBackgroundScanCapabilitiesSupported || !checkIfaceAndLogFailure(methodStr)) {
                 return null;
             }
             try {
@@ -273,6 +275,12 @@ public class WifiStaIfaceAidlImpl implements IWifiStaIface {
             } catch (RemoteException e) {
                 handleRemoteException(e, methodStr);
             } catch (ServiceSpecificException e) {
+                if (e.errorCode == WifiStatusCode.ERROR_NOT_SUPPORTED) {
+                    Log.i(TAG, "getBackgroundScanCapabilities is not supported on this device. "
+                            + "Disabling for subsequent calls.");
+                    mIsGetBackgroundScanCapabilitiesSupported = false;
+                    return null;
+                }
                 handleServiceSpecificException(e, methodStr);
             }
             return null;
@@ -792,7 +800,8 @@ public class WifiStaIfaceAidlImpl implements IWifiStaIface {
         final String methodStr = "getTwtCapabilities";
         synchronized (mLock) {
             try {
-                if (!isServiceVersionAtLeast(2) || !checkIfaceAndLogFailure(methodStr)) {
+                if (!isServiceVersionAtLeast(2) || !mIsGetTwtCapabilitiesSupported
+                        || !checkIfaceAndLogFailure(methodStr)) {
                     return null;
                 }
                 android.hardware.wifi.TwtCapabilities halTwtCapabilities =
@@ -817,6 +826,12 @@ public class WifiStaIfaceAidlImpl implements IWifiStaIface {
             } catch (RemoteException e) {
                 handleRemoteException(e, methodStr);
             } catch (ServiceSpecificException e) {
+                if (e.errorCode == WifiStatusCode.ERROR_NOT_SUPPORTED) {
+                    Log.i(TAG, "getTwtCapabilities is not supported on this device. "
+                            + "Disabling for subsequent calls.");
+                    mIsGetTwtCapabilitiesSupported = false;
+                    return null;
+                }
                 handleServiceSpecificException(e, methodStr);
             }
             return null;
