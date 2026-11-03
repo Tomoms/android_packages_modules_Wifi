@@ -59,6 +59,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -1712,6 +1713,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         when(mContext.createContextAsUser(any(), anyInt())).thenReturn(mContext);
         mWifiP2pServiceImpl.handleBootCompleted();
         if (SdkLevel.isAtLeastT()) {
+            mExtras.putParcelable(WifiManager.EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE,
+                    new AttributionSource(Binder.getCallingUid(), TEST_PACKAGE_NAME, null));
             mWifiP2pServiceImpl.registerWifiP2pListener(mP2pListener, TEST_PACKAGE_NAME, mExtras);
         }
 
@@ -2089,6 +2092,42 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
             verify(mWifiPermissionsUtil).checkCanAccessWifiDirect(
                     eq(TEST_PACKAGE_NAME), eq("testFeature"), anyInt(), eq(false));
         }
+    }
+
+    @Test
+    public void testAddLocalServiceFailureWithInternalMessageBypassAttempt() throws Exception {
+        setTargetSdkGreaterThanT();
+        forceP2pEnabled(mClient1);
+        doNothing().when(mWifiPermissionsUtil).checkPackage(anyInt(), anyString());
+        if (SdkLevel.isAtLeastT()) {
+            when(mWifiPermissionsUtil.checkNearbyDevicesPermission(any(), anyBoolean(), any()))
+                    .thenReturn(false);
+        } else {
+            when(mWifiPermissionsUtil.checkCanAccessWifiDirect(any(), any(), anyInt(),
+                    anyBoolean())).thenReturn(false);
+        }
+
+        // Send AddLocalService message, but inject EXTRA_PARAM_KEY_INTERNAL_MESSAGE
+        Message msg = Message.obtain();
+        int untrustedUid = Process.myUid() + 10000; // Use a UID different from the service's UID
+        msg.sendingUid = untrustedUid;
+        Bundle extras = new Bundle();
+        extras.putParcelable(WifiP2pManager.EXTRA_PARAM_KEY_SERVICE_INFO, mTestWifiP2pServiceInfo);
+        extras.putBoolean(WifiP2pManager.EXTRA_PARAM_KEY_INTERNAL_MESSAGE, true);
+        msg.what = WifiP2pManager.ADD_LOCAL_SERVICE;
+        if (SdkLevel.isAtLeastS()) {
+            msg.obj = new AttributionSource(untrustedUid, TEST_PACKAGE_NAME, null);
+        }
+        msg.getData().putBundle(WifiP2pManager.EXTRA_PARAM_KEY_BUNDLE, extras);
+        msg.replyTo = mClientMessenger;
+        mP2pStateMachineMessenger.send(Message.obtain(msg));
+        mLooper.dispatchAll();
+
+        // The request should fail because the sender is not a system UID or privileged.
+        // But on unmodified code, it will bypass permission check and
+        // succeed (or try to call native).
+        assertTrue(mClientHandler.hasMessages(WifiP2pManager.ADD_LOCAL_SERVICE_FAILED));
+        verify(mWifiNative, never()).p2pServiceAdd(any());
     }
 
     private void verifyAddLocalService() throws Exception {
@@ -5561,6 +5600,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
     public void testFactoryResetSuccessWhenP2pEnabled() throws Exception {
         // Move to enabled state
         forceP2pEnabled(mClient1);
+        clearInvocations(mWifiPermissionsUtil);
 
         when(mWifiInjector.getUserManager()).thenReturn(mUserManager);
         when(mPackageManager.getNameForUid(anyInt())).thenReturn("testPkg");
@@ -5577,7 +5617,8 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         }
         verify(mWifiInjector).getUserManager();
         verify(mPackageManager).getNameForUid(anyInt());
-        verify(mWifiPermissionsUtil).checkNetworkSettingsPermission(anyInt());
+        // Called twice: 1. factoryReset check, 2. onPersistentGroupsChanged broadcast check.
+        verify(mWifiPermissionsUtil, times(2)).checkNetworkSettingsPermission(anyInt());
         verify(mUserManager).hasUserRestrictionForUser(
                 eq(UserManager.DISALLOW_NETWORK_RESET), any());
         verify(mUserManager).hasUserRestrictionForUser(eq(UserManager.DISALLOW_CONFIG_WIFI), any());
@@ -5616,11 +5657,17 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         Message message = mMessageCaptor.getValue();
         assertEquals(WifiP2pManager.FACTORY_RESET_SUCCEEDED, message.what);
 
+        clearInvocations(mWifiPermissionsUtil);
+
         // Move to enabled state
         when(mWifiSettingsConfigStore.get(eq(WIFI_P2P_PENDING_FACTORY_RESET))).thenReturn(true);
         forceP2pEnabled(mClient1);
         verify(mPackageManager, times(2)).getNameForUid(anyInt());
-        verify(mWifiPermissionsUtil, times(2)).checkNetworkSettingsPermission(anyInt());
+        // Called 3 times in this phase:
+        // 1. factoryReset(SYSTEM_UID) check.
+        // 2. normal broadcast check.
+        // 3. factoryReset broadcast check.
+        verify(mWifiPermissionsUtil, times(3)).checkNetworkSettingsPermission(anyInt());
         verify(mUserManager, times(2)).hasUserRestrictionForUser(
                 eq(UserManager.DISALLOW_NETWORK_RESET), any());
         verify(mUserManager, times(2)).hasUserRestrictionForUser(
@@ -5638,6 +5685,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
     public void testFactoryResetFailureWithoutNetworkSettingPermission() throws Exception {
         // Move to enabled state
         forceP2pEnabled(mClient1);
+        clearInvocations(mWifiPermissionsUtil);
 
         when(mWifiInjector.getUserManager()).thenReturn(mUserManager);
         when(mPackageManager.getNameForUid(anyInt())).thenReturn("testPkg");
@@ -5659,6 +5707,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
     public void testFactoryResetFailureWhenNetworkResetDisallow() throws Exception {
         // Move to enabled state
         forceP2pEnabled(mClient1);
+        clearInvocations(mWifiPermissionsUtil);
 
         when(mWifiInjector.getUserManager()).thenReturn(mUserManager);
         when(mPackageManager.getNameForUid(anyInt())).thenReturn("testPkg");
@@ -5684,6 +5733,7 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
     public void testFactoryResetFailureWhenConfigWifiDisallow() throws Exception {
         // Move to enabled state
         forceP2pEnabled(mClient1);
+        clearInvocations(mWifiPermissionsUtil);
 
         when(mWifiInjector.getUserManager()).thenReturn(mUserManager);
         when(mPackageManager.getNameForUid(anyInt())).thenReturn(TEST_PACKAGE_NAME);
@@ -8536,7 +8586,6 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
     public void testGroupRemovedBeforeGroupFormed() throws Exception {
         assumeTrue(SdkLevel.isAtLeastT());
         forceP2pEnabled(mClient1);
-        mWifiP2pServiceImpl.registerWifiP2pListener(mP2pListener, TEST_PACKAGE_NAME, mBundle);
         mLooper.dispatchAll();
 
         WifiP2pGroup group = new WifiP2pGroup();
@@ -8587,6 +8636,118 @@ public class WifiP2pServiceImplTest extends WifiBaseTest {
         assertFalse(p2pGroupCaptor.getValue().isClientListEmpty());
         assertTrue(p2pInfoCaptor.getValue().groupFormed);
     }
+
+    private IWifiP2pListener registerListenerWithUidAndPackage(
+            int uid, String packageName) throws Exception {
+        final IWifiP2pListener listener = mock(IWifiP2pListener.class);
+        when(listener.asBinder()).thenReturn(mock(IBinder.class));
+        final Bundle bundle = new Bundle();
+        final AttributionSource source = new AttributionSource(uid, packageName, null);
+        bundle.putParcelable(WifiManager.EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE, source);
+        mWifiP2pServiceImpl.registerWifiP2pListener(listener, packageName, bundle);
+        return listener;
+    }
+
+    private WifiP2pGroupList verifyPersistentGroupsChangedBroadcast(
+            boolean hasNetworkSettingsPermission, boolean hasLocalMac) throws Exception {
+        // Must use the actual calling UID of the test process because
+        // WifiP2pServiceImpl.registerWifiP2pListener enforces that the AttributionSource UID
+        // matches the calling UID via attributionSource.checkCallingUid().
+        final int uid = Binder.getCallingUid();
+        final String packageName = TEST_PACKAGE_NAME;
+        assumeTrue(SdkLevel.isAtLeastT());
+
+        mWifiP2pServiceImpl.unregisterWifiP2pListener(mP2pListener);
+
+        final IWifiP2pListener listener = registerListenerWithUidAndPackage(uid, packageName);
+
+        when(mWifiPermissionsUtil.checkNetworkSettingsPermission(uid))
+                .thenReturn(hasNetworkSettingsPermission);
+        when(mWifiPermissionsUtil.checkNetworkStackPermission(uid)).thenReturn(false);
+        when(mWifiPermissionsUtil.checkReadWifiCredentialPermission(uid)).thenReturn(false);
+        when(mWifiPermissionsUtil.checkLocalMacAddressPermission(uid)).thenReturn(hasLocalMac);
+        doNothing().when(mWifiPermissionsUtil)
+                .enforceNearbyDevicesPermission(any(), anyBoolean(), any());
+
+        mGroups.clear();
+        mGroups.add(mTestWifiP2pNewPersistentGoGroup);
+
+        forceP2pEnabled(mClient1);
+
+        final ArgumentCaptor<WifiP2pGroupList> groupsCaptor =
+                ArgumentCaptor.forClass(WifiP2pGroupList.class);
+        verify(listener).onPersistentGroupsChanged(groupsCaptor.capture());
+        return groupsCaptor.getValue();
+    }
+
+    /**
+     * Verify that IWifiP2pListener.onPersistentGroupsChanged is not called
+     * if the listener is unauthorized (lacks signature permissions).
+     */
+    @Test
+    public void testPersistentGroupsChangedCallback_unauthorizedListener() throws Exception {
+        final WifiP2pGroupList result = verifyPersistentGroupsChangedBroadcast(false, false);
+        assertTrue(result.getGroupList().isEmpty());
+    }
+
+    /**
+     * Verify that IWifiP2pListener.onPersistentGroupsChanged redacts own MAC address
+     * if the listener lacks LOCAL_MAC_ADDRESS permission.
+     */
+    @Test
+    public void testPersistentGroupsChangedCallback_macRedaction_noLocalMacPermission()
+            throws Exception {
+        final WifiP2pGroupList result = verifyPersistentGroupsChangedBroadcast(true, false);
+        assertEquals(1, result.getGroupList().size());
+        final WifiP2pGroup group = result.getGroupList().iterator().next();
+        assertEquals("02:00:00:00:00:00", group.getOwner().deviceAddress);
+    }
+
+    /**
+     * Verify that IWifiP2pListener.onPersistentGroupsChanged does not redact own MAC address
+     * if the listener has LOCAL_MAC_ADDRESS permission.
+     */
+    @Test
+    public void testPersistentGroupsChangedCallback_macRedaction_withLocalMacPermission()
+            throws Exception {
+        final WifiP2pGroupList result = verifyPersistentGroupsChangedBroadcast(true, true);
+        assertEquals(1, result.getGroupList().size());
+        final WifiP2pGroup group = result.getGroupList().iterator().next();
+        assertEquals(thisDeviceMac, group.getOwner().deviceAddress);
+    }
+
+    /**
+     * Verify that registerWifiP2pListener throws IllegalArgumentException
+     * if AttributionSource is null.
+     */
+    @Test
+    public void testRegisterWifiP2pListener_nullAttributionSource() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastT());
+        final IWifiP2pListener listener = mock(IWifiP2pListener.class);
+        when(listener.asBinder()).thenReturn(mock(IBinder.class));
+        final Bundle bundle = new Bundle(); // Empty bundle, no AttributionSource
+        assertThrows(IllegalArgumentException.class, () ->
+                mWifiP2pServiceImpl.registerWifiP2pListener(listener, TEST_PACKAGE_NAME, bundle));
+    }
+
+    /**
+     * Verify that registerWifiP2pListener throws SecurityException
+     * if AttributionSource UID does not match calling UID.
+     */
+    @Test
+    public void testRegisterWifiP2pListener_invalidAttributionSourceUid() throws Exception {
+        assumeTrue(SdkLevel.isAtLeastT());
+        final IWifiP2pListener listener = mock(IWifiP2pListener.class);
+        when(listener.asBinder()).thenReturn(mock(IBinder.class));
+        final Bundle bundle = new Bundle();
+        // Use a different UID than the calling process UID
+        final int invalidUid = Binder.getCallingUid() + 1;
+        final AttributionSource source = new AttributionSource(invalidUid, TEST_PACKAGE_NAME, null);
+        bundle.putParcelable(WifiManager.EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE, source);
+        assertThrows(SecurityException.class, () ->
+                mWifiP2pServiceImpl.registerWifiP2pListener(listener, TEST_PACKAGE_NAME, bundle));
+    }
+
 
     /**
      * Verify that p2p disable when the D2d allowed value changes to false

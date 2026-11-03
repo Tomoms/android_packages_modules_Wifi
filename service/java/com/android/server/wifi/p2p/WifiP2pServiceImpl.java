@@ -730,6 +730,8 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
         final DeathRecipient mDeathRecipient;
         final Messenger mMessenger;
         final WorkSource mWorkSource;
+        // TODO(b/515051007): mDisplayId is unused and should be removed.
+        @Deprecated
         final int mDisplayId;
     }
     private final Object mLock = new Object();
@@ -1076,6 +1078,7 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
         // get the DisplayId of the caller (if available)
         int displayId = Display.DEFAULT_DISPLAY;
         if (mWifiPermissionsUtil.isSystem(packageName, callerUid)) {
+            mWifiPermissionsUtil.checkPackage(callerUid, packageName);
             displayId = extras.getInt(WifiP2pManager.EXTRA_PARAM_KEY_DISPLAY_ID,
                     Display.DEFAULT_DISPLAY);
         }
@@ -1215,11 +1218,23 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
         if (listener == null) {
             throw new IllegalArgumentException("listener should not be null");
         }
+        final AttributionSource attributionSource = extras != null
+                ? extras.getParcelable(
+                        WifiManager.EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE,
+                        AttributionSource.class)
+                : null;
+        // AttributionSource is required to associate the listener with the caller's identity
+        // and enforce permission checks during callback broadcasts.
+        if (attributionSource == null) {
+            throw new IllegalArgumentException("AttributionSource should not be null");
+        }
+        if (!attributionSource.checkCallingUid()) {
+            throw new SecurityException("AttributionSource UID does not match calling UID");
+        }
         mWifiPermissionsUtil.enforceNearbyDevicesPermission(
-                extras.getParcelable(WifiManager.EXTRA_PARAM_KEY_ATTRIBUTION_SOURCE), false,
-                TAG + " registerWifiP2pListener");
+                attributionSource, false, TAG + " registerWifiP2pListener");
         Log.i(TAG, "registerWifiP2pListener uid=" + Binder.getCallingUid());
-        mWifiP2pListeners.register(listener);
+        mWifiP2pListeners.register(listener, attributionSource);
     }
 
     /**
@@ -1299,7 +1314,25 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
         int numCallbacks = mWifiP2pListeners.beginBroadcast();
         for (int i = 0; i < numCallbacks; i++) {
             try {
-                mWifiP2pListeners.getBroadcastItem(i).onPersistentGroupsChanged(p2pGroupList);
+                final AttributionSource source =
+                        (AttributionSource) mWifiP2pListeners.getBroadcastCookie(i);
+                if (source == null) {
+                    Log.e(TAG, "No attribution source for listener, skipping broadcast");
+                    continue;
+                }
+                final IWifiP2pListener listener = mWifiP2pListeners.getBroadcastItem(i);
+                // Enforce signature permissions to prevent leaking persistent group info
+                // to unauthorized listeners.
+                if (!checkNetworkSettingsOrNetworkStackOrReadWifiCredentialPermission(
+                        source.getUid())) {
+                    listener.onPersistentGroupsChanged(new WifiP2pGroupList());
+                    continue;
+                }
+                // Redact the own device's MAC address if the listener lacks
+                // LOCAL_MAC_ADDRESS permission.
+                final WifiP2pGroupList redactedList = mP2pStateMachine
+                        .maybeEraseOwnDeviceAddress(p2pGroupList, source.getUid());
+                listener.onPersistentGroupsChanged(redactedList);
             } catch (RemoteException e) {
                 Log.e(TAG, "Failure calling onPersistentGroupsChanged" + e);
             }
@@ -6279,7 +6312,8 @@ public class WifiP2pServiceImpl extends IWifiP2pManager.Stub {
         private boolean checkNearbyDevicesPermission(int uid, String packageName, Bundle extras,
                 String message, Object attributionSource) {
             if (extras != null
-                    && extras.getBoolean(WifiP2pManager.EXTRA_PARAM_KEY_INTERNAL_MESSAGE)) {
+                    && extras.getBoolean(WifiP2pManager.EXTRA_PARAM_KEY_INTERNAL_MESSAGE)
+                    && uid == Process.myUid()) {
                 // bypass permission check for internal call.
                 return true;
             }

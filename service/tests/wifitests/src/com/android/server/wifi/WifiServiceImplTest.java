@@ -4058,23 +4058,29 @@ public class WifiServiceImplTest extends WifiBaseTest {
 
     private static class FakeLohsCallback extends ILocalOnlyHotspotCallback.Stub {
         boolean mIsStarted = false;
+        boolean mIsFailed = false;
+        int mFailureReason = -1;
         SoftApConfiguration mSoftApConfig = null;
 
         @Override
         public void onHotspotStarted(SoftApConfiguration softApConfig) {
             mIsStarted = true;
+            mIsFailed = false;
             this.mSoftApConfig = softApConfig;
         }
 
         @Override
         public void onHotspotStopped() {
             mIsStarted = false;
+            mIsFailed = false;
             mSoftApConfig = null;
         }
 
         @Override
         public void onHotspotFailed(int i) {
             mIsStarted = false;
+            mIsFailed = true;
+            mFailureReason = i;
             mSoftApConfig = null;
         }
     }
@@ -4264,6 +4270,39 @@ public class WifiServiceImplTest extends WifiBaseTest {
         assertThat(callback.mIsStarted).isTrue();
         assertThat(callback.mSoftApConfig.getBssid().toString())
                 .ignoringCase().isEqualTo("aa:bb:cc:dd:ee:ff");
+    }
+
+    @Test
+    public void testCustomLohs_BssidValidationFailsForUnprivilegedCaller() {
+        mLooper.startAutoDispatch();
+        SoftApConfiguration lohsConfig = createValidSoftApConfiguration();
+        SoftApConfiguration customizedConfig = new SoftApConfiguration.Builder(lohsConfig)
+                .setBssid(MacAddress.fromString("aa:bb:cc:dd:ee:ff"))
+                .build();
+        int testUid = 9999;
+        // Mock permissions: deny for testUid, grant for Process.myUid() for all permissions
+        when(mContext.checkPermission(anyString(), anyInt(), eq(testUid)))
+                .thenReturn(PackageManager.PERMISSION_DENIED);
+        when(mContext.checkPermission(anyString(), anyInt(), eq(Process.myUid())))
+                .thenReturn(PackageManager.PERMISSION_GRANTED);
+
+        when(mWifiApConfigStore.generateLocalOnlyHotspotConfig(
+                eq(mContext), eq(customizedConfig), any(), eq(true)))
+                .thenReturn(customizedConfig);
+        FakeLohsCallback callback = new FakeLohsCallback();
+
+        setupLohsPermissions();
+        WorkSource testWs = new WorkSource(testUid, TEST_PACKAGE_NAME);
+        LocalOnlyHotspotRequestInfo request = new LocalOnlyHotspotRequestInfo(
+                mLooper.getLooper(), testWs, callback,
+                WifiServiceImplTest::nopDeathCallback, customizedConfig);
+
+        mWifiServiceImpl.registerLOHSForTest(request.getPid(), request);
+        stopAutoDispatchWithDispatchAllBeforeStopAndIgnoreExceptions(mLooper);
+
+        verify(mActiveModeWarden, never()).startSoftAp(any(), any());
+        assertThat(callback.mIsFailed).isTrue();
+        assertThat(callback.mFailureReason).isEqualTo(LocalOnlyHotspotCallback.ERROR_GENERIC);
     }
 
     /**

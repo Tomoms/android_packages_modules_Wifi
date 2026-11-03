@@ -110,6 +110,9 @@ import com.android.wifi.resources.R;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
+import com.android.dx.mockito.inline.extended.ExtendedMockito;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -1002,6 +1005,57 @@ public class WifiScanningServiceTest extends WifiBaseTest {
         verify(mBatteryStats, never()).reportWifiScanStoppedFromSource(eq(workSource));
         verify(mWifiScannerImpl0, never()).startSingleScan(any(WifiNative.ScanSettings.class),
                 any(WifiNative.ScanEventHandler.class));
+    }
+
+    /**
+     * Verify that single scan request from a private compute core (PCC) app with vendor IEs is
+     * failed if the caller doesn't have NETWORK_STACK permission.
+     */
+    @Test
+    public void sendSingleScanRequestWithVendorIesFromPccAppWithoutNetworkStack_fails()
+            throws Exception {
+        assumeTrue(SdkLevel.isAtLeastC());
+        MockitoSession session = ExtendedMockito.mockitoSession()
+                .mockStatic(android.os.Process.class)
+                .strictness(Strictness.LENIENT)
+                .startMocking();
+        try {
+            when(android.os.Process.isPrivateComputeCoreUid(anyInt())).thenReturn(true);
+            WifiScanner.ScanSettings requestSettings = createRequest(WifiScanner.WIFI_BAND_BOTH, 0,
+                    0, 20, WifiScanner.REPORT_EVENT_AFTER_EACH_SCAN);
+            requestSettings.type = WifiScanner.SCAN_TYPE_LOW_LATENCY;
+            List<ScanResult.InformationElement> vendorIesList = new ArrayList<>();
+            ScanResult.InformationElement vendorIe = new ScanResult.InformationElement(221, 0,
+                    new byte[]{0x00, 0x50, (byte) 0xf2, 0x08, 0x11, 0x22, 0x33});
+            vendorIesList.add(vendorIe);
+            requestSettings.setVendorIes(vendorIesList);
+
+            int testUid = Binder.getCallingUid();
+            WorkSource workSource = new WorkSource(testUid);
+
+            when(mContext.checkPermission(
+                    eq(Manifest.permission.NETWORK_STACK), anyInt(), eq(testUid)))
+                    .thenReturn(PERMISSION_DENIED);
+
+            startServiceAndLoadDriver();
+
+            TestClient client = new TestClient();
+            mWifiScanningServiceImpl.startScan(client.listener, requestSettings, workSource,
+                    TEST_PACKAGE_NAME, TEST_FEATURE_ID);
+            mLooper.dispatchAll();
+
+            client.verifyFailedResponse(
+                    WifiScanner.REASON_INVALID_REQUEST, "bad request");
+            assertDumpContainsCallbackLog("singleScanInvalidRequest", "bad request");
+
+            verify(mWifiMetrics, never()).incrementOneshotScanCount();
+            verify(mWifiMetrics).incrementScanReturnEntry(
+                    WifiMetricsProto.WifiLog.SCAN_FAILURE_INVALID_CONFIGURATION, 1);
+            verify(mWifiScannerImpl0, never()).startSingleScan(any(WifiNative.ScanSettings.class),
+                    any(WifiNative.ScanEventHandler.class));
+        } finally {
+            session.finishMocking();
+        }
     }
 
     /**
